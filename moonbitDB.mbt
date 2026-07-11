@@ -971,6 +971,172 @@ pub fn Database::sismember(self : Database, key : String, value : String) -> Boo
   }
 }
 
+fn Database::get_set_members(self : Database, key : String) -> Map[String, Bool] {
+  if self.check_expired(key) {
+    Map([], capacity=0)
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::Set(s)) => s
+      _ => Map([], capacity=0)
+    }
+  }
+}
+
+pub fn Database::sinter(self : Database, keys : Array[String]) -> Array[String] {
+  if keys.length() == 0 {
+    return []
+  }
+  let first_set = self.get_set_members(keys[0])
+  if first_set.length() == 0 {
+    return []
+  }
+  let result = Map([], capacity=first_set.length())
+  for m, _ in first_set {
+    result.set(m, true)
+  }
+  for i = 1; i < keys.length(); i = i + 1 {
+    let current_set = self.get_set_members(keys[i])
+    let to_remove = []
+    for m, _ in result {
+      if !current_set.contains(m) {
+        to_remove.push(m)
+      }
+    }
+    for m in to_remove {
+      result.remove(m)
+    }
+  }
+  let arr = []
+  for m, _ in result {
+    arr.push(m)
+  }
+  arr
+}
+
+pub fn Database::sinterstore(self : Database, destination : String, keys : Array[String]) -> Int {
+  let result = self.sinter(keys)
+  let new_set = Map([], capacity=result.length())
+  for item in result {
+    new_set.set(item, true)
+  }
+  self.data.set(destination, RedisValue::Set(new_set))
+  result.length()
+}
+
+pub fn Database::sunion(self : Database, keys : Array[String]) -> Array[String] {
+  let result = Map([], capacity=10)
+  for key in keys {
+    let current_set = self.get_set_members(key)
+    for m, _ in current_set {
+      result.set(m, true)
+    }
+  }
+  let arr = []
+  for m, _ in result {
+    arr.push(m)
+  }
+  arr
+}
+
+pub fn Database::sunionstore(self : Database, destination : String, keys : Array[String]) -> Int {
+  let result = self.sunion(keys)
+  let new_set = Map([], capacity=result.length())
+  for item in result {
+    new_set.set(item, true)
+  }
+  self.data.set(destination, RedisValue::Set(new_set))
+  result.length()
+}
+
+pub fn Database::sdiff(self : Database, keys : Array[String]) -> Array[String] {
+  if keys.length() == 0 {
+    return []
+  }
+  let first_set = self.get_set_members(keys[0])
+  let result = Map([], capacity=first_set.length())
+  for m, _ in first_set {
+    result.set(m, true)
+  }
+  for i = 1; i < keys.length(); i = i + 1 {
+    let current_set = self.get_set_members(keys[i])
+    let to_remove = []
+    for m, _ in result {
+      if current_set.contains(m) {
+        to_remove.push(m)
+      }
+    }
+    for m in to_remove {
+      result.remove(m)
+    }
+  }
+  let arr = []
+  for m, _ in result {
+    arr.push(m)
+  }
+  arr
+}
+
+pub fn Database::sdiffstore(self : Database, destination : String, keys : Array[String]) -> Int {
+  let result = self.sdiff(keys)
+  let new_set = Map([], capacity=result.length())
+  for item in result {
+    new_set.set(item, true)
+  }
+  self.data.set(destination, RedisValue::Set(new_set))
+  result.length()
+}
+
+pub fn Database::smove(self : Database, source : String, destination : String, value : String) -> Bool {
+  if self.check_expired(source) || self.check_expired(destination) {
+    return false
+  }
+  match self.data.get(source) {
+    Some(RedisValue::Set(src_set)) => {
+      if !src_set.contains(value) {
+        return false
+      }
+      src_set.remove(value)
+      self.data.set(source, RedisValue::Set(src_set))
+      let dest_set = match self.data.get(destination) {
+        Some(RedisValue::Set(d)) => d
+        _ => Map([], capacity=10)
+      }
+      dest_set.set(value, true)
+      self.data.set(destination, RedisValue::Set(dest_set))
+      true
+    }
+    _ => false
+  }
+}
+
+pub fn Database::spop(self : Database, key : String) -> String? {
+  if self.check_expired(key) {
+    None
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::Set(set)) => {
+        if set.length() == 0 {
+          return None
+        }
+        let mut popped : String? = None
+        for m, _ in set {
+          popped = Some(m)
+          break
+        }
+        match popped {
+          Some(v) => {
+            set.remove(v)
+            self.data.set(key, RedisValue::Set(set))
+            Some(v)
+          }
+          None => None
+        }
+      }
+      _ => None
+    }
+  }
+}
+
 pub fn Database::zadd(self : Database, key : String, score : Float, member_val : String) -> Bool {
   self.check_expired(key) |> ignore
   let zset = match self.data.get(key) {
@@ -1741,4 +1907,219 @@ test "rpoplpush_operations" {
   debug_inspect(db.lindex("rotate", 1), content="Some(\"1\")")
   debug_inspect(db.lindex("rotate", 2), content="Some(\"2\")")
   debug_inspect(db.lindex("rotate", 3), content="Some(\"3\")")
+}
+
+test "sinter_operations" {
+  let db = Database::new()
+  
+  db.sadd("set1", "a") |> ignore
+  db.sadd("set1", "b") |> ignore
+  db.sadd("set1", "c") |> ignore
+  db.sadd("set1", "d") |> ignore
+  
+  db.sadd("set2", "b") |> ignore
+  db.sadd("set2", "c") |> ignore
+  db.sadd("set2", "e") |> ignore
+  db.sadd("set2", "f") |> ignore
+  
+  db.sadd("set3", "c") |> ignore
+  db.sadd("set3", "d") |> ignore
+  db.sadd("set3", "g") |> ignore
+  
+  let inter1 = db.sinter(["set1", "set2"])
+  debug_inspect(inter1.length(), content="2")
+  debug_inspect(inter1.contains("b"), content="true")
+  debug_inspect(inter1.contains("c"), content="true")
+  
+  let inter2 = db.sinter(["set1", "set2", "set3"])
+  debug_inspect(inter2.length(), content="1")
+  debug_inspect(inter2.contains("c"), content="true")
+  
+  let inter3 = db.sinter(["set1", "nonexistent"])
+  debug_inspect(inter3.length(), content="0")
+  
+  let inter4 = db.sinter([])
+  debug_inspect(inter4.length(), content="0")
+}
+
+test "sinterstore_operations" {
+  let db = Database::new()
+  
+  db.sadd("set1", "a") |> ignore
+  db.sadd("set1", "b") |> ignore
+  db.sadd("set1", "c") |> ignore
+  
+  db.sadd("set2", "b") |> ignore
+  db.sadd("set2", "c") |> ignore
+  db.sadd("set2", "d") |> ignore
+  
+  let count = db.sinterstore("dest", ["set1", "set2"])
+  debug_inspect(count, content="2")
+  debug_inspect(db.scard("dest"), content="2")
+  debug_inspect(db.sismember("dest", "b"), content="true")
+  debug_inspect(db.sismember("dest", "c"), content="true")
+  debug_inspect(db.sismember("dest", "a"), content="false")
+}
+
+test "sunion_operations" {
+  let db = Database::new()
+  
+  db.sadd("set1", "a") |> ignore
+  db.sadd("set1", "b") |> ignore
+  
+  db.sadd("set2", "b") |> ignore
+  db.sadd("set2", "c") |> ignore
+  
+  db.sadd("set3", "d") |> ignore
+  
+  let union1 = db.sunion(["set1", "set2"])
+  debug_inspect(union1.length(), content="3")
+  debug_inspect(union1.contains("a"), content="true")
+  debug_inspect(union1.contains("b"), content="true")
+  debug_inspect(union1.contains("c"), content="true")
+  
+  let union2 = db.sunion(["set1", "set2", "set3"])
+  debug_inspect(union2.length(), content="4")
+  
+  let union3 = db.sunion(["set1", "nonexistent"])
+  debug_inspect(union3.length(), content="2")
+  
+  let union4 = db.sunion([])
+  debug_inspect(union4.length(), content="0")
+}
+
+test "sunionstore_operations" {
+  let db = Database::new()
+  
+  db.sadd("set1", "a") |> ignore
+  db.sadd("set1", "b") |> ignore
+  
+  db.sadd("set2", "c") |> ignore
+  db.sadd("set2", "d") |> ignore
+  
+  let count = db.sunionstore("dest", ["set1", "set2"])
+  debug_inspect(count, content="4")
+  debug_inspect(db.scard("dest"), content="4")
+  debug_inspect(db.sismember("dest", "a"), content="true")
+  debug_inspect(db.sismember("dest", "d"), content="true")
+}
+
+test "sdiff_operations" {
+  let db = Database::new()
+  
+  db.sadd("set1", "a") |> ignore
+  db.sadd("set1", "b") |> ignore
+  db.sadd("set1", "c") |> ignore
+  db.sadd("set1", "d") |> ignore
+  
+  db.sadd("set2", "b") |> ignore
+  db.sadd("set2", "c") |> ignore
+  
+  db.sadd("set3", "d") |> ignore
+  
+  let diff1 = db.sdiff(["set1", "set2"])
+  debug_inspect(diff1.length(), content="2")
+  debug_inspect(diff1.contains("a"), content="true")
+  debug_inspect(diff1.contains("d"), content="true")
+  debug_inspect(diff1.contains("b"), content="false")
+  debug_inspect(diff1.contains("c"), content="false")
+  
+  let diff2 = db.sdiff(["set1", "set2", "set3"])
+  debug_inspect(diff2.length(), content="1")
+  debug_inspect(diff2.contains("a"), content="true")
+  
+  let diff3 = db.sdiff(["set1", "nonexistent"])
+  debug_inspect(diff3.length(), content="4")
+  
+  let diff4 = db.sdiff([])
+  debug_inspect(diff4.length(), content="0")
+}
+
+test "sdiffstore_operations" {
+  let db = Database::new()
+  
+  db.sadd("set1", "a") |> ignore
+  db.sadd("set1", "b") |> ignore
+  db.sadd("set1", "c") |> ignore
+  
+  db.sadd("set2", "b") |> ignore
+  
+  let count = db.sdiffstore("dest", ["set1", "set2"])
+  debug_inspect(count, content="2")
+  debug_inspect(db.scard("dest"), content="2")
+  debug_inspect(db.sismember("dest", "a"), content="true")
+  debug_inspect(db.sismember("dest", "c"), content="true")
+  debug_inspect(db.sismember("dest", "b"), content="false")
+}
+
+test "smove_operations" {
+  let db = Database::new()
+  
+  db.sadd("set1", "a") |> ignore
+  db.sadd("set1", "b") |> ignore
+  db.sadd("set1", "c") |> ignore
+  
+  db.sadd("set2", "x") |> ignore
+  db.sadd("set2", "y") |> ignore
+  
+  debug_inspect(db.smove("set1", "set2", "b"), content="true")
+  debug_inspect(db.sismember("set1", "b"), content="false")
+  debug_inspect(db.sismember("set2", "b"), content="true")
+  debug_inspect(db.scard("set1"), content="2")
+  debug_inspect(db.scard("set2"), content="3")
+  
+  debug_inspect(db.smove("set1", "set2", "nonexistent"), content="false")
+  
+  debug_inspect(db.smove("nonexistent", "set2", "a"), content="false")
+  
+  debug_inspect(db.smove("set1", "newset", "a"), content="true")
+  debug_inspect(db.sismember("newset", "a"), content="true")
+}
+
+test "spop_operations" {
+  let db = Database::new()
+  
+  db.sadd("set1", "a") |> ignore
+  db.sadd("set1", "b") |> ignore
+  db.sadd("set1", "c") |> ignore
+  
+  let popped = db.spop("set1")
+  debug_inspect(popped is None, content="false")
+  debug_inspect(db.scard("set1"), content="2")
+  
+  db.spop("set1") |> ignore
+  db.spop("set1") |> ignore
+  
+  debug_inspect(db.scard("set1"), content="0")
+  
+  let empty_pop = db.spop("set1")
+  debug_inspect(empty_pop is None, content="true")
+  
+  let nonexistent_pop = db.spop("nonexistent")
+  debug_inspect(nonexistent_pop is None, content="true")
+}
+
+test "set_operations_with_expire" {
+  let db = Database::new()
+  
+  db.sadd("set1", "a") |> ignore
+  db.sadd("set1", "b") |> ignore
+  db.sadd("set1", "c") |> ignore
+  
+  db.sadd("set2", "b") |> ignore
+  db.sadd("set2", "c") |> ignore
+  db.sadd("set2", "d") |> ignore
+  
+  db.expire("set2", 1) |> ignore
+  
+  db.advance_time(2000)
+  
+  let inter = db.sinter(["set1", "set2"])
+  debug_inspect(inter.length(), content="0")
+  
+  let union = db.sunion(["set1", "set2"])
+  debug_inspect(union.length(), content="3")
+  
+  let diff = db.sdiff(["set1", "set2"])
+  debug_inspect(diff.length(), content="3")
 }
