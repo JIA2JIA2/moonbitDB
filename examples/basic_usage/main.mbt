@@ -20,7 +20,7 @@ fn show_opt_float(opt : Float?) -> String {
 }
 
 fn main {
-  let db = @moonbitDB.Database::new()
+  let db = @lib.Database::new()
 
   println("=== String 操作 ===")
   db.set("name", "Alice")
@@ -97,8 +97,8 @@ fn main {
 
   println("\n=== 服务器信息 ===")
   println("DBSIZE: \{db.dbsize()}")
-  println("PING: \{@moonbitDB.Database::ping()}")
-  println("ECHO: \{@moonbitDB.Database::echo(db, "Hello MoonBitDB!")}")
+  println("PING: \{@lib.Database::ping()}")
+  println("ECHO: \{@lib.Database::echo(db, "Hello MoonBitDB!")}")
 
   println("\n=== TYPE 检查 ===")
   println("TYPE user:1: \{db.type_of("user:1")}")

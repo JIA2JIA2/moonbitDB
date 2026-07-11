@@ -1,14 +1,34 @@
 {
   "packages": [
     {
-      "root": "moonbitDB",
+      "root": "moonbitdb/moonbitdb",
       "rel": "",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/build/moonbitDB.mi"
+      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/build/moonbitdb.mi"
     },
     {
-      "root": "moonbitDB",
-      "rel": "examples",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/build/examples/examples.mi"
+      "root": "moonbitdb/moonbitdb",
+      "rel": "examples/basic_usage",
+      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/build/examples/basic_usage/basic_usage.mi"
+    },
+    {
+      "root": "moonbitdb/moonbitdb",
+      "rel": "examples/cli_repl",
+      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/build/examples/cli_repl/cli_repl.mi"
+    },
+    {
+      "root": "moonbitdb/moonbitdb",
+      "rel": "examples/leaderboard",
+      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/build/examples/leaderboard/leaderboard.mi"
+    },
+    {
+      "root": "moonbitdb/moonbitdb",
+      "rel": "examples/shopping_cart",
+      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/build/examples/shopping_cart/shopping_cart.mi"
+    },
+    {
+      "root": "moonbitdb/moonbitdb",
+      "rel": "lib",
+      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/build/lib/lib.mi"
     },
     {
       "root": "moonbitlang/core",

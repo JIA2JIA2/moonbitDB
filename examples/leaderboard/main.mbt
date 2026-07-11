@@ -15,7 +15,7 @@ fn Player::new(id : String, name : String) -> Player {
 }
 
 fn main {
-  let db = @moonbitDB.Database::new()
+  let db = @lib.Database::new()
 
   println("========================================")
   println("  游戏排行榜系统 - 部署示例")
@@ -162,7 +162,7 @@ fn main {
   println("\n📊 阶段10：服务器状态统计")
   println("----------------------------------------")
   println("  总 Key 数: \{db.dbsize()}")
-  println("  支持命令数: \{@moonbitDB.Database::command().length()}")
+  println("  支持命令数: \{@lib.Database::command().length()}")
 
   println("\n========================================")
   println("  ✅ 排行榜系统示例运行完成！")

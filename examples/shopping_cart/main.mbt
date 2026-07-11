@@ -63,7 +63,7 @@ fn Product::new(id : String, name : String, price : Float, stock : Int) -> Produ
 }
 
 fn main {
-  let db = @moonbitDB.Database::new()
+  let db = @lib.Database::new()
 
   println("========================================")
   println("  电商购物车 & 缓存系统 - 部署示例")

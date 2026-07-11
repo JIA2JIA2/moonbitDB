@@ -1,6 +1,7 @@
 {
-  "name": "moonbitDB",
+  "name": "JIA2JIA2/moonbitdb",
   "version": "0.1.0",
+  "license": "MIT",
   "deps": {
     "moonbitlang/x": "0.4.38"
   }
