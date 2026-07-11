@@ -451,6 +451,17 @@ let moonbit_test_driver_internal_no_args_tests : MoonBitTestDriverInternalTestMa
     50: (__test_6d6f6f6e62697444422e6d6274_50, ["time_operations"]),
     51: (__test_6d6f6f6e62697444422e6d6274_51, ["command_operations"]),
     52: (__test_6d6f6f6e62697444422e6d6274_52, ["object_encoding_operations"]),
+    53: (__test_6d6f6f6e62697444422e6d6274_53, ["string_extended_edge_cases"]),
+    54: (__test_6d6f6f6e62697444422e6d6274_54, ["hash_extended_edge_cases"]),
+    55: (__test_6d6f6f6e62697444422e6d6274_55, ["list_extended_edge_cases"]),
+    56: (__test_6d6f6f6e62697444422e6d6274_56, ["set_extended_edge_cases"]),
+    57: (__test_6d6f6f6e62697444422e6d6274_57, ["zset_extended_edge_cases"]),
+    58: (__test_6d6f6f6e62697444422e6d6274_58, ["expire_extended_edge_cases"]),
+    59: (__test_6d6f6f6e62697444422e6d6274_59, ["cross_type_safety"]),
+    60: (__test_6d6f6f6e62697444422e6d6274_60, ["batch_extended_edge_cases"]),
+    61: (__test_6d6f6f6e62697444422e6d6274_61, ["server_extended_edge_cases"]),
+    62: (__test_6d6f6f6e62697444422e6d6274_62, ["deque_internal_operations"]),
+    63: (__test_6d6f6f6e62697444422e6d6274_63, ["zset_score_edge_cases"]),
   },
 }
 
