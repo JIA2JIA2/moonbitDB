@@ -425,6 +425,15 @@ let moonbit_test_driver_internal_no_args_tests : MoonBitTestDriverInternalTestMa
     24: (__test_6d6f6f6e62697444422e6d6274_24, ["linsert_operations"]),
     25: (__test_6d6f6f6e62697444422e6d6274_25, ["lpushx_rpushx_operations"]),
     26: (__test_6d6f6f6e62697444422e6d6274_26, ["rpoplpush_operations"]),
+    27: (__test_6d6f6f6e62697444422e6d6274_27, ["sinter_operations"]),
+    28: (__test_6d6f6f6e62697444422e6d6274_28, ["sinterstore_operations"]),
+    29: (__test_6d6f6f6e62697444422e6d6274_29, ["sunion_operations"]),
+    30: (__test_6d6f6f6e62697444422e6d6274_30, ["sunionstore_operations"]),
+    31: (__test_6d6f6f6e62697444422e6d6274_31, ["sdiff_operations"]),
+    32: (__test_6d6f6f6e62697444422e6d6274_32, ["sdiffstore_operations"]),
+    33: (__test_6d6f6f6e62697444422e6d6274_33, ["smove_operations"]),
+    34: (__test_6d6f6f6e62697444422e6d6274_34, ["spop_operations"]),
+    35: (__test_6d6f6f6e62697444422e6d6274_35, ["set_operations_with_expire"]),
   },
 }
 
