@@ -463,6 +463,8 @@ let moonbit_test_driver_internal_no_args_tests : MoonBitTestDriverInternalTestMa
     62: (__test_6d6f6f6e62697444422e6d6274_62, ["deque_internal_operations"]),
     63: (__test_6d6f6f6e62697444422e6d6274_63, ["zset_score_edge_cases"]),
   },
+  "demo.mbt": {
+  },
 }
 
 

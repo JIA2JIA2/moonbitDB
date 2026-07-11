@@ -1,3 +1,4 @@
 {
-  "name": "moonbitDB"
+  "name": "moonbitDB",
+  "is_main": true
 }
