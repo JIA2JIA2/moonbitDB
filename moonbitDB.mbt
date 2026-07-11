@@ -168,8 +168,8 @@ pub enum RedisValue {
 }
 
 pub struct Database {
-  data : Map[String, RedisValue]
-  expires : Map[String, Int]
+  mut data : Map[String, RedisValue]
+  mut expires : Map[String, Int]
   mut current_time : Int
 }
 
@@ -1481,6 +1481,148 @@ pub fn Database::zpopmax(self : Database, key : String) -> (String, Float)? {
   }
 }
 
+pub fn Database::dbsize(self : Database) -> Int {
+  let mut count = 0
+  for key, _ in self.data {
+    if !self.check_expired(key) {
+      count = count + 1
+    }
+  }
+  count
+}
+
+pub fn Database::flushdb(self : Database) -> Unit {
+  self.data = Map([], capacity=1000)
+  self.expires = Map([], capacity=1000)
+}
+
+pub fn Database::flushall(self : Database) -> Unit {
+  self.flushdb()
+}
+
+pub fn Database::randomkey(self : Database) -> String? {
+  let all_keys : Array[String] = []
+  for key, _ in self.data {
+    if !self.check_expired(key) {
+      all_keys.push(key)
+    }
+  }
+  if all_keys.length() == 0 {
+    None
+  } else {
+    let idx = self.current_time % all_keys.length()
+    let safe_idx = if idx < 0 { -idx } else { idx }
+    Some(all_keys[safe_idx])
+  }
+}
+
+pub fn Database::rename(self : Database, old_key : String, new_key : String) -> Bool {
+  if self.check_expired(old_key) {
+    return false
+  }
+  match self.data.get(old_key) {
+    Some(value) => {
+      self.data.set(new_key, value)
+      self.data.remove(old_key)
+      match self.expires.get(old_key) {
+        Some(expire_time) => {
+          self.expires.set(new_key, expire_time)
+          self.expires.remove(old_key)
+        }
+        None => self.expires.remove(new_key)
+      }
+      true
+    }
+    None => false
+  }
+}
+
+pub fn Database::renamenx(self : Database, old_key : String, new_key : String) -> Bool {
+  if self.check_expired(old_key) {
+    return false
+  }
+  if self.check_expired(new_key) {
+    return false
+  }
+  if self.data.contains(new_key) {
+    return false
+  }
+  self.rename(old_key, new_key)
+}
+
+pub fn Database::ping() -> String {
+  "PONG"
+}
+
+pub fn Database::echo(_ : Database, message : String) -> String {
+  message
+}
+
+pub fn Database::info(self : Database) -> String {
+  let mut key_count = 0
+  let mut expire_count = 0
+  for key, _ in self.data {
+    if !self.check_expired(key) {
+      key_count = key_count + 1
+    }
+  }
+  for key, _ in self.expires {
+    if self.data.contains(key) {
+      expire_count = expire_count + 1
+    }
+  }
+  let info_arr : Array[String] = [
+    "# Server",
+    "moonbit_db_version:1.0.0",
+    "uptime_in_ms:\{self.current_time}",
+    "",
+    "# Keyspace",
+    "db0:keys=\{key_count},expires=\{expire_count},avg_ttl=0"
+  ]
+  info_arr.join("\n")
+}
+
+pub fn Database::time(self : Database) -> (Int, Int) {
+  let seconds = self.current_time / 1000
+  let microseconds = (self.current_time % 1000) * 1000
+  (seconds, microseconds)
+}
+
+pub fn Database::command() -> Array[String] {
+  [
+    "SET", "GET", "DEL", "EXISTS", "KEYS", "TYPE", "APPEND", "STRLEN",
+    "INCR", "DECR",
+    "EXPIRE", "PEXPIRE", "TTL", "PTTL", "PERSIST",
+    "MSET", "MGET", "MDEL",
+    "HSET", "HGET", "HDEL", "HGETALL", "HLEN", "HEXISTS", "HKEYS", "HVALS", "HMSET", "HMGET",
+    "LPUSH", "RPUSH", "LPOP", "RPOP", "LLEN", "LRANGE", "LINDEX", "LSET", "LREM", "LINSERT",
+    "LPUSHX", "RPUSHX", "RPOPLPUSH",
+    "SADD", "SMEMBERS", "SREM", "SCARD", "SISMEMBER",
+    "SINTER", "SINTERSTORE", "SUNION", "SUNIONSTORE", "SDIFF", "SDIFFSTORE", "SMOVE", "SPOP",
+    "ZADD", "ZRANGE", "ZCARD", "ZSCORE", "ZREM",
+    "ZRANGEBYSCORE", "ZCOUNT", "ZREVRANGE", "ZREVRANGEBYSCORE",
+    "ZRANK", "ZREVRANK", "ZINCRBY", "ZREMRANGEBYRANK", "ZREMRANGEBYSCORE",
+    "ZPOPMIN", "ZPOPMAX",
+    "DBSIZE", "FLUSHDB", "FLUSHALL", "RANDOMKEY", "RENAME", "RENAMENX",
+    "PING", "ECHO", "INFO", "TIME", "COMMAND"
+  ]
+}
+
+pub fn Database::object_encoding(self : Database, key : String) -> String? {
+  if self.check_expired(key) {
+    None
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::String(_)) => Some("embstr")
+      Some(RedisValue::Hash(h)) => if h.length() > 512 { Some("hashtable") } else { Some("listpack") }
+      Some(RedisValue::List(d)) => if d.length() > 128 { Some("quicklist") } else { Some("listpack") }
+      Some(RedisValue::Set(s)) => if s.length() > 128 { Some("hashtable") } else { Some("listpack") }
+      Some(RedisValue::ZSet(z)) => if z.length() > 128 { Some("skiplist") } else { Some("listpack") }
+      None => None
+    }
+  }
+}
+
 test "cross_type_operations" {
   let db = Database::new()
   
@@ -2551,4 +2693,177 @@ test "zpopmin_zpopmax_operations" {
   
   let nonexistent = db.zpopmin("nonexistent")
   debug_inspect(nonexistent is None, content="true")
+}
+
+test "dbsize_flushdb_operations" {
+  let db = Database::new()
+  
+  debug_inspect(db.dbsize(), content="0")
+  
+  db.set("key1", "value1")
+  db.set("key2", "value2")
+  db.set("key3", "value3")
+  
+  debug_inspect(db.dbsize(), content="3")
+  
+  db.del("key1") |> ignore
+  debug_inspect(db.dbsize(), content="2")
+  
+  db.flushdb()
+  debug_inspect(db.dbsize(), content="0")
+  debug_inspect(db.exists("key2"), content="false")
+  debug_inspect(db.exists("key3"), content="false")
+  
+  db.set("a", "1") |> ignore
+  db.flushall()
+  debug_inspect(db.dbsize(), content="0")
+}
+
+test "randomkey_operations" {
+  let db = Database::new()
+  
+  debug_inspect(db.randomkey() is None, content="true")
+  
+  db.set("key1", "value1")
+  db.set("key2", "value2")
+  db.set("key3", "value3")
+  
+  let key = db.randomkey()
+  debug_inspect(key is None, content="false")
+  
+  let key_val = match key {
+    Some(k) => k
+    None => ""
+  }
+  debug_inspect(db.exists(key_val), content="true")
+  
+  db.del("key1") |> ignore
+  db.del("key2") |> ignore
+  db.del("key3") |> ignore
+  
+  debug_inspect(db.randomkey() is None, content="true")
+}
+
+test "rename_operations" {
+  let db = Database::new()
+  
+  db.set("old_key", "value1")
+  
+  debug_inspect(db.rename("old_key", "new_key"), content="true")
+  debug_inspect(db.get("new_key"), content="Some(\"value1\")")
+  debug_inspect(db.exists("old_key"), content="false")
+  
+  debug_inspect(db.rename("nonexistent", "target"), content="false")
+  
+  db.set("key_a", "a") |> ignore
+  db.set("key_b", "b") |> ignore
+  debug_inspect(db.rename("key_a", "key_b"), content="true")
+  debug_inspect(db.get("key_b"), content="Some(\"a\")")
+  debug_inspect(db.exists("key_a"), content="false")
+  
+  db.set("src", "src_val") |> ignore
+  db.expire("src", 100) |> ignore
+  db.rename("src", "dst") |> ignore
+  debug_inspect(db.ttl("dst") >= 0, content="true")
+  debug_inspect(db.exists("src"), content="false")
+}
+
+test "renamenx_operations" {
+  let db = Database::new()
+  
+  db.set("key1", "value1") |> ignore
+  db.set("key2", "value2") |> ignore
+  
+  debug_inspect(db.renamenx("key1", "key3"), content="true")
+  debug_inspect(db.get("key3"), content="Some(\"value1\")")
+  debug_inspect(db.exists("key1"), content="false")
+  
+  db.set("key4", "value4") |> ignore
+  debug_inspect(db.renamenx("key2", "key4"), content="false")
+  debug_inspect(db.get("key4"), content="Some(\"value4\")")
+  debug_inspect(db.get("key2"), content="Some(\"value2\")")
+  
+  debug_inspect(db.renamenx("nonexistent", "key5"), content="false")
+}
+
+test "ping_echo_operations" {
+  let db = Database::new()
+  
+  debug_inspect(Database::ping(), content="\"PONG\"")
+  
+  debug_inspect(Database::echo(db, "Hello World"), content="\"Hello World\"")
+  debug_inspect(Database::echo(db, ""), content="\"\"")
+  debug_inspect(Database::echo(db, "123"), content="\"123\"")
+}
+
+test "info_operations" {
+  let db = Database::new()
+  
+  db.set("key1", "value1") |> ignore
+  db.set("key2", "value2") |> ignore
+  db.expire("key1", 100) |> ignore
+  
+  let info = db.info()
+  debug_inspect(info.contains("moonbit_db_version"), content="true")
+  debug_inspect(info.contains("keys=2"), content="true")
+  debug_inspect(info.contains("expires=1"), content="true")
+  
+  db.advance_time(200000)
+  let info2 = db.info()
+  debug_inspect(info2.contains("uptime_in_ms:200000"), content="true")
+  debug_inspect(info2.contains("keys=1"), content="true")
+}
+
+test "time_operations" {
+  let db = Database::new()
+  
+  let t1 = db.time()
+  debug_inspect(t1.0, content="0")
+  debug_inspect(t1.1, content="0")
+  
+  db.set_time(5000)
+  let t2 = db.time()
+  debug_inspect(t2.0, content="5")
+  debug_inspect(t2.1, content="0")
+  
+  db.set_time(5678)
+  let t3 = db.time()
+  debug_inspect(t3.0, content="5")
+  debug_inspect(t3.1, content="678000")
+}
+
+test "command_operations" {
+  let commands = Database::command()
+  debug_inspect(commands.length() > 50, content="true")
+  
+  debug_inspect(commands.contains("SET"), content="true")
+  debug_inspect(commands.contains("GET"), content="true")
+  debug_inspect(commands.contains("HSET"), content="true")
+  debug_inspect(commands.contains("LPUSH"), content="true")
+  debug_inspect(commands.contains("SADD"), content="true")
+  debug_inspect(commands.contains("ZADD"), content="true")
+  debug_inspect(commands.contains("DBSIZE"), content="true")
+  debug_inspect(commands.contains("FLUSHDB"), content="true")
+  debug_inspect(commands.contains("PING"), content="true")
+}
+
+test "object_encoding_operations" {
+  let db = Database::new()
+  
+  db.set("str_key", "hello")
+  debug_inspect(db.object_encoding("str_key"), content="Some(\"embstr\")")
+  
+  db.hset("hash_key", "field", "value")
+  debug_inspect(db.object_encoding("hash_key"), content="Some(\"listpack\")")
+  
+  db.rpush("list_key", "item") |> ignore
+  debug_inspect(db.object_encoding("list_key"), content="Some(\"listpack\")")
+  
+  db.sadd("set_key", "member") |> ignore
+  debug_inspect(db.object_encoding("set_key"), content="Some(\"listpack\")")
+  
+  db.zadd("zset_key", 1.0, "member") |> ignore
+  debug_inspect(db.object_encoding("zset_key"), content="Some(\"listpack\")")
+  
+  debug_inspect(db.object_encoding("nonexistent"), content="None")
 }
