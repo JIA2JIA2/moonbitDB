@@ -1522,6 +1522,9 @@ pub fn Database::rename(self : Database, old_key : String, new_key : String) -> 
   }
   match self.data.get(old_key) {
     Some(value) => {
+      if old_key == new_key {
+        return true
+      }
       self.data.set(new_key, value)
       self.data.remove(old_key)
       match self.expires.get(old_key) {
@@ -2866,4 +2869,375 @@ test "object_encoding_operations" {
   debug_inspect(db.object_encoding("zset_key"), content="Some(\"listpack\")")
   
   debug_inspect(db.object_encoding("nonexistent"), content="None")
+}
+
+test "string_extended_edge_cases" {
+  let db = Database::new()
+  
+  db.set("counter", "10")
+  debug_inspect(db.incr("counter"), content="Some(11)")
+  debug_inspect(db.incr("counter"), content="Some(12)")
+  debug_inspect(db.decr("counter"), content="Some(11)")
+  
+  db.set("zero", "0")
+  debug_inspect(db.decr("zero"), content="Some(-1)")
+  debug_inspect(db.decr("zero"), content="Some(-2)")
+  
+  debug_inspect(db.incr("new_counter"), content="Some(1)")
+  
+  db.set("not_number", "abc")
+  debug_inspect(db.incr("not_number"), content="None")
+  debug_inspect(db.decr("not_number"), content="None")
+  
+  db.set("append_key", "Hello")
+  db.append("append_key", " World") |> ignore
+  debug_inspect(db.get("append_key"), content="Some(\"Hello World\")")
+  debug_inspect(db.strlen("append_key"), content="11")
+  
+  db.append("new_append", "First") |> ignore
+  debug_inspect(db.get("new_append"), content="Some(\"First\")")
+  
+  db.set("unicode", "你好")
+  debug_inspect(db.strlen("unicode"), content="2")
+}
+
+test "hash_extended_edge_cases" {
+  let db = Database::new()
+  
+  db.hset("user:1", "name", "Alice") |> ignore
+  db.hset("user:1", "age", "30") |> ignore
+  db.hset("user:1", "email", "alice@test.com") |> ignore
+  
+  debug_inspect(db.hlen("user:1"), content="3")
+  
+  db.hset("user:1", "age", "31") |> ignore
+  debug_inspect(db.hget("user:1", "age"), content="Some(\"31\")")
+  debug_inspect(db.hlen("user:1"), content="3")
+  
+  debug_inspect(db.hdel("user:1", "email"), content="true")
+  debug_inspect(db.hdel("user:1", "email"), content="false")
+  debug_inspect(db.hlen("user:1"), content="2")
+  
+  debug_inspect(db.hget("user:1", "name"), content="Some(\"Alice\")")
+  debug_inspect(db.hget("user:1", "nonexistent"), content="None")
+  
+  let all = db.hgetall("user:1")
+  debug_inspect(all.length(), content="2")
+  
+  debug_inspect(db.hlen("nonexistent"), content="0")
+  let empty_all = db.hgetall("nonexistent")
+  debug_inspect(empty_all.length(), content="0")
+}
+
+test "list_extended_edge_cases" {
+  let db = Database::new()
+  
+  db.lpush("mix", "b") |> ignore
+  db.rpush("mix", "c") |> ignore
+  db.lpush("mix", "a") |> ignore
+  db.rpush("mix", "d") |> ignore
+  
+  debug_inspect(db.lindex("mix", 0), content="Some(\"a\")")
+  debug_inspect(db.lindex("mix", 1), content="Some(\"b\")")
+  debug_inspect(db.lindex("mix", 2), content="Some(\"c\")")
+  debug_inspect(db.lindex("mix", 3), content="Some(\"d\")")
+  
+  let rev_range = db.lrange("mix", 2, 0)
+  debug_inspect(rev_range.length(), content="0")
+  
+  let full = db.lrange("mix", 0, -1)
+  debug_inspect(full.length(), content="4")
+  
+  let single = db.lrange("mix", 1, 1)
+  debug_inspect(single.length(), content="1")
+  debug_inspect(single[0], content="\"b\"")
+  
+  debug_inspect(db.lindex("mix", -4), content="Some(\"a\")")
+  debug_inspect(db.lindex("mix", -1), content="Some(\"d\")")
+  debug_inspect(db.lindex("mix", 100), content="None")
+  debug_inspect(db.lindex("mix", -100), content="None")
+  
+  db.lset("mix", 0, "A") |> ignore
+  debug_inspect(db.lindex("mix", 0), content="Some(\"A\")")
+  
+  debug_inspect(db.lrem("mix", 0, "nonexistent"), content="0")
+}
+
+test "set_extended_edge_cases" {
+  let db = Database::new()
+  
+  debug_inspect(db.sadd("s1", "a"), content="true")
+  debug_inspect(db.sadd("s1", "a"), content="false")
+  debug_inspect(db.sadd("s1", "b"), content="true")
+  
+  debug_inspect(db.srem("s1", "nonexistent"), content="false")
+  debug_inspect(db.srem("s1", "a"), content="true")
+  debug_inspect(db.srem("s1", "a"), content="false")
+  
+  debug_inspect(db.scard("nonexistent"), content="0")
+  debug_inspect(db.sismember("nonexistent", "x"), content="false")
+  
+  db.sadd("empty_set", "temp") |> ignore
+  db.srem("empty_set", "temp") |> ignore
+  debug_inspect(db.scard("empty_set"), content="0")
+  
+  db.sadd("set_a", "1") |> ignore
+  db.sadd("set_a", "2") |> ignore
+  db.sadd("set_a", "3") |> ignore
+  db.sadd("set_b", "3") |> ignore
+  db.sadd("set_b", "4") |> ignore
+  db.sadd("set_b", "5") |> ignore
+  
+  let inter = db.sinter(["set_a", "set_b"])
+  debug_inspect(inter.length(), content="1")
+  debug_inspect(inter.contains("3"), content="true")
+  
+  let self_inter = db.sinter(["set_a"])
+  debug_inspect(self_inter.length(), content="3")
+  
+  let self_union = db.sunion(["set_a"])
+  debug_inspect(self_union.length(), content="3")
+  
+  let self_diff = db.sdiff(["set_a"])
+  debug_inspect(self_diff.length(), content="3")
+  
+  let no_overlap = db.sinter(["set_a", "set_b", "nonexistent"])
+  debug_inspect(no_overlap.length(), content="0")
+}
+
+test "zset_extended_edge_cases" {
+  let db = Database::new()
+  
+  db.zadd("zset", 1.0, "a") |> ignore
+  debug_inspect(db.zadd("zset", 5.0, "a"), content="false")
+  debug_inspect(db.zscore("zset", "a"), content="Some(5)")
+  
+  debug_inspect(db.zscore("zset", "nonexistent"), content="None")
+  debug_inspect(db.zscore("nonexistent", "a"), content="None")
+  
+  debug_inspect(db.zcard("nonexistent"), content="0")
+  
+  let single = db.zrange("zset", 0, -1)
+  debug_inspect(single.length(), content="1")
+  
+  db.zadd("zset", 3.0, "b") |> ignore
+  db.zadd("zset", 3.0, "c") |> ignore
+  
+  let score_range = db.zrangebyscore("zset", 3.0, 3.0)
+  debug_inspect(score_range.length(), content="2")
+  
+  let count_exact = db.zcount("zset", 3.0, 3.0)
+  debug_inspect(count_exact, content="2")
+  
+  debug_inspect(db.zrank("zset", "a"), content="Some(2)")
+  debug_inspect(db.zrank("zset", "b"), content="Some(0)")
+  
+  db.zincrby("zset", -10.0, "a") |> ignore
+  debug_inspect(db.zscore("zset", "a"), content="Some(-5)")
+  
+  let rev = db.zrange("zset", 0, -1)
+  debug_inspect(rev[0], content="\"a\"")
+  
+  debug_inspect(db.zrem("zset", "nonexistent"), content="false")
+  debug_inspect(db.zrem("nonexistent", "a"), content="false")
+  
+  debug_inspect(db.zremrangebyrank("zset", 100, 200), content="0")
+  debug_inspect(db.zremrangebyscore("zset", 100.0, 200.0), content="0")
+}
+
+test "expire_extended_edge_cases" {
+  let db = Database::new()
+  
+  debug_inspect(db.expire("nonexistent", 100), content="false")
+  
+  debug_inspect(db.pexpire("nonexistent", 100000), content="false")
+  
+  db.set("key1", "value1") |> ignore
+  debug_inspect(db.persist("key1"), content="false")
+  
+  db.expire("key1", 100) |> ignore
+  debug_inspect(db.persist("key1"), content="true")
+  debug_inspect(db.ttl("key1"), content="-1")
+  debug_inspect(db.persist("key1"), content="false")
+  
+  db.set("key2", "value2") |> ignore
+  db.pexpire("key2", 500) |> ignore
+  debug_inspect(db.pttl("key2") >= 0, content="true")
+  
+  db.advance_time(300)
+  debug_inspect(db.exists("key2"), content="true")
+  
+  db.advance_time(300)
+  debug_inspect(db.exists("key2"), content="false")
+  
+  db.set("key3", "value3") |> ignore
+  db.expire("key3", 100) |> ignore
+  db.set("key3", "new_value") |> ignore
+  debug_inspect(db.ttl("key3"), content="-1")
+  
+  db.set("key4", "value4") |> ignore
+  db.expire("key4", 100) |> ignore
+  db.del("key4") |> ignore
+  debug_inspect(db.exists("key4"), content="false")
+  debug_inspect(db.ttl("key4"), content="-2")
+}
+
+test "cross_type_safety" {
+  let db = Database::new()
+  
+  db.set("str_key", "hello") |> ignore
+  db.lpush("str_key", "item") |> ignore
+  debug_inspect(db.type_of("str_key"), content="\"list\"")
+  
+  db.lpush("list_key", "item1") |> ignore
+  db.hset("list_key", "field", "value") |> ignore
+  debug_inspect(db.type_of("list_key"), content="\"hash\"")
+  
+  db.sadd("set_key", "member") |> ignore
+  db.zadd("set_key", 1.0, "zmember") |> ignore
+  debug_inspect(db.type_of("set_key"), content="\"zset\"")
+  
+  db.hset("hash_key", "f", "v") |> ignore
+  db.set("hash_key", "string_value") |> ignore
+  debug_inspect(db.type_of("hash_key"), content="\"string\"")
+  
+  debug_inspect(db.type_of("nonexistent"), content="\"none\"")
+}
+
+test "batch_extended_edge_cases" {
+  let db = Database::new()
+  
+  db.mset(["k1", "k2"], ["v1", "v2"]) |> ignore
+  debug_inspect(db.get("k1"), content="Some(\"v1\")")
+  debug_inspect(db.get("k2"), content="Some(\"v2\")")
+  
+  db.mset(["k1", "k2"], ["new_v1", "new_v2"]) |> ignore
+  debug_inspect(db.get("k1"), content="Some(\"new_v1\")")
+  
+  db.set("k3", "existing") |> ignore
+  let result = db.mget(["k1", "k2", "k3", "nonexistent"])
+  debug_inspect(result.length(), content="4")
+  debug_inspect(result[0], content="Some(\"new_v1\")")
+  debug_inspect(result[1], content="Some(\"new_v2\")")
+  debug_inspect(result[2], content="Some(\"existing\")")
+  debug_inspect(result[3], content="None")
+  
+  db.mset(["k4", "k5", "k6"], ["v4"]) |> ignore
+  debug_inspect(db.exists("k4"), content="true")
+  debug_inspect(db.exists("k5"), content="false")
+  debug_inspect(db.exists("k6"), content="false")
+  
+  let deleted = db.mdel(["k1", "k2", "k3", "nonexistent"])
+  debug_inspect(deleted, content="3")
+  
+  db.hmset("hash_batch", ["f1", "f2"], ["v1", "v2"]) |> ignore
+  db.hmset("hash_batch", ["f3", "f4"], ["v3", "v4"]) |> ignore
+  debug_inspect(db.hlen("hash_batch"), content="4")
+  
+  db.hmset("hash_batch", ["f1"], ["updated"]) |> ignore
+  debug_inspect(db.hget("hash_batch", "f1"), content="Some(\"updated\")")
+  debug_inspect(db.hlen("hash_batch"), content="4")
+}
+
+test "server_extended_edge_cases" {
+  let db = Database::new()
+  
+  db.set("key1", "value1") |> ignore
+  db.set("key2", "value2") |> ignore
+  db.expire("key1", 1) |> ignore
+  
+  db.advance_time(2000)
+  
+  debug_inspect(db.dbsize(), content="1")
+  
+  db.set("key3", "value3") |> ignore
+  debug_inspect(db.rename("key3", "key3"), content="true")
+  debug_inspect(db.get("key3"), content="Some(\"value3\")")
+  
+  db.set("key4", "value4") |> ignore
+  db.expire("key4", 100) |> ignore
+  db.rename("key4", "key5") |> ignore
+  debug_inspect(db.ttl("key5") >= 0, content="true")
+  
+  db.set("key6", "value6") |> ignore
+  db.set("key7", "value7") |> ignore
+  debug_inspect(db.renamenx("key6", "key6"), content="false")
+  
+  let all_keys = db.keys()
+  let _ = db.randomkey()
+  debug_inspect(all_keys.length() > 0, content="true")
+  
+  db.flushdb()
+  debug_inspect(db.dbsize(), content="0")
+  debug_inspect(db.randomkey() is None, content="true")
+}
+
+test "deque_internal_operations" {
+  let db = Database::new()
+  
+  db.lpush("dq", "c") |> ignore
+  db.lpush("dq", "b") |> ignore
+  db.lpush("dq", "a") |> ignore
+  db.rpush("dq", "d") |> ignore
+  db.rpush("dq", "e") |> ignore
+  
+  debug_inspect(db.lindex("dq", 0), content="Some(\"a\")")
+  debug_inspect(db.lindex("dq", 4), content="Some(\"e\")")
+  debug_inspect(db.lindex("dq", 2), content="Some(\"c\")")
+  
+  db.lset("dq", 2, "C") |> ignore
+  debug_inspect(db.lindex("dq", 2), content="Some(\"C\")")
+  
+  db.lrem("dq", 1, "C") |> ignore
+  debug_inspect(db.llen("dq"), content="4")
+  
+  db.linsert("dq", true, "b", "B") |> ignore
+  debug_inspect(db.lindex("dq", 1), content="Some(\"B\")")
+  
+  db.linsert("dq", false, "d", "D") |> ignore
+  debug_inspect(db.lindex("dq", 4), content="Some(\"D\")")
+  debug_inspect(db.llen("dq"), content="6")
+  
+  let val = db.rpoplpush("dq", "dq2")
+  debug_inspect(val, content="Some(\"e\")")
+  debug_inspect(db.llen("dq"), content="5")
+  debug_inspect(db.llen("dq2"), content="1")
+}
+
+test "zset_score_edge_cases" {
+  let db = Database::new()
+  
+  db.zadd("zset", 0.0, "zero") |> ignore
+  db.zadd("zset", -1.0, "negative") |> ignore
+  db.zadd("zset", 3.14, "pi") |> ignore
+  db.zadd("zset", -0.5, "neg_half") |> ignore
+  
+  let sorted = db.zrange("zset", 0, -1)
+  debug_inspect(sorted[0], content="\"negative\"")
+  debug_inspect(sorted[1], content="\"neg_half\"")
+  debug_inspect(sorted[2], content="\"zero\"")
+  debug_inspect(sorted[3], content="\"pi\"")
+  
+  let neg_range = db.zrangebyscore("zset", -1.0, 0.0)
+  debug_inspect(neg_range.length(), content="3")
+  
+  let pos_count = db.zcount("zset", 0.0, 100.0)
+  debug_inspect(pos_count, content="2")
+  
+  db.zincrby("zset", 1.5, "zero") |> ignore
+  debug_inspect(db.zscore("zset", "zero"), content="Some(1.5)")
+  
+  let min_pop = db.zpopmin("zset")
+  let min_val = match min_pop {
+    Some(v) => v
+    None => ("", 0.0)
+  }
+  debug_inspect(min_val.0, content="\"negative\"")
+  
+  let max_pop = db.zpopmax("zset")
+  let max_val = match max_pop {
+    Some(v) => v
+    None => ("", 0.0)
+  }
+  debug_inspect(max_val.0, content="\"pi\"")
 }
