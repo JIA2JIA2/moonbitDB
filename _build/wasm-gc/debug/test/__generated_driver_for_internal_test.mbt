@@ -434,6 +434,14 @@ let moonbit_test_driver_internal_no_args_tests : MoonBitTestDriverInternalTestMa
     33: (__test_6d6f6f6e62697444422e6d6274_33, ["smove_operations"]),
     34: (__test_6d6f6f6e62697444422e6d6274_34, ["spop_operations"]),
     35: (__test_6d6f6f6e62697444422e6d6274_35, ["set_operations_with_expire"]),
+    36: (__test_6d6f6f6e62697444422e6d6274_36, ["zrangebyscore_zcount_operations"]),
+    37: (__test_6d6f6f6e62697444422e6d6274_37, ["zrevrange_operations"]),
+    38: (__test_6d6f6f6e62697444422e6d6274_38, ["zrevrangebyscore_operations"]),
+    39: (__test_6d6f6f6e62697444422e6d6274_39, ["zrank_zrevrank_operations"]),
+    40: (__test_6d6f6f6e62697444422e6d6274_40, ["zincrby_operations"]),
+    41: (__test_6d6f6f6e62697444422e6d6274_41, ["zremrangebyrank_operations"]),
+    42: (__test_6d6f6f6e62697444422e6d6274_42, ["zremrangebyscore_operations"]),
+    43: (__test_6d6f6f6e62697444422e6d6274_43, ["zpopmin_zpopmax_operations"]),
   },
 }
 
