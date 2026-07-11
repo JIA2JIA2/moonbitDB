@@ -1,0 +1,4 @@
+{
+  "import": ["moonbitDB"],
+  "is_main": true
+}

@@ -6,6 +6,26 @@
       "artifact": "/home/developer/Documents2/moonbitDB/_build/native/debug/build/moonbitDB.mi"
     },
     {
+      "root": "moonbitDB",
+      "rel": "examples/basic_usage",
+      "artifact": "/home/developer/Documents2/moonbitDB/_build/native/debug/build/examples/basic_usage/basic_usage.mi"
+    },
+    {
+      "root": "moonbitDB",
+      "rel": "examples/cli_repl",
+      "artifact": "/home/developer/Documents2/moonbitDB/_build/native/debug/build/examples/cli_repl/cli_repl.mi"
+    },
+    {
+      "root": "moonbitDB",
+      "rel": "examples/leaderboard",
+      "artifact": "/home/developer/Documents2/moonbitDB/_build/native/debug/build/examples/leaderboard/leaderboard.mi"
+    },
+    {
+      "root": "moonbitDB",
+      "rel": "examples/shopping_cart",
+      "artifact": "/home/developer/Documents2/moonbitDB/_build/native/debug/build/examples/shopping_cart/shopping_cart.mi"
+    },
+    {
       "root": "moonbitlang/core",
       "rel": "abort",
       "artifact": "/home/developer/.moon/lib/core/_build/native/release/bundle/abort/abort.mi"

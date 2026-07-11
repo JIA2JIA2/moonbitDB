@@ -1,0 +1,9 @@
+-I/home/developer/.moon/include
+-L/home/developer/.moon/lib
+-g
+-DMOONBIT_NATIVE_NO_SYS_HEADER
+-fPIC
+-DMOONBIT_USE_SHARED_RUNTIME
+/home/developer/Documents2/moonbitDB/_build/native/debug/build/libruntime.so
+-run
+/home/developer/Documents2/moonbitDB/_build/native/debug/build/examples/basic_usage/basic_usage.c

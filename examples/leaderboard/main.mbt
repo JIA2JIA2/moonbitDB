@@ -1,3 +1,10 @@
+fn show_opt_float(opt : Float?) -> String {
+  match opt {
+    Some(v) => "\{v}"
+    None => "N/A"
+  }
+}
+
 struct Player {
   id : String
   name : String
@@ -7,13 +14,13 @@ fn Player::new(id : String, name : String) -> Player {
   { id, name }
 }
 
-fn main() -> Unit {
-  let db = Database::new()
-  
+fn main {
+  let db = @moonbitDB.Database::new()
+
   println("========================================")
   println("  游戏排行榜系统 - 部署示例")
   println("========================================")
-  
+
   let players = [
     Player::new("p1", "Alice"),
     Player::new("p2", "Bob"),
@@ -24,18 +31,18 @@ fn main() -> Unit {
     Player::new("p7", "Grace"),
     Player::new("p8", "Henry")
   ]
-  
+
   println("\n📊 阶段1：初始化玩家分数")
   println("----------------------------------------")
   for i = 0; i < players.length(); i = i + 1 {
     let player = players[i]
-    let score = (i * 100 + 50).to_float()
+    let score = Float::from_int(i * 100 + 50)
     db.zadd("leaderboard:global", score, player.id) |> ignore
     db.hset("player:\{player.id}", "name", player.name) |> ignore
-    db.hset("player:\{player.id}", "score", int_to_string(i * 100 + 50)) |> ignore
+    db.hset("player:\{player.id}", "score", "\{i * 100 + 50}") |> ignore
     println("  玩家 \{player.name} (ID: \{player.id}): \{i * 100 + 50} 分")
   }
-  
+
   println("\n🏆 阶段2：查询排行榜 TOP 5")
   println("----------------------------------------")
   let top5_ids = db.zrevrange("leaderboard:global", 0, 4)
@@ -47,24 +54,15 @@ fn main() -> Unit {
       Some(n) => n
       None => "Unknown"
     }
-    let score = db.zscore("leaderboard:global", pid)
-    let score_str = match score {
-      Some(s) => "\{s}"
-      None => "N/A"
-    }
-    println("   #\{i + 1}  | \{pid}     | \{pname}    | \{score_str}")
+    let score = show_opt_float(db.zscore("leaderboard:global", pid))
+    println("   #\{i + 1}  | \{pid}     | \{pname}    | \{score}")
   }
-  
+
   println("\n🔄 阶段3：模拟游戏对局更新分数")
   println("----------------------------------------")
-  let score_updates = [
-    ("p1", 250.0),
-    ("p3", 180.0),
-    ("p5", 320.0),
-    ("p7", 410.0)
-  ]
-  for i = 0; i < score_updates.length(); i = i + 1 {
-    let (pid, add_score) = score_updates[i]
+  let updates : Array[(String, Float)] = [("p1", 250.0), ("p3", 180.0), ("p5", 320.0), ("p7", 410.0)]
+  for i = 0; i < updates.length(); i = i + 1 {
+    let (pid, add_score) = updates[i]
     let new_score = db.zincrby("leaderboard:global", add_score, pid)
     let pname = match db.hget("player:\{pid}", "name") {
       Some(n) => n
@@ -72,7 +70,7 @@ fn main() -> Unit {
     }
     println("  \{pname} 增加 \{add_score} 分，新总分: \{new_score}")
   }
-  
+
   println("\n🏆 阶段4：更新后的完整排行榜")
   println("----------------------------------------")
   let all_ids = db.zrevrange("leaderboard:global", 0, -1)
@@ -84,10 +82,7 @@ fn main() -> Unit {
       Some(n) => n
       None => "Unknown"
     }
-    let score = match db.zscore("leaderboard:global", pid) {
-      Some(s) => "\{s}"
-      None => "N/A"
-    }
+    let score = show_opt_float(db.zscore("leaderboard:global", pid))
     let new_rank = db.zrevrank("leaderboard:global", pid)
     let rank_str = match new_rank {
       Some(r) => "#\{r + 1}"
@@ -98,15 +93,14 @@ fn main() -> Unit {
     let change_str = if change > 0 { "↑\{change}" } else if change < 0 { "↓\{-change}" } else { "—" }
     println("   \{rank_str}  | \{pid}     | \{pname}    | \{score} | \{change_str}")
   }
-  
+
   println("\n📈 阶段5：分数区间统计")
   println("----------------------------------------")
   let count_200_400 = db.zcount("leaderboard:global", 200.0, 400.0)
   println("  200-400 分区间玩家数: \{count_200_400}")
-  
   let mid_players = db.zrangebyscore("leaderboard:global", 100.0, 300.0)
   println("  100-300 分区间玩家: \{mid_players.join(", ")}")
-  
+
   println("\n🎮 阶段6：每日排行榜（带过期）")
   println("----------------------------------------")
   db.zadd("leaderboard:daily", 500.0, "p1") |> ignore
@@ -115,7 +109,7 @@ fn main() -> Unit {
   db.expire("leaderboard:daily", 86400) |> ignore
   println("  每日排行榜已创建，24小时后自动过期")
   println("  TTL: \{db.ttl("leaderboard:daily")} 秒")
-  
+
   println("\n👑 阶段7：弹出每日前三名领奖")
   println("----------------------------------------")
   for i = 0; i < 3; i = i + 1 {
@@ -131,7 +125,7 @@ fn main() -> Unit {
       None => println("  第 \{i + 1} 名: 无")
     }
   }
-  
+
   println("\n📦 阶段8：使用Set管理好友关系")
   println("----------------------------------------")
   db.sadd("friends:p1", "p2") |> ignore
@@ -140,30 +134,21 @@ fn main() -> Unit {
   db.sadd("friends:p2", "p1") |> ignore
   db.sadd("friends:p2", "p3") |> ignore
   db.sadd("friends:p2", "p5") |> ignore
-  
   let mutual = db.sinter(["friends:p1", "friends:p2"])
   println("  Alice 和 Bob 的共同好友数: \{mutual.length()}")
   println("  共同好友ID: \{mutual.join(", ")}")
-  
   let all_friends = db.sunion(["friends:p1", "friends:p2"])
   println("  两人好友总数（去重）: \{all_friends.length()}")
-  
   let only_p1 = db.sdiff(["friends:p1", "friends:p2"])
   println("  仅 Alice 有的好友: \{only_p1.join(", ")}")
-  
+
   println("\n📋 阶段9：使用List管理消息队列")
   println("----------------------------------------")
-  let messages = [
-    "系统维护通知",
-    "新版本发布",
-    "活动奖励发放",
-    "赛季更新预告"
-  ]
+  let messages = ["系统维护通知", "新版本发布", "活动奖励发放", "赛季更新预告"]
   for msg in messages {
     db.rpush("notifications:global", msg) |> ignore
   }
   println("  消息队列长度: \{db.llen("notifications:global")}")
-  
   println("  逐条消费消息:")
   while db.llen("notifications:global") > 0 {
     let msg = db.lpop("notifications:global")
@@ -173,21 +158,12 @@ fn main() -> Unit {
     }
   }
   println("  队列剩余长度: \{db.llen("notifications:global")}")
-  
+
   println("\n📊 阶段10：服务器状态统计")
   println("----------------------------------------")
   println("  总 Key 数: \{db.dbsize()}")
-  println("  随机 Key: \{db.randomkey()}")
-  println("  支持命令数: \{Database::command().length()}")
-  
-  let info = db.info()
-  let info_lines = info.split("\n")
-  for line in info_lines {
-    if line.starts_with("db0") {
-      println("  数据库: \{line}")
-    }
-  }
-  
+  println("  支持命令数: \{@moonbitDB.Database::command().length()}")
+
   println("\n========================================")
   println("  ✅ 排行榜系统示例运行完成！")
   println("========================================")

@@ -22,13 +22,21 @@ moon test
 
 ```
 moonbitDB/
-├── moonbitDB.mbt               # 核心数据库实现（~3200 行）
-├── demo.mbt                    # 快速开始演示（可运行）
-├── examples/                   # 场景部署示例
-│   ├── basic_usage.mbt        # 基础 API 使用示例
-│   ├── leaderboard_demo.mbt   # 游戏排行榜场景
-│   ├── shopping_cart_demo.mbt # 电商购物车 / 缓存场景
-│   └── cli_repl_demo.mbt      # 命令行交互演示
+├── moonbitDB.mbt              # 核心数据库实现（~3200 行）
+├── demo.mbt                   # 快速开始演示（可运行）
+├── examples/                  # 场景部署示例（独立子包，均可运行）
+│   ├── basic_usage/           # 基础 API 使用示例
+│   │   ├── main.mbt
+│   │   └── moon.pkg.json
+│   ├── leaderboard/           # 游戏排行榜场景
+│   │   ├── main.mbt
+│   │   └── moon.pkg.json
+│   ├── shopping_cart/         # 电商购物车 / 缓存场景
+│   │   ├── main.mbt
+│   │   └── moon.pkg.json
+│   └── cli_repl/              # 命令行交互演示
+│       ├── main.mbt
+│       └── moon.pkg.json
 ├── moon.mod.json               # 模块配置
 ├── moon.pkg.json               # 包配置（is_main: true）
 └── README.md                   # 本文档
@@ -169,6 +177,8 @@ moonbitDB/
 
 ## 部署示例
 
+所有示例均为独立子包，可单独运行。运行前需先安装 [MoonBit](https://www.moonbitlang.com/) CLI 工具。
+
 ### 1. 快速开始演示
 
 直接运行主包即可看到 8 大功能模块的完整演示：
@@ -212,9 +222,25 @@ moon run . --target native
 ========================================
 ```
 
-### 2. 游戏排行榜系统
+### 2. 基础 API 使用示例
 
-参考 [examples/leaderboard_demo.mbt](examples/leaderboard_demo.mbt)
+覆盖所有 5 种数据结构的基础操作演示。
+
+```bash
+moon run examples/basic_usage --target native
+```
+
+参考 [examples/basic_usage/main.mbt](examples/basic_usage/main.mbt)
+
+### 3. 游戏排行榜系统
+
+10 阶段完整场景：初始化分数 → TOP 5 查询 → 对局更新 → 排名变化 → 分数统计 → 每日榜单 → 领奖弹出 → 好友关系 → 消息队列 → 状态统计。
+
+```bash
+moon run examples/leaderboard --target native
+```
+
+参考 [examples/leaderboard/main.mbt](examples/leaderboard/main.mbt)
 
 展示了如何使用：
 - **ZSET** 实现玩家分数排名
@@ -226,9 +252,15 @@ moon run . --target native
 - **LIST** 实现消息队列
 - **HASH** 存储玩家信息
 
-### 3. 电商购物车 & 缓存
+### 4. 电商购物车 & 缓存
 
-参考 [examples/shopping_cart_demo.mbt](examples/shopping_cart_demo.mbt)
+10 阶段完整场景：商品缓存 → 购物车 → 浏览历史 → 收藏 → 共同收藏 → 商品标签 → 销量排行 → 会话管理 → 缓存预热 → 状态总览。
+
+```bash
+moon run examples/shopping_cart --target native
+```
+
+参考 [examples/shopping_cart/main.mbt](examples/shopping_cart/main.mbt)
 
 展示了如何使用：
 - **HASH** 存储购物车商品和商品信息
@@ -239,9 +271,14 @@ moon run . --target native
 - **ZSET** 实现销量排行榜
 - **MSET / MGET** 批量预热缓存
 
-### 4. CLI 命令行交互
+### 5. CLI 命令行交互
 
-参考 [examples/cli_repl_demo.mbt](examples/cli_repl_demo.mbt)
+模拟 Redis 风格的命令行交互，自动执行 45 条演示命令并输出结果。
 
-模拟 Redis 风格的命令行交互，支持 60+ 命令解析和执行。
-s
+```bash
+moon run examples/cli_repl --target native
+```
+
+参考 [examples/cli_repl/main.mbt](examples/cli_repl/main.mbt)
+
+支持解析和执行 60+ 命令，包括 SET/GET/HSET/LPUSH/SADD/ZADD/MSET 等全部命令类型。
