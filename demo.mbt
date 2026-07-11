@@ -24,7 +24,7 @@ fn main() -> Unit {
   println("  MoonBitDB - 快速开始演示")
   println("========================================")
   
-  let db = Database::new()
+  let db = @lib.Database::new()
   
   println("\n📌 1. String 基础操作")
   println("----------------------------------------")
@@ -129,12 +129,12 @@ fn main() -> Unit {
   println("\n📌 8. 服务器信息")
   println("----------------------------------------")
   println("  DBSIZE = \{db.dbsize()}")
-  println("  PING = \{Database::ping()}")
+  println("  PING = \{@lib.Database::ping()}")
   let rk = db.randomkey()
   println("  RANDOMKEY = \{show_opt(rk)}")
   let all_keys = db.keys()
   println("  KEYS * (\{all_keys.length()} 个): [\{all_keys.join(", ")}]")
-  println("  支持命令数 = \{Database::command().length()}")
+  println("  支持命令数 = \{@lib.Database::command().length()}")
   
   println("\n========================================")
   println("  ✅ 演示完成！")

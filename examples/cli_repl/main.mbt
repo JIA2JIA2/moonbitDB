@@ -70,7 +70,7 @@ fn split_command(cmd : String) -> Array[String] {
       if in_quote {
         // closing quote: extract token between quotes
         if start >= 0 {
-          parts.push(cmd[start:i].to_string())
+          parts.push(cmd[start:i].to_owned())
           start = -1
         }
         in_quote = false
@@ -81,7 +81,7 @@ fn split_command(cmd : String) -> Array[String] {
       }
     } else if c == ' ' && !in_quote {
       if start >= 0 {
-        parts.push(cmd[start:i].to_string())
+        parts.push(cmd[start:i].to_owned())
         start = -1
       }
     } else {
@@ -96,13 +96,13 @@ fn split_command(cmd : String) -> Array[String] {
     if start == cmd.length() {
       parts.push("")
     } else {
-      parts.push(cmd[start:].to_string())
+      parts.push(cmd[start:].to_owned())
     }
   }
   parts
 }
 
-fn execute_command(db : @moonbitDB.Database, cmd : String) -> Array[String] {
+fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
   let parts = split_command(cmd)
   if parts.length() == 0 {
     return ["(empty)"]
@@ -388,7 +388,7 @@ fn execute_command(db : @moonbitDB.Database, cmd : String) -> Array[String] {
     }
     "DBSIZE" => { ["(integer) \{db.dbsize()}"] }
     "FLUSHDB" => { db.flushdb(); ["OK"] }
-    "PING" => { [@moonbitDB.Database::ping()] }
+    "PING" => { [@lib.Database::ping()] }
     "INFO" => {
       let info = db.info()
       let lines = info.split("\n")
@@ -434,7 +434,7 @@ fn main {
   println("========================================")
   println("")
 
-  let db = @moonbitDB.Database::new()
+  let db = @lib.Database::new()
 
   let demo_commands : Array[String] = [
     "SET name Alice",

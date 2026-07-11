@@ -22,25 +22,29 @@ moon test
 
 ```
 moonbitDB/
-├── moonbitDB.mbt              # 核心数据库实现（~3200 行）
-├── demo.mbt                   # 快速开始演示（可运行）
-├── examples/                  # 场景部署示例（独立子包，均可运行）
-│   ├── basic_usage/           # 基础 API 使用示例
+├── lib/                        # 核心库（非 main 包，可被其他包 import）
+│   ├── database.mbt            # 核心数据库实现（~3200 行）
+│   └── moon.pkg.json
+├── demo.mbt                    # 快速开始演示（主包入口）
+├── moon.pkg.json               # 主包配置（is_main: true，依赖 lib）
+├── examples/                   # 场景部署示例（独立子包，均可运行）
+│   ├── basic_usage/            # 基础 API 使用示例
 │   │   ├── main.mbt
 │   │   └── moon.pkg.json
-│   ├── leaderboard/           # 游戏排行榜场景
+│   ├── leaderboard/            # 游戏排行榜场景
 │   │   ├── main.mbt
 │   │   └── moon.pkg.json
-│   ├── shopping_cart/         # 电商购物车 / 缓存场景
+│   ├── shopping_cart/          # 电商购物车 / 缓存场景
 │   │   ├── main.mbt
 │   │   └── moon.pkg.json
-│   └── cli_repl/              # 命令行交互演示
+│   └── cli_repl/               # 命令行交互演示
 │       ├── main.mbt
 │       └── moon.pkg.json
-├── moon.mod.json               # 模块配置
-├── moon.pkg.json               # 包配置（is_main: true）
+├── moon.mod.json               # 模块配置（moonbitdb/moonbitdb）
 └── README.md                   # 本文档
 ```
+
+> **包架构说明**：核心逻辑放在 `lib/` 子包（非 main），主包和 examples 均依赖 lib。这种设计符合 MoonBit 规范，避免了 "examples depend on main package" 的警告。
 
 ## 支持的命令
 
