@@ -33,7 +33,7 @@ moonbitDB/
 ├── moon.pkg.json               # 包配置（is_main: true）
 └── README.md                   # 本文档
 ```
-s
+
 ## 支持的命令
 
 共支持 **80+ 个命令**，覆盖 Redis 核心功能。
