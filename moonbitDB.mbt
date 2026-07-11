@@ -1260,6 +1260,227 @@ pub fn Database::zrem(self : Database, key : String, member_val : String) -> Boo
   }
 }
 
+fn Database::get_sorted_zset(self : Database, key : String) -> Array[(String, Float)] {
+  if self.check_expired(key) {
+    []
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::ZSet(zset)) => {
+        let items : Array[(String, Float)] = []
+        for m, s in zset {
+          items.push((m, s))
+        }
+        sort_by_score(items)
+      }
+      _ => []
+    }
+  }
+}
+
+pub fn Database::zrangebyscore(self : Database, key : String, min_score : Float, max_score : Float) -> Array[String] {
+  let sorted = self.get_sorted_zset(key)
+  let result = []
+  for item in sorted {
+    if item.1 >= min_score && item.1 <= max_score {
+      result.push(item.0)
+    }
+  }
+  result
+}
+
+pub fn Database::zcount(self : Database, key : String, min_score : Float, max_score : Float) -> Int {
+  let sorted = self.get_sorted_zset(key)
+  let mut count = 0
+  for item in sorted {
+    if item.1 >= min_score && item.1 <= max_score {
+      count = count + 1
+    }
+  }
+  count
+}
+
+pub fn Database::zrevrange(self : Database, key : String, start : Int, end : Int) -> Array[String] {
+  let sorted = self.get_sorted_zset(key)
+  let len = sorted.length()
+  let result = []
+  let start_idx = if start < 0 { len + start } else { start }
+  let end_idx = if end < 0 { len + end } else { end }
+  for i = start_idx; i <= end_idx && i < len; i = i + 1 {
+    let rev_idx = len - 1 - i
+    if rev_idx >= 0 {
+      result.push(sorted[rev_idx].0)
+    }
+  }
+  result
+}
+
+pub fn Database::zrevrangebyscore(self : Database, key : String, max_score : Float, min_score : Float) -> Array[String] {
+  let sorted = self.get_sorted_zset(key)
+  let result = []
+  for i = sorted.length() - 1; i >= 0; i = i - 1 {
+    if sorted[i].1 >= min_score && sorted[i].1 <= max_score {
+      result.push(sorted[i].0)
+    }
+  }
+  result
+}
+
+pub fn Database::zrank(self : Database, key : String, member_val : String) -> Int? {
+  if self.check_expired(key) {
+    None
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::ZSet(zset)) => {
+        if !zset.contains(member_val) {
+          None
+        } else {
+          let sorted = self.get_sorted_zset(key)
+          let mut rank = 0
+          for i = 0; i < sorted.length(); i = i + 1 {
+            if sorted[i].0 == member_val {
+              rank = i
+              break
+            }
+          }
+          Some(rank)
+        }
+      }
+      _ => None
+    }
+  }
+}
+
+pub fn Database::zrevrank(self : Database, key : String, member_val : String) -> Int? {
+  if self.check_expired(key) {
+    None
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::ZSet(zset)) => {
+        if !zset.contains(member_val) {
+          None
+        } else {
+          let sorted = self.get_sorted_zset(key)
+          let len = sorted.length()
+          let mut rank = 0
+          for i = 0; i < len; i = i + 1 {
+            if sorted[i].0 == member_val {
+              rank = len - 1 - i
+              break
+            }
+          }
+          Some(rank)
+        }
+      }
+      _ => None
+    }
+  }
+}
+
+pub fn Database::zincrby(self : Database, key : String, increment : Float, member_val : String) -> Float {
+  self.check_expired(key) |> ignore
+  let zset = match self.data.get(key) {
+    Some(RedisValue::ZSet(z)) => z
+    _ => Map([], capacity=10)
+  }
+  let current_score = match zset.get(member_val) {
+    Some(s) => s
+    None => 0.0
+  }
+  let new_score = current_score + increment
+  zset.set(member_val, new_score)
+  self.data.set(key, RedisValue::ZSet(zset))
+  new_score
+}
+
+pub fn Database::zremrangebyrank(self : Database, key : String, start : Int, end : Int) -> Int {
+  if self.check_expired(key) {
+    0
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::ZSet(zset)) => {
+        let sorted = self.get_sorted_zset(key)
+        let len = sorted.length()
+        let start_idx = if start < 0 { len + start } else { start }
+        let end_idx = if end < 0 { len + end } else { end }
+        let mut removed = 0
+        for i = start_idx; i <= end_idx && i < len; i = i + 1 {
+          zset.remove(sorted[i].0)
+          removed = removed + 1
+        }
+        self.data.set(key, RedisValue::ZSet(zset))
+        removed
+      }
+      _ => 0
+    }
+  }
+}
+
+pub fn Database::zremrangebyscore(self : Database, key : String, min_score : Float, max_score : Float) -> Int {
+  if self.check_expired(key) {
+    0
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::ZSet(zset)) => {
+        let to_remove = []
+        for m, s in zset {
+          if s >= min_score && s <= max_score {
+            to_remove.push(m)
+          }
+        }
+        for m in to_remove {
+          zset.remove(m)
+        }
+        self.data.set(key, RedisValue::ZSet(zset))
+        to_remove.length()
+      }
+      _ => 0
+    }
+  }
+}
+
+pub fn Database::zpopmin(self : Database, key : String) -> (String, Float)? {
+  if self.check_expired(key) {
+    None
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::ZSet(zset)) => {
+        let sorted = self.get_sorted_zset(key)
+        if sorted.length() == 0 {
+          None
+        } else {
+          let min_item = sorted[0]
+          zset.remove(min_item.0)
+          self.data.set(key, RedisValue::ZSet(zset))
+          Some(min_item)
+        }
+      }
+      _ => None
+    }
+  }
+}
+
+pub fn Database::zpopmax(self : Database, key : String) -> (String, Float)? {
+  if self.check_expired(key) {
+    None
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::ZSet(zset)) => {
+        let sorted = self.get_sorted_zset(key)
+        let len = sorted.length()
+        if len == 0 {
+          None
+        } else {
+          let max_item = sorted[len - 1]
+          zset.remove(max_item.0)
+          self.data.set(key, RedisValue::ZSet(zset))
+          Some(max_item)
+        }
+      }
+      _ => None
+    }
+  }
+}
+
 test "cross_type_operations" {
   let db = Database::new()
   
@@ -2122,4 +2343,212 @@ test "set_operations_with_expire" {
   
   let diff = db.sdiff(["set1", "set2"])
   debug_inspect(diff.length(), content="3")
+}
+
+test "zrangebyscore_zcount_operations" {
+  let db = Database::new()
+  
+  db.zadd("zset1", 1.0, "a") |> ignore
+  db.zadd("zset1", 2.0, "b") |> ignore
+  db.zadd("zset1", 3.0, "c") |> ignore
+  db.zadd("zset1", 4.0, "d") |> ignore
+  db.zadd("zset1", 5.0, "e") |> ignore
+  
+  let range1 = db.zrangebyscore("zset1", 2.0, 4.0)
+  debug_inspect(range1.length(), content="3")
+  debug_inspect(range1[0], content="\"b\"")
+  debug_inspect(range1[1], content="\"c\"")
+  debug_inspect(range1[2], content="\"d\"")
+  
+  let range2 = db.zrangebyscore("zset1", 0.0, 100.0)
+  debug_inspect(range2.length(), content="5")
+  
+  let range3 = db.zrangebyscore("zset1", 10.0, 20.0)
+  debug_inspect(range3.length(), content="0")
+  
+  let count1 = db.zcount("zset1", 2.0, 4.0)
+  debug_inspect(count1, content="3")
+  
+  let count2 = db.zcount("zset1", 0.0, 100.0)
+  debug_inspect(count2, content="5")
+  
+  let count3 = db.zcount("nonexistent", 0.0, 100.0)
+  debug_inspect(count3, content="0")
+}
+
+test "zrevrange_operations" {
+  let db = Database::new()
+  
+  db.zadd("zset1", 1.0, "a") |> ignore
+  db.zadd("zset1", 2.0, "b") |> ignore
+  db.zadd("zset1", 3.0, "c") |> ignore
+  db.zadd("zset1", 4.0, "d") |> ignore
+  
+  let rev1 = db.zrevrange("zset1", 0, -1)
+  debug_inspect(rev1.length(), content="4")
+  debug_inspect(rev1[0], content="\"d\"")
+  debug_inspect(rev1[1], content="\"c\"")
+  debug_inspect(rev1[2], content="\"b\"")
+  debug_inspect(rev1[3], content="\"a\"")
+  
+  let rev2 = db.zrevrange("zset1", 0, 1)
+  debug_inspect(rev2.length(), content="2")
+  debug_inspect(rev2[0], content="\"d\"")
+  debug_inspect(rev2[1], content="\"c\"")
+  
+  let rev3 = db.zrevrange("zset1", -2, -1)
+  debug_inspect(rev3.length(), content="2")
+  debug_inspect(rev3[0], content="\"b\"")
+  debug_inspect(rev3[1], content="\"a\"")
+}
+
+test "zrevrangebyscore_operations" {
+  let db = Database::new()
+  
+  db.zadd("zset1", 1.0, "a") |> ignore
+  db.zadd("zset1", 2.0, "b") |> ignore
+  db.zadd("zset1", 3.0, "c") |> ignore
+  db.zadd("zset1", 4.0, "d") |> ignore
+  
+  let rev1 = db.zrevrangebyscore("zset1", 4.0, 2.0)
+  debug_inspect(rev1.length(), content="3")
+  debug_inspect(rev1[0], content="\"d\"")
+  debug_inspect(rev1[1], content="\"c\"")
+  debug_inspect(rev1[2], content="\"b\"")
+  
+  let rev2 = db.zrevrangebyscore("zset1", 3.0, 1.0)
+  debug_inspect(rev2.length(), content="3")
+  debug_inspect(rev2[0], content="\"c\"")
+  
+  let rev3 = db.zrevrangebyscore("zset1", 10.0, 5.0)
+  debug_inspect(rev3.length(), content="0")
+}
+
+test "zrank_zrevrank_operations" {
+  let db = Database::new()
+  
+  db.zadd("zset1", 10.0, "a") |> ignore
+  db.zadd("zset1", 20.0, "b") |> ignore
+  db.zadd("zset1", 30.0, "c") |> ignore
+  db.zadd("zset1", 40.0, "d") |> ignore
+  
+  debug_inspect(db.zrank("zset1", "a"), content="Some(0)")
+  debug_inspect(db.zrank("zset1", "b"), content="Some(1)")
+  debug_inspect(db.zrank("zset1", "d"), content="Some(3)")
+  debug_inspect(db.zrank("zset1", "nonexistent"), content="None")
+  debug_inspect(db.zrank("nonexistent", "a"), content="None")
+  
+  debug_inspect(db.zrevrank("zset1", "a"), content="Some(3)")
+  debug_inspect(db.zrevrank("zset1", "b"), content="Some(2)")
+  debug_inspect(db.zrevrank("zset1", "d"), content="Some(0)")
+  debug_inspect(db.zrevrank("zset1", "nonexistent"), content="None")
+}
+
+test "zincrby_operations" {
+  let db = Database::new()
+  
+  db.zadd("zset1", 10.0, "a") |> ignore
+  
+  let score1 = db.zincrby("zset1", 5.0, "a")
+  debug_inspect(score1, content="15")
+  
+  debug_inspect(db.zscore("zset1", "a"), content="Some(15)")
+  
+  let score2 = db.zincrby("zset1", -3.0, "a")
+  debug_inspect(score2, content="12")
+  
+  let score3 = db.zincrby("zset1", 100.0, "new_member")
+  debug_inspect(score3, content="100")
+  debug_inspect(db.zscore("zset1", "new_member"), content="Some(100)")
+  
+  let score4 = db.zincrby("nonexistent", 5.0, "x")
+  debug_inspect(score4, content="5")
+}
+
+test "zremrangebyrank_operations" {
+  let db = Database::new()
+  
+  db.zadd("zset1", 1.0, "a") |> ignore
+  db.zadd("zset1", 2.0, "b") |> ignore
+  db.zadd("zset1", 3.0, "c") |> ignore
+  db.zadd("zset1", 4.0, "d") |> ignore
+  db.zadd("zset1", 5.0, "e") |> ignore
+  
+  let removed1 = db.zremrangebyrank("zset1", 0, 1)
+  debug_inspect(removed1, content="2")
+  debug_inspect(db.zcard("zset1"), content="3")
+  debug_inspect(db.zrange("zset1", 0, -1)[0], content="\"c\"")
+  
+  let removed2 = db.zremrangebyrank("zset1", -2, -1)
+  debug_inspect(removed2, content="2")
+  debug_inspect(db.zcard("zset1"), content="1")
+  
+  let removed3 = db.zremrangebyrank("nonexistent", 0, 10)
+  debug_inspect(removed3, content="0")
+}
+
+test "zremrangebyscore_operations" {
+  let db = Database::new()
+  
+  db.zadd("zset1", 1.0, "a") |> ignore
+  db.zadd("zset1", 2.0, "b") |> ignore
+  db.zadd("zset1", 3.0, "c") |> ignore
+  db.zadd("zset1", 4.0, "d") |> ignore
+  db.zadd("zset1", 5.0, "e") |> ignore
+  
+  let removed1 = db.zremrangebyscore("zset1", 2.0, 4.0)
+  debug_inspect(removed1, content="3")
+  debug_inspect(db.zcard("zset1"), content="2")
+  debug_inspect(db.zscore("zset1", "b"), content="None")
+  debug_inspect(db.zscore("zset1", "a"), content="Some(1)")
+  
+  let removed2 = db.zremrangebyscore("zset1", 0.0, 100.0)
+  debug_inspect(removed2, content="2")
+  debug_inspect(db.zcard("zset1"), content="0")
+  
+  let removed3 = db.zremrangebyscore("nonexistent", 0.0, 100.0)
+  debug_inspect(removed3, content="0")
+}
+
+test "zpopmin_zpopmax_operations" {
+  let db = Database::new()
+  
+  db.zadd("zset1", 10.0, "a") |> ignore
+  db.zadd("zset1", 20.0, "b") |> ignore
+  db.zadd("zset1", 30.0, "c") |> ignore
+  db.zadd("zset1", 40.0, "d") |> ignore
+  
+  let min1 = db.zpopmin("zset1")
+  debug_inspect(min1 is None, content="false")
+  
+  let min_val = match min1 {
+    Some(v) => v
+    None => ("", 0.0)
+  }
+  debug_inspect(min_val.0, content="\"a\"")
+  debug_inspect(db.zcard("zset1"), content="3")
+  
+  let max1 = db.zpopmax("zset1")
+  debug_inspect(max1 is None, content="false")
+  
+  let max_val = match max1 {
+    Some(v) => v
+    None => ("", 0.0)
+  }
+  debug_inspect(max_val.0, content="\"d\"")
+  debug_inspect(db.zcard("zset1"), content="2")
+  
+  db.zpopmin("zset1") |> ignore
+  db.zpopmin("zset1") |> ignore
+  
+  debug_inspect(db.zcard("zset1"), content="0")
+  
+  let empty_min = db.zpopmin("zset1")
+  debug_inspect(empty_min is None, content="true")
+  
+  let empty_max = db.zpopmax("zset1")
+  debug_inspect(empty_max is None, content="true")
+  
+  let nonexistent = db.zpopmin("nonexistent")
+  debug_inspect(nonexistent is None, content="true")
 }
