@@ -1,7 +1,54 @@
+pub struct Deque {
+  front : Array[String]
+  back : Array[String]
+}
+
+pub fn Deque::new() -> Deque {
+  Deque::{ front: [], back: [] }
+}
+
+pub fn Deque::push_front(self : Deque, value : String) -> Unit {
+  self.front.push(value)
+}
+
+pub fn Deque::push_back(self : Deque, value : String) -> Unit {
+  self.back.push(value)
+}
+
+pub fn Deque::pop_front(self : Deque) -> String? {
+  if self.front.length() == 0 {
+    while self.back.length() > 0 {
+      let item = self.back.pop()
+      match item {
+        Some(v) => self.front.push(v)
+        None => break
+      }
+    }
+  }
+  self.front.pop()
+}
+
+pub fn Deque::pop_back(self : Deque) -> String? {
+  if self.back.length() == 0 {
+    while self.front.length() > 0 {
+      let item = self.front.pop()
+      match item {
+        Some(v) => self.back.push(v)
+        None => break
+      }
+    }
+  }
+  self.back.pop()
+}
+
+pub fn Deque::length(self : Deque) -> Int {
+  self.front.length() + self.back.length()
+}
+
 pub enum RedisValue {
   String(String)
   Hash(Map[String, String])
-  List(Array[String])
+  List(Deque)
   Set(Map[String, Bool])
   ZSet(Map[String, Float])
 }
@@ -46,33 +93,35 @@ pub fn Database::keys(self : Database) -> Array[String] {
 }
 
 pub fn match_pattern(pattern : String, str : String) -> Bool {
+  match_pattern_helper(pattern, str, 0, 0)
+}
+
+pub fn match_pattern_helper(pattern : String, str : String, p_idx : Int, s_idx : Int) -> Bool {
   let p_len = pattern.length()
   let s_len = str.length()
-  let mut p_idx = 0
-  let mut s_idx = 0
   
-  while p_idx < p_len {
-    if p_idx < p_len && s_idx < s_len && (pattern[p_idx] == str[s_idx] || pattern[p_idx] == '?') {
-      p_idx = p_idx + 1
-      s_idx = s_idx + 1
-    } else if p_idx < p_len && pattern[p_idx] == '*' {
-      if p_idx == p_len - 1 {
-        return true
-      }
+  if p_idx == p_len {
+    return s_idx == s_len
+  }
+  
+  if p_idx < p_len && s_idx < s_len && (pattern[p_idx] == str[s_idx] || pattern[p_idx] == '?') {
+    match_pattern_helper(pattern, str, p_idx + 1, s_idx + 1)
+  } else if p_idx < p_len && pattern[p_idx] == '*' {
+    if p_idx == p_len - 1 {
+      true
+    } else {
       let mut i = s_idx
       while i <= s_len {
-        if match_pattern(pattern.substring(start=p_idx + 1), str.substring(start=i)) {
+        if match_pattern_helper(pattern, str, p_idx + 1, i) {
           return true
         }
         i = i + 1
       }
-      return false
-    } else {
-      return false
+      false
     }
+  } else {
+    false
   }
-  
-  s_idx == s_len
 }
 
 pub fn Database::keys_pattern(self : Database, pattern : String) -> Array[String] {
@@ -173,35 +222,34 @@ pub fn int_to_string(n : Int) -> String {
     "0"
   } else {
     let mut num = n
-    let chars : Array[UInt16] = []
+    let chars : Array[String] = []
     if num < 0 {
       num = -num
     }
     while num > 0 {
-      chars.push(digit_to_uint16(num % 10))
+      match num % 10 {
+        0 => chars.push("0")
+        1 => chars.push("1")
+        2 => chars.push("2")
+        3 => chars.push("3")
+        4 => chars.push("4")
+        5 => chars.push("5")
+        6 => chars.push("6")
+        7 => chars.push("7")
+        8 => chars.push("8")
+        9 => chars.push("9")
+        _ => chars.push("0")
+      }
       num = num / 10
     }
     if n < 0 {
-      chars.push(45)
+      chars.push("-")
     }
-    let mut result = ""
+    let result : Array[String] = []
     for i = chars.length() - 1; i >= 0; i = i - 1 {
-      match chars[i] {
-        48 => result = result + "0"
-        49 => result = result + "1"
-        50 => result = result + "2"
-        51 => result = result + "3"
-        52 => result = result + "4"
-        53 => result = result + "5"
-        54 => result = result + "6"
-        55 => result = result + "7"
-        56 => result = result + "8"
-        57 => result = result + "9"
-        45 => result = result + "-"
-        _ => result = result + "0"
-      }
+      result.push(chars[i])
     }
-    result
+    result.join("")
   }
 }
 
@@ -280,43 +328,31 @@ pub fn Database::hlen(self : Database, key : String) -> Int {
 }
 
 pub fn Database::lpush(self : Database, key : String, value : String) -> Int {
-  let list = match self.data.get(key) {
-    Some(RedisValue::List(l)) => l
-    _ => []
+  let deque = match self.data.get(key) {
+    Some(RedisValue::List(d)) => d
+    _ => Deque::new()
   }
-  let new_list = [value]
-  for item in list {
-    new_list.push(item)
-  }
-  self.data.set(key, RedisValue::List(new_list))
-  new_list.length()
+  deque.push_front(value)
+  self.data.set(key, RedisValue::List(deque))
+  deque.length()
 }
 
 pub fn Database::rpush(self : Database, key : String, value : String) -> Int {
-  let list = match self.data.get(key) {
-    Some(RedisValue::List(l)) => l
-    _ => []
+  let deque = match self.data.get(key) {
+    Some(RedisValue::List(d)) => d
+    _ => Deque::new()
   }
-  let new_list = list
-  new_list.push(value)
-  self.data.set(key, RedisValue::List(new_list))
-  new_list.length()
+  deque.push_back(value)
+  self.data.set(key, RedisValue::List(deque))
+  deque.length()
 }
 
 pub fn Database::lpop(self : Database, key : String) -> String? {
   match self.data.get(key) {
-    Some(RedisValue::List(list)) => {
-      if list.length() == 0 {
-        None
-      } else {
-        let val = list[0]
-        let new_list : Array[String] = []
-        for i = 1; i < list.length(); i = i + 1 {
-          new_list.push(list[i])
-        }
-        self.data.set(key, RedisValue::List(new_list))
-        Some(val)
-      }
+    Some(RedisValue::List(deque)) => {
+      let val = deque.pop_front()
+      self.data.set(key, RedisValue::List(deque))
+      val
     }
     _ => None
   }
@@ -324,19 +360,10 @@ pub fn Database::lpop(self : Database, key : String) -> String? {
 
 pub fn Database::rpop(self : Database, key : String) -> String? {
   match self.data.get(key) {
-    Some(RedisValue::List(list)) => {
-      let len = list.length()
-      if len == 0 {
-        None
-      } else {
-        let val = list[len - 1]
-        let new_list : Array[String] = []
-        for i = 0; i < len - 1; i = i + 1 {
-          new_list.push(list[i])
-        }
-        self.data.set(key, RedisValue::List(new_list))
-        Some(val)
-      }
+    Some(RedisValue::List(deque)) => {
+      let val = deque.pop_back()
+      self.data.set(key, RedisValue::List(deque))
+      val
     }
     _ => None
   }
@@ -344,7 +371,7 @@ pub fn Database::rpop(self : Database, key : String) -> String? {
 
 pub fn Database::llen(self : Database, key : String) -> Int {
   match self.data.get(key) {
-    Some(RedisValue::List(l)) => l.length()
+    Some(RedisValue::List(d)) => d.length()
     _ => 0
   }
 }
@@ -437,15 +464,47 @@ pub fn Database::zrange(self : Database, key : String, start : Int, end : Int) -
 }
 
 pub fn sort_by_score(items : Array[(String, Float)]) -> Array[(String, Float)] {
-  let result = items
-  for i = 0; i < result.length(); i = i + 1 {
-    for j = i + 1; j < result.length(); j = j + 1 {
-      if result[i].1 > result[j].1 {
-        let temp = result[i]
-        result[i] = result[j]
-        result[j] = temp
-      }
+  merge_sort(items)
+}
+
+pub fn merge_sort(arr : Array[(String, Float)]) -> Array[(String, Float)] {
+  let len = arr.length()
+  if len <= 1 {
+    arr
+  } else {
+    let mid = len / 2
+    let left : Array[(String, Float)] = []
+    let right : Array[(String, Float)] = []
+    for i = 0; i < mid; i = i + 1 {
+      left.push(arr[i])
     }
+    for i = mid; i < len; i = i + 1 {
+      right.push(arr[i])
+    }
+    merge(merge_sort(left), merge_sort(right))
+  }
+}
+
+pub fn merge(left : Array[(String, Float)], right : Array[(String, Float)]) -> Array[(String, Float)] {
+  let result : Array[(String, Float)] = []
+  let mut i = 0
+  let mut j = 0
+  while i < left.length() && j < right.length() {
+    if left[i].1 <= right[j].1 {
+      result.push(left[i])
+      i = i + 1
+    } else {
+      result.push(right[j])
+      j = j + 1
+    }
+  }
+  while i < left.length() {
+    result.push(left[i])
+    i = i + 1
+  }
+  while j < right.length() {
+    result.push(right[j])
+    j = j + 1
   }
   result
 }
