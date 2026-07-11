@@ -1,6 +1,6 @@
 pub struct Deque {
-  front : Array[String]
-  back : Array[String]
+  mut front : Array[String]
+  mut back : Array[String]
 }
 
 pub fn Deque::new() -> Deque {
@@ -43,6 +43,120 @@ pub fn Deque::pop_back(self : Deque) -> String? {
 
 pub fn Deque::length(self : Deque) -> Int {
   self.front.length() + self.back.length()
+}
+
+pub fn Deque::to_array(self : Deque) -> Array[String] {
+  let result = []
+  for i = self.front.length() - 1; i >= 0; i = i - 1 {
+    result.push(self.front[i])
+  }
+  for item in self.back {
+    result.push(item)
+  }
+  result
+}
+
+pub fn Deque::get_at(self : Deque, index : Int) -> String? {
+  let len = self.length()
+  if index < 0 || index >= len {
+    None
+  } else {
+    let front_len = self.front.length()
+    if index < front_len {
+      Some(self.front[front_len - 1 - index])
+    } else {
+      Some(self.back[index - front_len])
+    }
+  }
+}
+
+pub fn Deque::set_at(self : Deque, index : Int, value : String) -> Bool {
+  let len = self.length()
+  if index < 0 || index >= len {
+    false
+  } else {
+    let front_len = self.front.length()
+    if index < front_len {
+      self.front[front_len - 1 - index] = value
+    } else {
+      self.back[index - front_len] = value
+    }
+    true
+  }
+}
+
+pub fn Deque::remove_at(self : Deque, index : Int) -> Bool {
+  let len = self.length()
+  if index < 0 || index >= len {
+    false
+  } else {
+    let front_len = self.front.length()
+    if index < front_len {
+      let idx = front_len - 1 - index
+      let new_front : Array[String] = []
+      for i = 0; i < idx; i = i + 1 {
+        new_front.push(self.front[i])
+      }
+      for i = idx + 1; i < front_len; i = i + 1 {
+        new_front.push(self.front[i])
+      }
+      self.front = new_front
+    } else {
+      let idx = index - front_len
+      let new_back : Array[String] = []
+      for i = 0; i < idx; i = i + 1 {
+        new_back.push(self.back[i])
+      }
+      for i = idx + 1; i < self.back.length(); i = i + 1 {
+        new_back.push(self.back[i])
+      }
+      self.back = new_back
+    }
+    true
+  }
+}
+
+pub fn Deque::find_index(self : Deque, value : String) -> Int {
+  let arr = self.to_array()
+  for i = 0; i < arr.length(); i = i + 1 {
+    if arr[i] == value {
+      return i
+    }
+  }
+  -1
+}
+
+pub fn Deque::insert_at(self : Deque, index : Int, value : String) -> Bool {
+  let len = self.length()
+  if index < 0 || index > len {
+    false
+  } else {
+    let front_len = self.front.length()
+    if index <= front_len {
+      let idx = front_len - index
+      let new_front : Array[String] = []
+      for i = 0; i < idx; i = i + 1 {
+        new_front.push(self.front[i])
+      }
+      new_front.push(value)
+      for i = idx; i < front_len; i = i + 1 {
+        new_front.push(self.front[i])
+      }
+      self.front = new_front
+    } else {
+      let idx = index - front_len
+      let new_back : Array[String] = []
+      for i = 0; i < idx; i = i + 1 {
+        new_back.push(self.back[i])
+      }
+      new_back.push(value)
+      for i = idx; i < self.back.length(); i = i + 1 {
+        new_back.push(self.back[i])
+      }
+      self.back = new_back
+    }
+    true
+  }
 }
 
 pub enum RedisValue {
@@ -599,6 +713,188 @@ pub fn Database::llen(self : Database, key : String) -> Int {
     match self.data.get(key) {
       Some(RedisValue::List(d)) => d.length()
       _ => 0
+    }
+  }
+}
+
+pub fn Database::lrange(self : Database, key : String, start : Int, end : Int) -> Array[String] {
+  if self.check_expired(key) {
+    []
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::List(deque)) => {
+        let arr = deque.to_array()
+        let len = arr.length()
+        let start_idx = if start < 0 { len + start } else { start }
+        let end_idx = if end < 0 { len + end } else { end }
+        let result = []
+        for i = start_idx; i <= end_idx && i >= 0 && i < len; i = i + 1 {
+          result.push(arr[i])
+        }
+        result
+      }
+      _ => []
+    }
+  }
+}
+
+pub fn Database::lindex(self : Database, key : String, index : Int) -> String? {
+  if self.check_expired(key) {
+    None
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::List(deque)) => {
+        if index < 0 {
+          deque.get_at(deque.length() + index)
+        } else {
+          deque.get_at(index)
+        }
+      }
+      _ => None
+    }
+  }
+}
+
+pub fn Database::lset(self : Database, key : String, index : Int, value : String) -> Bool {
+  if self.check_expired(key) {
+    false
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::List(deque)) => {
+        let adjusted_idx = if index < 0 { deque.length() + index } else { index }
+        let result = deque.set_at(adjusted_idx, value)
+        self.data.set(key, RedisValue::List(deque))
+        result
+      }
+      _ => false
+    }
+  }
+}
+
+pub fn Database::lrem(self : Database, key : String, count : Int, value : String) -> Int {
+  if self.check_expired(key) {
+    0
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::List(deque)) => {
+        let arr = deque.to_array()
+        let len = arr.length()
+        let removed = Map([], capacity=len)
+        let mut count_remaining = count
+        
+        if count > 0 {
+          for i = 0; i < len; i = i + 1 {
+            if count_remaining > 0 && arr[i] == value {
+              removed.set(int_to_string(i), true)
+              count_remaining = count_remaining - 1
+            }
+          }
+        } else if count < 0 {
+          for i = len - 1; i >= 0; i = i - 1 {
+            if count_remaining < 0 && arr[i] == value {
+              removed.set(int_to_string(i), true)
+              count_remaining = count_remaining + 1
+            }
+          }
+        } else {
+          for i = 0; i < len; i = i + 1 {
+            if arr[i] == value {
+              removed.set(int_to_string(i), true)
+            }
+          }
+        }
+        
+        let result = []
+        for i = 0; i < len; i = i + 1 {
+          if !removed.contains(int_to_string(i)) {
+            result.push(arr[i])
+          }
+        }
+        
+        let new_deque = Deque::new()
+        for item in result {
+          new_deque.push_back(item)
+        }
+        self.data.set(key, RedisValue::List(new_deque))
+        removed.keys().length()
+      }
+      _ => 0
+    }
+  }
+}
+
+pub fn Database::linsert(self : Database, key : String, before : Bool, pivot : String, value : String) -> Int {
+  if self.check_expired(key) {
+    -1
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::List(deque)) => {
+        let idx = deque.find_index(pivot)
+        if idx == -1 {
+          -1
+        } else {
+          let insert_idx = if before { idx } else { idx + 1 }
+          deque.insert_at(insert_idx, value) |> ignore
+          self.data.set(key, RedisValue::List(deque))
+          deque.length()
+        }
+      }
+      _ => -1
+    }
+  }
+}
+
+pub fn Database::lpushx(self : Database, key : String, value : String) -> Int {
+  if self.check_expired(key) {
+    0
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::List(deque)) => {
+        deque.push_front(value)
+        self.data.set(key, RedisValue::List(deque))
+        deque.length()
+      }
+      _ => 0
+    }
+  }
+}
+
+pub fn Database::rpushx(self : Database, key : String, value : String) -> Int {
+  if self.check_expired(key) {
+    0
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::List(deque)) => {
+        deque.push_back(value)
+        self.data.set(key, RedisValue::List(deque))
+        deque.length()
+      }
+      _ => 0
+    }
+  }
+}
+
+pub fn Database::rpoplpush(self : Database, source : String, destination : String) -> String? {
+  if self.check_expired(source) {
+    None
+  } else {
+    match self.data.get(source) {
+      Some(RedisValue::List(source_deque)) => {
+        match source_deque.pop_back() {
+          Some(val) => {
+            self.data.set(source, RedisValue::List(source_deque))
+            let dest_deque = match self.data.get(destination) {
+              Some(RedisValue::List(d)) => d
+              _ => Deque::new()
+            }
+            dest_deque.push_front(val)
+            self.data.set(destination, RedisValue::List(dest_deque))
+            Some(val)
+          }
+          None => None
+        }
+      }
+      _ => None
     }
   }
 }
@@ -1292,4 +1588,157 @@ test "batch_with_expire" {
   debug_inspect(hash_fields.length(), content="2")
   debug_inspect(hash_fields[0], content="None")
   debug_inspect(hash_fields[1], content="None")
+}
+
+test "lrange_operations" {
+  let db = Database::new()
+  
+  db.rpush("list1", "a") |> ignore
+  db.rpush("list1", "b") |> ignore
+  db.rpush("list1", "c") |> ignore
+  db.rpush("list1", "d") |> ignore
+  db.rpush("list1", "e") |> ignore
+  
+  let range1 = db.lrange("list1", 0, -1)
+  debug_inspect(range1.length(), content="5")
+  
+  let range2 = db.lrange("list1", 0, 2)
+  debug_inspect(range2.length(), content="3")
+  
+  let range3 = db.lrange("list1", -3, -1)
+  debug_inspect(range3.length(), content="3")
+  
+  let range4 = db.lrange("list1", 10, 20)
+  debug_inspect(range4.length(), content="0")
+  
+  let range5 = db.lrange("nonexistent", 0, -1)
+  debug_inspect(range5.length(), content="0")
+}
+
+test "lindex_lset_operations" {
+  let db = Database::new()
+  
+  db.rpush("list1", "a") |> ignore
+  db.rpush("list1", "b") |> ignore
+  db.rpush("list1", "c") |> ignore
+  
+  debug_inspect(db.lindex("list1", 0), content="Some(\"a\")")
+  debug_inspect(db.lindex("list1", 1), content="Some(\"b\")")
+  debug_inspect(db.lindex("list1", -1), content="Some(\"c\")")
+  debug_inspect(db.lindex("list1", 10), content="None")
+  debug_inspect(db.lindex("nonexistent", 0), content="None")
+  
+  debug_inspect(db.lset("list1", 1, "new_b"), content="true")
+  debug_inspect(db.lindex("list1", 1), content="Some(\"new_b\")")
+  
+  debug_inspect(db.lset("list1", -1, "new_c"), content="true")
+  debug_inspect(db.lindex("list1", -1), content="Some(\"new_c\")")
+  
+  debug_inspect(db.lset("list1", 10, "invalid"), content="false")
+  debug_inspect(db.lset("nonexistent", 0, "value"), content="false")
+}
+
+test "lrem_operations" {
+  let db = Database::new()
+  
+  db.rpush("list1", "a") |> ignore
+  db.rpush("list1", "b") |> ignore
+  db.rpush("list1", "a") |> ignore
+  db.rpush("list1", "c") |> ignore
+  db.rpush("list1", "a") |> ignore
+  
+  let removed1 = db.lrem("list1", 2, "a")
+  debug_inspect(removed1, content="2")
+  debug_inspect(db.llen("list1"), content="3")
+  
+  db.rpush("list1", "a") |> ignore
+  db.rpush("list1", "a") |> ignore
+  
+  let removed2 = db.lrem("list1", -2, "a")
+  debug_inspect(removed2, content="2")
+  debug_inspect(db.llen("list1"), content="3")
+  
+  let removed3 = db.lrem("list1", 0, "a")
+  debug_inspect(removed3, content="1")
+  debug_inspect(db.llen("list1"), content="2")
+  
+  let removed4 = db.lrem("nonexistent", 1, "a")
+  debug_inspect(removed4, content="0")
+}
+
+test "linsert_operations" {
+  let db = Database::new()
+  
+  db.rpush("list1", "a") |> ignore
+  db.rpush("list1", "b") |> ignore
+  db.rpush("list1", "c") |> ignore
+  
+  let len1 = db.linsert("list1", true, "b", "new")
+  debug_inspect(len1, content="4")
+  debug_inspect(db.lindex("list1", 1), content="Some(\"new\")")
+  
+  let len2 = db.linsert("list1", false, "b", "after")
+  debug_inspect(len2, content="5")
+  debug_inspect(db.lindex("list1", 3), content="Some(\"after\")")
+  
+  let len3 = db.linsert("list1", true, "nonexistent", "value")
+  debug_inspect(len3, content="-1")
+  
+  let len4 = db.linsert("nonexistent", true, "a", "value")
+  debug_inspect(len4, content="-1")
+}
+
+test "lpushx_rpushx_operations" {
+  let db = Database::new()
+  
+  let len1 = db.lpushx("nonexistent", "a")
+  debug_inspect(len1, content="0")
+  
+  let len2 = db.rpushx("nonexistent", "a")
+  debug_inspect(len2, content="0")
+  
+  db.rpush("list1", "a") |> ignore
+  
+  let len3 = db.lpushx("list1", "b")
+  debug_inspect(len3, content="2")
+  debug_inspect(db.lindex("list1", 0), content="Some(\"b\")")
+  
+  let len4 = db.rpushx("list1", "c")
+  debug_inspect(len4, content="3")
+  debug_inspect(db.lindex("list1", 2), content="Some(\"c\")")
+}
+
+test "rpoplpush_operations" {
+  let db = Database::new()
+  
+  db.rpush("source", "a") |> ignore
+  db.rpush("source", "b") |> ignore
+  db.rpush("source", "c") |> ignore
+  
+  let val1 = db.rpoplpush("source", "dest")
+  debug_inspect(val1, content="Some(\"c\")")
+  debug_inspect(db.llen("source"), content="2")
+  debug_inspect(db.llen("dest"), content="1")
+  debug_inspect(db.lindex("dest", 0), content="Some(\"c\")")
+  
+  let val2 = db.rpoplpush("source", "dest")
+  debug_inspect(val2, content="Some(\"b\")")
+  debug_inspect(db.llen("source"), content="1")
+  debug_inspect(db.llen("dest"), content="2")
+  debug_inspect(db.lindex("dest", 0), content="Some(\"b\")")
+  
+  let val3 = db.rpoplpush("empty", "dest")
+  debug_inspect(val3, content="None")
+  
+  db.rpush("rotate", "1") |> ignore
+  db.rpush("rotate", "2") |> ignore
+  db.rpush("rotate", "3") |> ignore
+  db.rpush("rotate", "4") |> ignore
+  
+  let val4 = db.rpoplpush("rotate", "rotate")
+  debug_inspect(val4, content="Some(\"4\")")
+  debug_inspect(db.lindex("rotate", 0), content="Some(\"4\")")
+  debug_inspect(db.lindex("rotate", 1), content="Some(\"1\")")
+  debug_inspect(db.lindex("rotate", 2), content="Some(\"2\")")
+  debug_inspect(db.lindex("rotate", 3), content="Some(\"3\")")
 }

@@ -419,6 +419,12 @@ let moonbit_test_driver_internal_no_args_tests : MoonBitTestDriverInternalTestMa
     18: (__test_6d6f6f6e62697444422e6d6274_18, ["mdel_operations"]),
     19: (__test_6d6f6f6e62697444422e6d6274_19, ["hmset_hmget_operations"]),
     20: (__test_6d6f6f6e62697444422e6d6274_20, ["batch_with_expire"]),
+    21: (__test_6d6f6f6e62697444422e6d6274_21, ["lrange_operations"]),
+    22: (__test_6d6f6f6e62697444422e6d6274_22, ["lindex_lset_operations"]),
+    23: (__test_6d6f6f6e62697444422e6d6274_23, ["lrem_operations"]),
+    24: (__test_6d6f6f6e62697444422e6d6274_24, ["linsert_operations"]),
+    25: (__test_6d6f6f6e62697444422e6d6274_25, ["lpushx_rpushx_operations"]),
+    26: (__test_6d6f6f6e62697444422e6d6274_26, ["rpoplpush_operations"]),
   },
 }
 
