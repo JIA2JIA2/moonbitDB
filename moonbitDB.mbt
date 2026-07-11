@@ -55,39 +55,141 @@ pub enum RedisValue {
 
 pub struct Database {
   data : Map[String, RedisValue]
+  expires : Map[String, Int]
+  mut current_time : Int
 }
 
 pub fn Database::new() -> Database {
-  Database::{ data: Map([], capacity=1000) }
+  Database::{ data: Map([], capacity=1000), expires: Map([], capacity=1000), current_time: 0 }
+}
+
+pub fn Database::set_time(self : Database, time_ms : Int) -> Unit {
+  self.current_time = time_ms
+}
+
+pub fn Database::advance_time(self : Database, ms : Int) -> Unit {
+  self.current_time = self.current_time + ms
+}
+
+pub fn Database::check_expired(self : Database, key : String) -> Bool {
+  match self.expires.get(key) {
+    Some(expire_time) => {
+      if expire_time <= self.current_time {
+        self.data.remove(key)
+        self.expires.remove(key)
+        true
+      } else {
+        false
+      }
+    }
+    None => false
+  }
 }
 
 pub fn Database::set(self : Database, key : String, value : String) -> Unit {
   self.data.set(key, RedisValue::String(value))
+  self.expires.remove(key)
+}
+
+pub fn Database::expire(self : Database, key : String, seconds : Int) -> Bool {
+  if self.data.contains(key) {
+    self.expires.set(key, self.current_time + seconds * 1000)
+    true
+  } else {
+    false
+  }
+}
+
+pub fn Database::pexpire(self : Database, key : String, milliseconds : Int) -> Bool {
+  if self.data.contains(key) {
+    self.expires.set(key, self.current_time + milliseconds)
+    true
+  } else {
+    false
+  }
+}
+
+pub fn Database::ttl(self : Database, key : String) -> Int {
+  if !self.data.contains(key) {
+    -2
+  } else if self.expires.contains(key) {
+    let remaining = self.expires.get(key).unwrap() - self.current_time
+    if remaining <= 0 {
+      self.data.remove(key)
+      self.expires.remove(key)
+      -2
+    } else {
+      remaining / 1000
+    }
+  } else {
+    -1
+  }
+}
+
+pub fn Database::pttl(self : Database, key : String) -> Int {
+  if !self.data.contains(key) {
+    -2
+  } else if self.expires.contains(key) {
+    let remaining = self.expires.get(key).unwrap() - self.current_time
+    if remaining <= 0 {
+      self.data.remove(key)
+      self.expires.remove(key)
+      -2
+    } else {
+      remaining
+    }
+  } else {
+    -1
+  }
+}
+
+pub fn Database::persist(self : Database, key : String) -> Bool {
+  if self.data.contains(key) && self.expires.contains(key) {
+    self.expires.remove(key)
+    true
+  } else {
+    false
+  }
 }
 
 pub fn Database::get(self : Database, key : String) -> String? {
-  match self.data.get(key) {
-    Some(RedisValue::String(s)) => Some(s)
-    _ => None
+  if self.check_expired(key) {
+    None
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::String(s)) => Some(s)
+      _ => None
+    }
   }
 }
 
 pub fn Database::del(self : Database, key : String) -> Bool {
-  let existed = self.data.contains(key)
-  if existed {
-    self.data.remove(key)
+  if self.check_expired(key) {
+    false
+  } else {
+    let existed = self.data.contains(key)
+    if existed {
+      self.data.remove(key)
+      self.expires.remove(key)
+    }
+    existed
   }
-  existed
 }
 
 pub fn Database::exists(self : Database, key : String) -> Bool {
-  self.data.contains(key)
+  if self.check_expired(key) {
+    false
+  } else {
+    self.data.contains(key)
+  }
 }
 
 pub fn Database::keys(self : Database) -> Array[String] {
   let result = []
   for key, _ in self.data {
-    result.push(key)
+    if !self.check_expired(key) {
+      result.push(key)
+    }
   }
   result
 }
@@ -135,30 +237,44 @@ pub fn Database::keys_pattern(self : Database, pattern : String) -> Array[String
 }
 
 pub fn Database::type_of(self : Database, key : String) -> String {
-  match self.data.get(key) {
-    Some(RedisValue::String(_)) => "string"
-    Some(RedisValue::Hash(_)) => "hash"
-    Some(RedisValue::List(_)) => "list"
-    Some(RedisValue::Set(_)) => "set"
-    Some(RedisValue::ZSet(_)) => "zset"
-    None => "none"
+  if self.check_expired(key) {
+    "none"
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::String(_)) => "string"
+      Some(RedisValue::Hash(_)) => "hash"
+      Some(RedisValue::List(_)) => "list"
+      Some(RedisValue::Set(_)) => "set"
+      Some(RedisValue::ZSet(_)) => "zset"
+      None => "none"
+    }
   }
 }
 
 pub fn Database::append(self : Database, key : String, value : String) -> Int {
-  let current = match self.data.get(key) {
-    Some(RedisValue::String(s)) => s
-    _ => ""
+  if self.check_expired(key) {
+    let new_val = value
+    self.data.set(key, RedisValue::String(new_val))
+    new_val.length()
+  } else {
+    let current = match self.data.get(key) {
+      Some(RedisValue::String(s)) => s
+      _ => ""
+    }
+    let new_val = current + value
+    self.data.set(key, RedisValue::String(new_val))
+    new_val.length()
   }
-  let new_val = current + value
-  self.data.set(key, RedisValue::String(new_val))
-  new_val.length()
 }
 
 pub fn Database::strlen(self : Database, key : String) -> Int {
-  match self.data.get(key) {
-    Some(RedisValue::String(s)) => s.length()
-    _ => 0
+  if self.check_expired(key) {
+    0
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::String(s)) => s.length()
+      _ => 0
+    }
   }
 }
 
@@ -254,6 +370,7 @@ pub fn int_to_string(n : Int) -> String {
 }
 
 pub fn Database::incr(self : Database, key : String) -> Int? {
+  self.check_expired(key) |> ignore
   let current = match self.data.get(key) {
     Some(RedisValue::String(s)) => s
     _ => "0"
@@ -262,6 +379,7 @@ pub fn Database::incr(self : Database, key : String) -> Int? {
     Some(n) => {
       let new_val = int_to_string(n + 1)
       self.data.set(key, RedisValue::String(new_val))
+      self.expires.remove(key)
       Some(n + 1)
     }
     None => None
@@ -269,6 +387,7 @@ pub fn Database::incr(self : Database, key : String) -> Int? {
 }
 
 pub fn Database::decr(self : Database, key : String) -> Int? {
+  self.check_expired(key) |> ignore
   let current = match self.data.get(key) {
     Some(RedisValue::String(s)) => s
     _ => "0"
@@ -277,6 +396,7 @@ pub fn Database::decr(self : Database, key : String) -> Int? {
     Some(n) => {
       let new_val = int_to_string(n - 1)
       self.data.set(key, RedisValue::String(new_val))
+      self.expires.remove(key)
       Some(n - 1)
     }
     None => None
@@ -284,6 +404,7 @@ pub fn Database::decr(self : Database, key : String) -> Int? {
 }
 
 pub fn Database::hset(self : Database, key : String, field : String, value : String) -> Unit {
+  self.check_expired(key) |> ignore
   let hash = match self.data.get(key) {
     Some(RedisValue::Hash(h)) => h
     _ => Map([], capacity=10)
@@ -293,41 +414,58 @@ pub fn Database::hset(self : Database, key : String, field : String, value : Str
 }
 
 pub fn Database::hget(self : Database, key : String, field : String) -> String? {
-  match self.data.get(key) {
-    Some(RedisValue::Hash(h)) => h.get(field)
-    _ => None
+  if self.check_expired(key) {
+    None
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::Hash(h)) => h.get(field)
+      _ => None
+    }
   }
 }
 
 pub fn Database::hdel(self : Database, key : String, field : String) -> Bool {
-  match self.data.get(key) {
-    Some(RedisValue::Hash(h)) => {
-      let existed = h.contains(field)
-      if existed {
-        h.remove(field)
-        self.data.set(key, RedisValue::Hash(h))
+  if self.check_expired(key) {
+    false
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::Hash(h)) => {
+        let existed = h.contains(field)
+        if existed {
+          h.remove(field)
+          self.data.set(key, RedisValue::Hash(h))
+        }
+        existed
       }
-      existed
+      _ => false
     }
-    _ => false
   }
 }
 
 pub fn Database::hgetall(self : Database, key : String) -> Map[String, String] {
-  match self.data.get(key) {
-    Some(RedisValue::Hash(h)) => h
-    _ => Map([], capacity=0)
+  if self.check_expired(key) {
+    Map([], capacity=0)
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::Hash(h)) => h
+      _ => Map([], capacity=0)
+    }
   }
 }
 
 pub fn Database::hlen(self : Database, key : String) -> Int {
-  match self.data.get(key) {
-    Some(RedisValue::Hash(h)) => h.length()
-    _ => 0
+  if self.check_expired(key) {
+    0
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::Hash(h)) => h.length()
+      _ => 0
+    }
   }
 }
 
 pub fn Database::lpush(self : Database, key : String, value : String) -> Int {
+  self.check_expired(key) |> ignore
   let deque = match self.data.get(key) {
     Some(RedisValue::List(d)) => d
     _ => Deque::new()
@@ -338,6 +476,7 @@ pub fn Database::lpush(self : Database, key : String, value : String) -> Int {
 }
 
 pub fn Database::rpush(self : Database, key : String, value : String) -> Int {
+  self.check_expired(key) |> ignore
   let deque = match self.data.get(key) {
     Some(RedisValue::List(d)) => d
     _ => Deque::new()
@@ -348,35 +487,48 @@ pub fn Database::rpush(self : Database, key : String, value : String) -> Int {
 }
 
 pub fn Database::lpop(self : Database, key : String) -> String? {
-  match self.data.get(key) {
-    Some(RedisValue::List(deque)) => {
-      let val = deque.pop_front()
-      self.data.set(key, RedisValue::List(deque))
-      val
+  if self.check_expired(key) {
+    None
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::List(deque)) => {
+        let val = deque.pop_front()
+        self.data.set(key, RedisValue::List(deque))
+        val
+      }
+      _ => None
     }
-    _ => None
   }
 }
 
 pub fn Database::rpop(self : Database, key : String) -> String? {
-  match self.data.get(key) {
-    Some(RedisValue::List(deque)) => {
-      let val = deque.pop_back()
-      self.data.set(key, RedisValue::List(deque))
-      val
+  if self.check_expired(key) {
+    None
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::List(deque)) => {
+        let val = deque.pop_back()
+        self.data.set(key, RedisValue::List(deque))
+        val
+      }
+      _ => None
     }
-    _ => None
   }
 }
 
 pub fn Database::llen(self : Database, key : String) -> Int {
-  match self.data.get(key) {
-    Some(RedisValue::List(d)) => d.length()
-    _ => 0
+  if self.check_expired(key) {
+    0
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::List(d)) => d.length()
+      _ => 0
+    }
   }
 }
 
 pub fn Database::sadd(self : Database, key : String, value : String) -> Bool {
+  self.check_expired(key) |> ignore
   let set = match self.data.get(key) {
     Some(RedisValue::Set(s)) => s
     _ => Map([], capacity=10)
@@ -391,47 +543,64 @@ pub fn Database::sadd(self : Database, key : String, value : String) -> Bool {
 }
 
 pub fn Database::smembers(self : Database, key : String) -> Array[String] {
-  match self.data.get(key) {
-    Some(RedisValue::Set(s)) => {
-      let result = []
-      for m, _ in s {
-        result.push(m)
+  if self.check_expired(key) {
+    []
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::Set(s)) => {
+        let result = []
+        for m, _ in s {
+          result.push(m)
+        }
+        result
       }
-      result
+      _ => []
     }
-    _ => []
   }
 }
 
 pub fn Database::srem(self : Database, key : String, value : String) -> Bool {
-  match self.data.get(key) {
-    Some(RedisValue::Set(set)) => {
-      let existed = set.contains(value)
-      if existed {
-        set.remove(value)
-        self.data.set(key, RedisValue::Set(set))
+  if self.check_expired(key) {
+    false
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::Set(set)) => {
+        let existed = set.contains(value)
+        if existed {
+          set.remove(value)
+          self.data.set(key, RedisValue::Set(set))
+        }
+        existed
       }
-      existed
+      _ => false
     }
-    _ => false
   }
 }
 
 pub fn Database::scard(self : Database, key : String) -> Int {
-  match self.data.get(key) {
-    Some(RedisValue::Set(s)) => s.length()
-    _ => 0
+  if self.check_expired(key) {
+    0
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::Set(s)) => s.length()
+      _ => 0
+    }
   }
 }
 
 pub fn Database::sismember(self : Database, key : String, value : String) -> Bool {
-  match self.data.get(key) {
-    Some(RedisValue::Set(s)) => s.contains(value)
-    _ => false
+  if self.check_expired(key) {
+    false
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::Set(s)) => s.contains(value)
+      _ => false
+    }
   }
 }
 
 pub fn Database::zadd(self : Database, key : String, score : Float, member_val : String) -> Bool {
+  self.check_expired(key) |> ignore
   let zset = match self.data.get(key) {
     Some(RedisValue::ZSet(z)) => z
     _ => Map([], capacity=10)
@@ -443,23 +612,27 @@ pub fn Database::zadd(self : Database, key : String, score : Float, member_val :
 }
 
 pub fn Database::zrange(self : Database, key : String, start : Int, end : Int) -> Array[String] {
-  match self.data.get(key) {
-    Some(RedisValue::ZSet(zset)) => {
-      let items : Array[(String, Float)] = []
-      for m, s in zset {
-        items.push((m, s))
+  if self.check_expired(key) {
+    []
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::ZSet(zset)) => {
+        let items : Array[(String, Float)] = []
+        for m, s in zset {
+          items.push((m, s))
+        }
+        let sorted = sort_by_score(items)
+        let len = sorted.length()
+        let result : Array[String] = []
+        let start_idx = if start < 0 { len + start } else { start }
+        let end_idx = if end < 0 { len + end } else { end }
+        for i = start_idx; i <= end_idx && i < len; i = i + 1 {
+          result.push(sorted[i].0)
+        }
+        result
       }
-      let sorted = sort_by_score(items)
-      let len = sorted.length()
-      let result : Array[String] = []
-      let start_idx = if start < 0 { len + start } else { start }
-      let end_idx = if end < 0 { len + end } else { end }
-      for i = start_idx; i <= end_idx && i < len; i = i + 1 {
-        result.push(sorted[i].0)
-      }
-      result
+      _ => []
     }
-    _ => []
   }
 }
 
@@ -510,30 +683,42 @@ pub fn merge(left : Array[(String, Float)], right : Array[(String, Float)]) -> A
 }
 
 pub fn Database::zcard(self : Database, key : String) -> Int {
-  match self.data.get(key) {
-    Some(RedisValue::ZSet(z)) => z.length()
-    _ => 0
+  if self.check_expired(key) {
+    0
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::ZSet(z)) => z.length()
+      _ => 0
+    }
   }
 }
 
 pub fn Database::zscore(self : Database, key : String, member_val : String) -> Float? {
-  match self.data.get(key) {
-    Some(RedisValue::ZSet(z)) => z.get(member_val)
-    _ => None
+  if self.check_expired(key) {
+    None
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::ZSet(z)) => z.get(member_val)
+      _ => None
+    }
   }
 }
 
 pub fn Database::zrem(self : Database, key : String, member_val : String) -> Bool {
-  match self.data.get(key) {
-    Some(RedisValue::ZSet(zset)) => {
-      let existed = zset.contains(member_val)
-      if existed {
-        zset.remove(member_val)
-        self.data.set(key, RedisValue::ZSet(zset))
+  if self.check_expired(key) {
+    false
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::ZSet(zset)) => {
+        let existed = zset.contains(member_val)
+        if existed {
+          zset.remove(member_val)
+          self.data.set(key, RedisValue::ZSet(zset))
+        }
+        existed
       }
-      existed
+      _ => false
     }
-    _ => false
   }
 }
 
@@ -845,4 +1030,81 @@ test "sorted_set_boundary_cases" {
   
   let sorted_neg = db.zrange("neg_scores", 0, -1)
   debug_inspect(sorted_neg.length(), content="3")
+}
+
+test "expire_operations" {
+  let db = Database::new()
+  
+  db.set("key1", "value1")
+  debug_inspect(db.exists("key1"), content="true")
+  debug_inspect(db.ttl("key1"), content="-1")
+  debug_inspect(db.pttl("key1"), content="-1")
+  
+  debug_inspect(db.expire("key1", 60), content="true")
+  debug_inspect(db.ttl("key1") >= 0, content="true")
+  debug_inspect(db.pttl("key1") >= 0, content="true")
+  
+  debug_inspect(db.expire("nonexistent", 60), content="false")
+  
+  debug_inspect(db.persist("key1"), content="true")
+  debug_inspect(db.ttl("key1"), content="-1")
+  debug_inspect(db.pttl("key1"), content="-1")
+  
+  debug_inspect(db.persist("key1"), content="false")
+}
+
+test "expire_after_timeout" {
+  let db = Database::new()
+  
+  db.set("temp_key", "temp_value")
+  debug_inspect(db.get("temp_key"), content="Some(\"temp_value\")")
+  
+  debug_inspect(db.pexpire("temp_key", 10), content="true")
+  
+  db.advance_time(20)
+  
+  debug_inspect(db.get("temp_key"), content="None")
+  debug_inspect(db.exists("temp_key"), content="false")
+  debug_inspect(db.ttl("temp_key"), content="-2")
+  debug_inspect(db.pttl("temp_key"), content="-2")
+}
+
+test "expire_type_check" {
+  let db = Database::new()
+  
+  db.set("string_key", "value")
+  db.hset("hash_key", "field", "value")
+  db.lpush("list_key", "item") |> ignore
+  db.sadd("set_key", "member") |> ignore
+  db.zadd("zset_key", 100.0, "member") |> ignore
+  
+  debug_inspect(db.expire("string_key", 60), content="true")
+  debug_inspect(db.expire("hash_key", 60), content="true")
+  debug_inspect(db.expire("list_key", 60), content="true")
+  debug_inspect(db.expire("set_key", 60), content="true")
+  debug_inspect(db.expire("zset_key", 60), content="true")
+  
+  debug_inspect(db.ttl("string_key") >= 0, content="true")
+  debug_inspect(db.ttl("hash_key") >= 0, content="true")
+  debug_inspect(db.ttl("list_key") >= 0, content="true")
+  debug_inspect(db.ttl("set_key") >= 0, content="true")
+  debug_inspect(db.ttl("zset_key") >= 0, content="true")
+}
+
+test "expire_refresh_on_write" {
+  let db = Database::new()
+  
+  db.set("key", "value")
+  db.expire("key", 1) |> ignore
+  debug_inspect(db.ttl("key") >= 0, content="true")
+  
+  db.set("key", "new_value")
+  debug_inspect(db.ttl("key"), content="-1")
+  
+  db.set("key2", "100")
+  db.expire("key2", 1) |> ignore
+  debug_inspect(db.ttl("key2") >= 0, content="true")
+  
+  db.incr("key2") |> ignore
+  debug_inspect(db.ttl("key2"), content="-1")
 }
