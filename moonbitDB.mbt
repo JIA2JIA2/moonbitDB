@@ -520,6 +520,31 @@ test "string_operations" {
   debug_inspect(db.strlen("name"), content="11")
 }
 
+test "string_boundary_cases" {
+  let db = Database::new()
+  
+  debug_inspect(db.get("nonexistent"), content="None")
+  debug_inspect(db.strlen("nonexistent"), content="0")
+  
+  db.set("empty", "")
+  debug_inspect(db.get("empty"), content="Some(\"\")")
+  debug_inspect(db.strlen("empty"), content="0")
+  
+  db.set("key1", "value1")
+  db.set("key1", "value2")
+  debug_inspect(db.get("key1"), content="Some(\"value2\")")
+  
+  db.append("non_string_key", "test") |> ignore
+  debug_inspect(db.get("non_string_key"), content="Some(\"test\")")
+  
+  debug_inspect(db.exists("key1"), content="true")
+  debug_inspect(db.exists("nonexistent"), content="false")
+  
+  db.del("key1") |> ignore
+  debug_inspect(db.exists("key1"), content="false")
+  debug_inspect(db.del("nonexistent"), content="false")
+}
+
 test "incr_decr_operations" {
   let db = Database::new()
   
@@ -578,6 +603,35 @@ test "hash_operations" {
   debug_inspect(db.hget("user:1", "email"), content="None")
 }
 
+test "hash_boundary_cases" {
+  let db = Database::new()
+  
+  debug_inspect(db.hget("nonexistent", "field"), content="None")
+  debug_inspect(db.hlen("nonexistent"), content="0")
+  debug_inspect(db.hdel("nonexistent", "field"), content="false")
+  
+  let empty_hash = db.hgetall("nonexistent")
+  debug_inspect(empty_hash.length(), content="0")
+  
+  db.hset("hash1", "field1", "value1")
+  db.hset("hash1", "field2", "value2")
+  
+  let hash_all = db.hgetall("hash1")
+  debug_inspect(hash_all.length(), content="2")
+  
+  db.hset("hash1", "field1", "updated")
+  debug_inspect(db.hget("hash1", "field1"), content="Some(\"updated\")")
+  debug_inspect(db.hlen("hash1"), content="2")
+  
+  db.hdel("hash1", "field1") |> ignore
+  debug_inspect(db.hlen("hash1"), content="1")
+  
+  debug_inspect(db.hdel("hash1", "nonexistent_field"), content="false")
+  
+  db.hset("hash2", "", "empty_field")
+  debug_inspect(db.hget("hash2", ""), content="Some(\"empty_field\")")
+}
+
 test "list_operations" {
   let db = Database::new()
   
@@ -589,6 +643,41 @@ test "list_operations" {
   debug_inspect(db.lpop("mylist"), content="Some(\"b\")")
   debug_inspect(db.rpop("mylist"), content="Some(\"c\")")
   debug_inspect(db.llen("mylist"), content="1")
+}
+
+test "list_boundary_cases" {
+  let db = Database::new()
+  
+  debug_inspect(db.llen("nonexistent"), content="0")
+  debug_inspect(db.lpop("nonexistent"), content="None")
+  debug_inspect(db.rpop("nonexistent"), content="None")
+  
+  db.lpush("empty_list", "first") |> ignore
+  debug_inspect(db.llen("empty_list"), content="1")
+  debug_inspect(db.lpop("empty_list"), content="Some(\"first\")")
+  debug_inspect(db.llen("empty_list"), content="0")
+  debug_inspect(db.lpop("empty_list"), content="None")
+  
+  db.rpush("single_list", "item") |> ignore
+  debug_inspect(db.rpop("single_list"), content="Some(\"item\")")
+  debug_inspect(db.llen("single_list"), content="0")
+  
+  db.lpush("multi", "x") |> ignore
+  db.lpush("multi", "y") |> ignore
+  db.lpush("multi", "z") |> ignore
+  debug_inspect(db.llen("multi"), content="3")
+  
+  debug_inspect(db.lpop("multi"), content="Some(\"z\")")
+  debug_inspect(db.lpop("multi"), content="Some(\"y\")")
+  debug_inspect(db.lpop("multi"), content="Some(\"x\")")
+  debug_inspect(db.lpop("multi"), content="None")
+  
+  db.rpush("reverse", "a") |> ignore
+  db.rpush("reverse", "b") |> ignore
+  db.rpush("reverse", "c") |> ignore
+  debug_inspect(db.rpop("reverse"), content="Some(\"c\")")
+  debug_inspect(db.rpop("reverse"), content="Some(\"b\")")
+  debug_inspect(db.rpop("reverse"), content="Some(\"a\")")
 }
 
 test "set_operations" {
@@ -606,6 +695,39 @@ test "set_operations" {
   debug_inspect(db.scard("myset"), content="1")
 }
 
+test "set_boundary_cases" {
+  let db = Database::new()
+  
+  debug_inspect(db.scard("nonexistent"), content="0")
+  debug_inspect(db.sismember("nonexistent", "item"), content="false")
+  debug_inspect(db.srem("nonexistent", "item"), content="false")
+  
+  let empty_members = db.smembers("nonexistent")
+  debug_inspect(empty_members.length(), content="0")
+  
+  debug_inspect(db.sadd("set1", "a"), content="true")
+  debug_inspect(db.sadd("set1", "b"), content="true")
+  debug_inspect(db.sadd("set1", "a"), content="false")
+  
+  debug_inspect(db.scard("set1"), content="2")
+  
+  debug_inspect(db.srem("set1", "c"), content="false")
+  debug_inspect(db.srem("set1", "a"), content="true")
+  
+  debug_inspect(db.scard("set1"), content="1")
+  debug_inspect(db.sismember("set1", "a"), content="false")
+  debug_inspect(db.sismember("set1", "b"), content="true")
+  
+  let members = db.smembers("set1")
+  debug_inspect(members.length(), content="1")
+  
+  db.srem("set1", "b") |> ignore
+  debug_inspect(db.scard("set1"), content="0")
+  
+  db.sadd("empty_item", "") |> ignore
+  debug_inspect(db.sismember("empty_item", ""), content="true")
+}
+
 test "sorted_set_operations" {
   let db = Database::new()
   
@@ -621,4 +743,47 @@ test "sorted_set_operations" {
   
   db.zrem("scores", "Bob") |> ignore
   debug_inspect(db.zcard("scores"), content="2")
+}
+
+test "sorted_set_boundary_cases" {
+  let db = Database::new()
+  
+  debug_inspect(db.zcard("nonexistent"), content="0")
+  debug_inspect(db.zscore("nonexistent", "member"), content="None")
+  debug_inspect(db.zrem("nonexistent", "member"), content="false")
+  
+  let empty_range = db.zrange("nonexistent", 0, -1)
+  debug_inspect(empty_range.length(), content="0")
+  
+  debug_inspect(db.zadd("zset1", 10.0, "a"), content="true")
+  debug_inspect(db.zadd("zset1", 20.0, "b"), content="true")
+  debug_inspect(db.zadd("zset1", 10.0, "a"), content="false")
+  
+  debug_inspect(db.zcard("zset1"), content="2")
+  debug_inspect(db.zscore("zset1", "a"), content="Some(10)")
+  
+  debug_inspect(db.zadd("zset1", 15.0, "a"), content="false")
+  debug_inspect(db.zscore("zset1", "a"), content="Some(15)")
+  
+  let all_range = db.zrange("zset1", 0, -1)
+  debug_inspect(all_range.length(), content="2")
+  
+  let first = db.zrange("zset1", 0, 0)
+  debug_inspect(first.length(), content="1")
+  
+  let last = db.zrange("zset1", -1, -1)
+  debug_inspect(last.length(), content="1")
+  
+  debug_inspect(db.zrem("zset1", "c"), content="false")
+  debug_inspect(db.zrem("zset1", "a"), content="true")
+  
+  debug_inspect(db.zcard("zset1"), content="1")
+  debug_inspect(db.zscore("zset1", "a"), content="None")
+  
+  db.zadd("neg_scores", -5.0, "low") |> ignore
+  db.zadd("neg_scores", -10.0, "lower") |> ignore
+  db.zadd("neg_scores", 0.0, "zero") |> ignore
+  
+  let sorted_neg = db.zrange("neg_scores", 0, -1)
+  debug_inspect(sorted_neg.length(), content="3")
 }

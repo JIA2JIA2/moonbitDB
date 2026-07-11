@@ -400,12 +400,17 @@ let moonbit_test_driver_internal_no_args_tests : MoonBitTestDriverInternalTestMa
   "moonbitDB.mbt": {
     0: (__test_6d6f6f6e62697444422e6d6274_0, ["cross_type_operations"]),
     1: (__test_6d6f6f6e62697444422e6d6274_1, ["string_operations"]),
-    2: (__test_6d6f6f6e62697444422e6d6274_2, ["incr_decr_operations"]),
-    3: (__test_6d6f6f6e62697444422e6d6274_3, ["keys_pattern_operations"]),
-    4: (__test_6d6f6f6e62697444422e6d6274_4, ["hash_operations"]),
-    5: (__test_6d6f6f6e62697444422e6d6274_5, ["list_operations"]),
-    6: (__test_6d6f6f6e62697444422e6d6274_6, ["set_operations"]),
-    7: (__test_6d6f6f6e62697444422e6d6274_7, ["sorted_set_operations"]),
+    2: (__test_6d6f6f6e62697444422e6d6274_2, ["string_boundary_cases"]),
+    3: (__test_6d6f6f6e62697444422e6d6274_3, ["incr_decr_operations"]),
+    4: (__test_6d6f6f6e62697444422e6d6274_4, ["keys_pattern_operations"]),
+    5: (__test_6d6f6f6e62697444422e6d6274_5, ["hash_operations"]),
+    6: (__test_6d6f6f6e62697444422e6d6274_6, ["hash_boundary_cases"]),
+    7: (__test_6d6f6f6e62697444422e6d6274_7, ["list_operations"]),
+    8: (__test_6d6f6f6e62697444422e6d6274_8, ["list_boundary_cases"]),
+    9: (__test_6d6f6f6e62697444422e6d6274_9, ["set_operations"]),
+    10: (__test_6d6f6f6e62697444422e6d6274_10, ["set_boundary_cases"]),
+    11: (__test_6d6f6f6e62697444422e6d6274_11, ["sorted_set_operations"]),
+    12: (__test_6d6f6f6e62697444422e6d6274_12, ["sorted_set_boundary_cases"]),
   },
 }
 
