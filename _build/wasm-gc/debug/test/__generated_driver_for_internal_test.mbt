@@ -415,6 +415,10 @@ let moonbit_test_driver_internal_no_args_tests : MoonBitTestDriverInternalTestMa
     14: (__test_6d6f6f6e62697444422e6d6274_14, ["expire_after_timeout"]),
     15: (__test_6d6f6f6e62697444422e6d6274_15, ["expire_type_check"]),
     16: (__test_6d6f6f6e62697444422e6d6274_16, ["expire_refresh_on_write"]),
+    17: (__test_6d6f6f6e62697444422e6d6274_17, ["mset_mget_operations"]),
+    18: (__test_6d6f6f6e62697444422e6d6274_18, ["mdel_operations"]),
+    19: (__test_6d6f6f6e62697444422e6d6274_19, ["hmset_hmget_operations"]),
+    20: (__test_6d6f6f6e62697444422e6d6274_20, ["batch_with_expire"]),
   },
 }
 

@@ -152,6 +152,82 @@ pub fn Database::persist(self : Database, key : String) -> Bool {
   }
 }
 
+pub fn Database::mset(self : Database, keys : Array[String], values : Array[String]) -> Unit {
+  for i = 0; i < keys.length() && i < values.length(); i = i + 1 {
+    self.data.set(keys[i], RedisValue::String(values[i]))
+    self.expires.remove(keys[i])
+  }
+}
+
+pub fn Database::mget(self : Database, keys : Array[String]) -> Array[String?] {
+  let result = []
+  for key in keys {
+    if self.check_expired(key) {
+      result.push(None)
+    } else {
+      match self.data.get(key) {
+        Some(RedisValue::String(s)) => result.push(Some(s))
+        _ => result.push(None)
+      }
+    }
+  }
+  result
+}
+
+pub fn Database::mdel(self : Database, keys : Array[String]) -> Int {
+  let mut count = 0
+  for key in keys {
+    if !self.check_expired(key) {
+      let existed = self.data.contains(key)
+      if existed {
+        self.data.remove(key)
+        self.expires.remove(key)
+        count = count + 1
+      }
+    }
+  }
+  count
+}
+
+pub fn Database::hmset(self : Database, key : String, fields : Array[String], values : Array[String]) -> Unit {
+  self.check_expired(key) |> ignore
+  let hash = match self.data.get(key) {
+    Some(RedisValue::Hash(h)) => h
+    _ => Map([], capacity=10)
+  }
+  for i = 0; i < fields.length() && i < values.length(); i = i + 1 {
+    hash.set(fields[i], values[i])
+  }
+  self.data.set(key, RedisValue::Hash(hash))
+}
+
+pub fn Database::hmget(self : Database, key : String, fields : Array[String]) -> Array[String?] {
+  if self.check_expired(key) {
+    let result = []
+    for _ in fields {
+      result.push(None)
+    }
+    result
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::Hash(h)) => {
+        let result = []
+        for field in fields {
+          result.push(h.get(field))
+        }
+        result
+      }
+      _ => {
+        let result = []
+        for _ in fields {
+          result.push(None)
+        }
+        result
+      }
+    }
+  }
+}
+
 pub fn Database::get(self : Database, key : String) -> String? {
   if self.check_expired(key) {
     None
@@ -1107,4 +1183,113 @@ test "expire_refresh_on_write" {
   
   db.incr("key2") |> ignore
   debug_inspect(db.ttl("key2"), content="-1")
+}
+
+test "mset_mget_operations" {
+  let db = Database::new()
+  
+  db.mset(["key1", "key2", "key3"], ["value1", "value2", "value3"])
+  
+  debug_inspect(db.get("key1"), content="Some(\"value1\")")
+  debug_inspect(db.get("key2"), content="Some(\"value2\")")
+  debug_inspect(db.get("key3"), content="Some(\"value3\")")
+  
+  let values = db.mget(["key1", "key2", "key3"])
+  debug_inspect(values.length(), content="3")
+  debug_inspect(values[0], content="Some(\"value1\")")
+  debug_inspect(values[1], content="Some(\"value2\")")
+  debug_inspect(values[2], content="Some(\"value3\")")
+  
+  let mixed = db.mget(["key1", "nonexistent", "key3"])
+  debug_inspect(mixed.length(), content="3")
+  debug_inspect(mixed[0], content="Some(\"value1\")")
+  debug_inspect(mixed[1], content="None")
+  debug_inspect(mixed[2], content="Some(\"value3\")")
+  
+  db.mset(["key2", "key4"], ["updated", "value4"])
+  debug_inspect(db.get("key2"), content="Some(\"updated\")")
+  debug_inspect(db.get("key4"), content="Some(\"value4\")")
+}
+
+test "mdel_operations" {
+  let db = Database::new()
+  
+  db.mset(["a", "b", "c", "d"], ["1", "2", "3", "4"])
+  
+  debug_inspect(db.exists("a"), content="true")
+  debug_inspect(db.exists("b"), content="true")
+  debug_inspect(db.exists("c"), content="true")
+  debug_inspect(db.exists("d"), content="true")
+  
+  let deleted = db.mdel(["a", "c", "nonexistent"])
+  debug_inspect(deleted, content="2")
+  
+  debug_inspect(db.exists("a"), content="false")
+  debug_inspect(db.exists("b"), content="true")
+  debug_inspect(db.exists("c"), content="false")
+  debug_inspect(db.exists("d"), content="true")
+  
+  let deleted_all = db.mdel(["b", "d"])
+  debug_inspect(deleted_all, content="2")
+  
+  let remaining = db.keys()
+  debug_inspect(remaining.length(), content="0")
+}
+
+test "hmset_hmget_operations" {
+  let db = Database::new()
+  
+  db.hmset("user:1", ["name", "email", "age"], ["Alice", "alice@example.com", "30"])
+  
+  debug_inspect(db.hget("user:1", "name"), content="Some(\"Alice\")")
+  debug_inspect(db.hget("user:1", "email"), content="Some(\"alice@example.com\")")
+  debug_inspect(db.hget("user:1", "age"), content="Some(\"30\")")
+  
+  let fields = db.hmget("user:1", ["name", "email", "age"])
+  debug_inspect(fields.length(), content="3")
+  debug_inspect(fields[0], content="Some(\"Alice\")")
+  debug_inspect(fields[1], content="Some(\"alice@example.com\")")
+  debug_inspect(fields[2], content="Some(\"30\")")
+  
+  let mixed = db.hmget("user:1", ["name", "nonexistent", "age"])
+  debug_inspect(mixed.length(), content="3")
+  debug_inspect(mixed[0], content="Some(\"Alice\")")
+  debug_inspect(mixed[1], content="None")
+  debug_inspect(mixed[2], content="Some(\"30\")")
+  
+  db.hmset("user:1", ["age", "city"], ["31", "Beijing"])
+  debug_inspect(db.hget("user:1", "age"), content="Some(\"31\")")
+  debug_inspect(db.hget("user:1", "city"), content="Some(\"Beijing\")")
+}
+
+test "batch_with_expire" {
+  let db = Database::new()
+  
+  db.mset(["temp1", "temp2"], ["value1", "value2"])
+  db.expire("temp1", 1) |> ignore
+  
+  let before_expire = db.mget(["temp1", "temp2"])
+  debug_inspect(before_expire.length(), content="2")
+  debug_inspect(before_expire[0], content="Some(\"value1\")")
+  debug_inspect(before_expire[1], content="Some(\"value2\")")
+  
+  db.advance_time(2000)
+  
+  let after_expire = db.mget(["temp1", "temp2"])
+  debug_inspect(after_expire.length(), content="2")
+  debug_inspect(after_expire[0], content="None")
+  debug_inspect(after_expire[1], content="Some(\"value2\")")
+  
+  let deleted = db.mdel(["temp1", "temp2"])
+  debug_inspect(deleted, content="1")
+  
+  db.hmset("temp_hash", ["a", "b"], ["1", "2"])
+  db.expire("temp_hash", 1) |> ignore
+  
+  db.advance_time(2000)
+  
+  let hash_fields = db.hmget("temp_hash", ["a", "b"])
+  debug_inspect(hash_fields.length(), content="2")
+  debug_inspect(hash_fields[0], content="None")
+  debug_inspect(hash_fields[1], content="None")
 }
