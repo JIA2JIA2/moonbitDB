@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  MOONBIT_VERSION: latest
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Restore MoonBit Dependencies Cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.moon
+          key: moon-deps-${{ hashFiles('moon.mod.json') }}
+          restore-keys: moon-deps-
+
+      - name: Install MoonBit CLI
+        run: |
+          for i in 1 2 3; do
+            curl -fsSL https://cli.moonbitlang.com/install.sh | bash && break
+            echo "::warning::MoonBit CLI installation failed, retry ${i}..."
+            sleep 5
+          done
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: Verify MoonBit Installation & Install Dependencies
+        run: |
+          moon version
+          moon install
+
+      - name: Run moon check
+        run: moon check
+
+      - name: Run moon build
+        run: moon build
+
+      - name: Run moon test
+        run: moon test
