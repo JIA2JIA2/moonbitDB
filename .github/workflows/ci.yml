@@ -26,19 +26,32 @@ jobs:
 
       - name: Install MoonBit CLI
         run: |
+          MOONBIT_INSTALL_URL="https://cli.moonbitlang.com/install/unix.sh"
+          MOONBIT_INSTALL_SCRIPT="/tmp/moonbit-install.sh"
           INSTALL_SUCCESS=false
+
           for i in 1 2 3; do
-            if curl -fsSL https://cli.moonbitlang.com/install.sh | bash; then
-              INSTALL_SUCCESS=true
-              break
+            if curl -fsSL -o "$MOONBIT_INSTALL_SCRIPT" "$MOONBIT_INSTALL_URL" && bash "$MOONBIT_INSTALL_SCRIPT"; then
+              MOON_BIN_PATH="$(command -v moon 2>/dev/null)"
+              if [ -n "$MOON_BIN_PATH" ]; then
+                MOON_BIN_DIR="$(dirname "$MOON_BIN_PATH")"
+                if "$MOON_BIN_PATH" version; then
+                  echo "$MOON_BIN_DIR" >> "$GITHUB_PATH"
+                  INSTALL_SUCCESS=true
+                  break
+                else
+                  echo "::warning::moon version verification failed (attempt ${i}/3)"
+                fi
+              else
+                echo "::warning::moon command not found after install (attempt ${i}/3)"
+              fi
+            else
+              echo "::warning::MoonBit CLI installation failed (attempt ${i}/3)"
             fi
-            echo "::warning::MoonBit CLI installation failed, retry ${i}..."
             sleep 5
           done
 
-          if [ "$INSTALL_SUCCESS" = true ]; then
-            echo "$HOME/.moon/bin" >> $GITHUB_PATH
-          else
+          if [ "$INSTALL_SUCCESS" = false ]; then
             echo "::error::MoonBit CLI installation failed after all retries"
             exit 1
           fi
