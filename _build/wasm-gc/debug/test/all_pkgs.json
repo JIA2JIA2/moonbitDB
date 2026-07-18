@@ -3,32 +3,32 @@
     {
       "root": "JIA2JIA2/moonbitdb",
       "rel": "",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/moonbitdb.mi"
+      "artifact": "/home/developer/Documents/moonbitDB/_build/wasm-gc/debug/test/moonbitdb.mi"
     },
     {
       "root": "JIA2JIA2/moonbitdb",
       "rel": "examples/basic_usage",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/examples/basic_usage/basic_usage.mi"
+      "artifact": "/home/developer/Documents/moonbitDB/_build/wasm-gc/debug/test/examples/basic_usage/basic_usage.mi"
     },
     {
       "root": "JIA2JIA2/moonbitdb",
       "rel": "examples/cli_repl",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/examples/cli_repl/cli_repl.mi"
+      "artifact": "/home/developer/Documents/moonbitDB/_build/wasm-gc/debug/test/examples/cli_repl/cli_repl.mi"
     },
     {
       "root": "JIA2JIA2/moonbitdb",
       "rel": "examples/leaderboard",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/examples/leaderboard/leaderboard.mi"
+      "artifact": "/home/developer/Documents/moonbitDB/_build/wasm-gc/debug/test/examples/leaderboard/leaderboard.mi"
     },
     {
       "root": "JIA2JIA2/moonbitdb",
       "rel": "examples/shopping_cart",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/examples/shopping_cart/shopping_cart.mi"
+      "artifact": "/home/developer/Documents/moonbitDB/_build/wasm-gc/debug/test/examples/shopping_cart/shopping_cart.mi"
     },
     {
       "root": "JIA2JIA2/moonbitdb",
       "rel": "lib",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/lib/lib.mi"
+      "artifact": "/home/developer/Documents/moonbitDB/_build/wasm-gc/debug/test/lib/lib.mi"
     },
     {
       "root": "moonbitlang/core",
@@ -409,121 +409,6 @@
       "root": "moonbitlang/core",
       "rel": "v128",
       "artifact": "/home/developer/.moon/lib/core/_build/wasm-gc/release/bundle/v128/v128.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "benchmark",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/benchmark/benchmark.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "benchmark/internal/benchmark_ffi",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/benchmark/internal/benchmark_ffi/benchmark_ffi.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "codec/base64",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/codec/base64/base64.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "crypto",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/crypto/crypto.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "decimal",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/decimal/decimal.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "encoding",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/encoding/encoding.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "encoding/internal/benchmark",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/encoding/internal/benchmark/benchmark.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "encoding/internal/benchmark/decoding_batch",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/encoding/internal/benchmark/decoding_batch/decoding_batch.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "encoding/internal/benchmark/decoding_streaming",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/encoding/internal/benchmark/decoding_streaming/decoding_streaming.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "fs",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/fs/fs.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "internal/ffi",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/internal/ffi/ffi.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "json5",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/json5/json5.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "num",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/num/num.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "path",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/path/path.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "path/internal/ffi",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/path/internal/ffi/ffi.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "path/posix",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/path/posix/posix.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "path/win32",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/path/win32/win32.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "rational",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/rational/rational.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "stack",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/stack/stack.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "sys",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/sys/sys.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "sys/internal/ffi",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/sys/internal/ffi/ffi.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "time",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/time/time.mi"
-    },
-    {
-      "root": "moonbitlang/x",
-      "rel": "uuid",
-      "artifact": "/home/developer/Documents2/moonbitDB/_build/wasm-gc/debug/test/.mooncakes/moonbitlang/x/uuid/uuid.mi"
     }
   ]
 }

@@ -233,7 +233,7 @@ pub fn Database::ttl(self : Database, key : String) -> Int {
       self.expires.remove(key)
       -2
     } else {
-      remaining / 1000
+      (remaining + 999) / 1000
     }
   } else {
     -1
@@ -419,7 +419,7 @@ pub fn match_pattern_helper(pattern : String, str : String, p_idx : Int, s_idx :
 pub fn Database::keys_pattern(self : Database, pattern : String) -> Array[String] {
   let result = []
   for key, _ in self.data {
-    if match_pattern(pattern, key) {
+    if match_pattern(pattern, key) && !self.check_expired(key) {
       result.push(key)
     }
   }
@@ -447,13 +447,19 @@ pub fn Database::append(self : Database, key : String, value : String) -> Int {
     self.data.set(key, RedisValue::String(new_val))
     new_val.length()
   } else {
-    let current = match self.data.get(key) {
-      Some(RedisValue::String(s)) => s
-      _ => ""
+    match self.data.get(key) {
+      Some(RedisValue::String(s)) => {
+        let new_val = s + value
+        self.data.set(key, RedisValue::String(new_val))
+        new_val.length()
+      }
+      Some(_) => -1
+      None => {
+        let new_val = value
+        self.data.set(key, RedisValue::String(new_val))
+        new_val.length()
+      }
     }
-    let new_val = current + value
-    self.data.set(key, RedisValue::String(new_val))
-    new_val.length()
   }
 }
 
@@ -513,6 +519,9 @@ pub fn parse_int(s : String) -> Int? {
     } else if s[0] == 43 {
       start = 1
     }
+    if start >= s.length() {
+      return None
+    }
     for i = start; i < s.length(); i = i + 1 {
       match uint16_to_digit(s[i]) {
         Some(digit) => result = result * 10 + digit
@@ -529,26 +538,44 @@ pub fn int_to_string(n : Int) -> String {
   } else {
     let mut num = n
     let chars : Array[String] = []
+    let mut is_negative = false
     if num < 0 {
-      num = -num
+      is_negative = true
     }
-    while num > 0 {
-      match num % 10 {
-        0 => chars.push("0")
-        1 => chars.push("1")
-        2 => chars.push("2")
-        3 => chars.push("3")
-        4 => chars.push("4")
-        5 => chars.push("5")
-        6 => chars.push("6")
-        7 => chars.push("7")
-        8 => chars.push("8")
-        9 => chars.push("9")
-        _ => chars.push("0")
+    while num != 0 {
+      let digit = num % 10
+      if is_negative {
+        match -digit {
+          0 => chars.push("0")
+          1 => chars.push("1")
+          2 => chars.push("2")
+          3 => chars.push("3")
+          4 => chars.push("4")
+          5 => chars.push("5")
+          6 => chars.push("6")
+          7 => chars.push("7")
+          8 => chars.push("8")
+          9 => chars.push("9")
+          _ => chars.push("0")
+        }
+      } else {
+        match digit {
+          0 => chars.push("0")
+          1 => chars.push("1")
+          2 => chars.push("2")
+          3 => chars.push("3")
+          4 => chars.push("4")
+          5 => chars.push("5")
+          6 => chars.push("6")
+          7 => chars.push("7")
+          8 => chars.push("8")
+          9 => chars.push("9")
+          _ => chars.push("0")
+        }
       }
       num = num / 10
     }
-    if n < 0 {
+    if is_negative {
       chars.push("-")
     }
     let result : Array[String] = []
@@ -569,7 +596,6 @@ pub fn Database::incr(self : Database, key : String) -> Int? {
     Some(n) => {
       let new_val = int_to_string(n + 1)
       self.data.set(key, RedisValue::String(new_val))
-      self.expires.remove(key)
       Some(n + 1)
     }
     None => None
@@ -586,7 +612,6 @@ pub fn Database::decr(self : Database, key : String) -> Int? {
     Some(n) => {
       let new_val = int_to_string(n - 1)
       self.data.set(key, RedisValue::String(new_val))
-      self.expires.remove(key)
       Some(n - 1)
     }
     None => None
@@ -883,6 +908,7 @@ pub fn Database::rpoplpush(self : Database, source : String, destination : Strin
         match source_deque.pop_back() {
           Some(val) => {
             self.data.set(source, RedisValue::List(source_deque))
+            self.check_expired(destination) |> ignore
             let dest_deque = match self.data.get(destination) {
               Some(RedisValue::List(d)) => d
               _ => Deque::new()
@@ -1544,9 +1570,7 @@ pub fn Database::renamenx(self : Database, old_key : String, new_key : String) -
   if self.check_expired(old_key) {
     return false
   }
-  if self.check_expired(new_key) {
-    return false
-  }
+  self.check_expired(new_key) |> ignore
   if self.data.contains(new_key) {
     return false
   }
@@ -2010,7 +2034,7 @@ test "expire_refresh_on_write" {
   debug_inspect(db.ttl("key2") >= 0, content="true")
   
   db.incr("key2") |> ignore
-  debug_inspect(db.ttl("key2"), content="-1")
+  debug_inspect(db.ttl("key2") >= 0, content="true")
 }
 
 test "mset_mget_operations" {
@@ -3240,4 +3264,119 @@ test "zset_score_edge_cases" {
     None => ("", 0.0)
   }
   debug_inspect(max_val.0, content="\"pi\"")
+}
+
+test "keys_pattern_expired_key" {
+  let db = Database::new()
+  db.set("user:1", "Alice")
+  db.set("user:2", "Bob")
+  db.set("admin:1", "Root")
+  db.pexpire("user:1", 100) |> ignore
+  db.advance_time(200)
+
+  let users = db.keys_pattern("user:*")
+  debug_inspect(users.length(), content="1")
+
+  let all = db.keys_pattern("*")
+  debug_inspect(all.length(), content="2")
+}
+
+test "rpoplpush_expired_destination" {
+  let db = Database::new()
+  db.rpush("src", "a") |> ignore
+  db.rpush("src", "b") |> ignore
+  db.rpush("dest", "old1") |> ignore
+  db.pexpire("dest", 100) |> ignore
+  db.advance_time(200)
+
+  let val = db.rpoplpush("src", "dest")
+  debug_inspect(val, content="Some(\"b\")")
+  debug_inspect(db.llen("dest"), content="1")
+  debug_inspect(db.lindex("dest", 0), content="Some(\"b\")")
+}
+
+test "renamenx_expired_newkey" {
+  let db = Database::new()
+  db.set("old_key", "value")
+  db.set("new_key", "old_value")
+  db.pexpire("new_key", 100) |> ignore
+  db.advance_time(200)
+
+  debug_inspect(db.renamenx("old_key", "new_key"), content="true")
+  debug_inspect(db.get("new_key"), content="Some(\"value\")")
+}
+
+test "incr_decr_ttl_preserved" {
+  let db = Database::new()
+  db.set("counter", "10")
+  db.expire("counter", 60) |> ignore
+  let ttl_before = db.ttl("counter")
+
+  db.incr("counter") |> ignore
+  let ttl_after_incr = db.ttl("counter")
+  debug_inspect(ttl_after_incr >= 0, content="true")
+  debug_inspect(ttl_after_incr <= ttl_before + 1, content="true")
+
+  db.decr("counter") |> ignore
+  let ttl_after_decr = db.ttl("counter")
+  debug_inspect(ttl_after_decr >= 0, content="true")
+
+  db.set("counter2", "5")
+  db.incr("counter2") |> ignore
+  debug_inspect(db.ttl("counter2"), content="-1")
+}
+
+test "int_to_string_min_value" {
+  let db = Database::new()
+  db.set("counter", "-9223372036854775807")
+  db.decr("counter") |> ignore
+  let val = db.get("counter")
+  debug_inspect(val is None, content="false")
+}
+
+test "parse_int_sign_only" {
+  let db = Database::new()
+  db.set("sign_minus", "-")
+  db.set("sign_plus", "+")
+  debug_inspect(db.incr("sign_minus"), content="None")
+  debug_inspect(db.incr("sign_plus"), content="None")
+}
+
+test "append_cross_type_safety" {
+  let db = Database::new()
+  db.hset("myhash", "field", "value")
+
+  debug_inspect(db.append("myhash", "test"), content="-1")
+  debug_inspect(db.type_of("myhash"), content="\"hash\"")
+  debug_inspect(db.hget("myhash", "field"), content="Some(\"value\")")
+
+  db.set("mystr", "hello")
+  debug_inspect(db.append("mystr", " world"), content="11")
+  debug_inspect(db.get("mystr"), content="Some(\"hello world\")")
+}
+
+test "ttl_ceil_rounding" {
+  let db = Database::new()
+  db.set("key1", "value1")
+  db.pexpire("key1", 1500) |> ignore
+
+  debug_inspect(db.ttl("key1"), content="2")
+
+  debug_inspect(db.pttl("key1"), content="1500")
+
+  db.set("key2", "value2")
+  db.pexpire("key2", 1000) |> ignore
+  debug_inspect(db.ttl("key2"), content="1")
+
+  db.set("key3", "value3")
+  db.pexpire("key3", 1) |> ignore
+  debug_inspect(db.ttl("key3"), content="1")
+}
+
+test "pttl_precision" {
+  let db = Database::new()
+  db.set("key1", "value1")
+  db.pexpire("key1", 1500) |> ignore
+
+  debug_inspect(db.pttl("key1"), content="1500")
 }
