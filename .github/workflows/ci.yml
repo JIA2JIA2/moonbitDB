@@ -26,12 +26,22 @@ jobs:
 
       - name: Install MoonBit CLI
         run: |
+          INSTALL_SUCCESS=false
           for i in 1 2 3; do
-            curl -fsSL https://cli.moonbitlang.com/install.sh | bash && break
+            if curl -fsSL https://cli.moonbitlang.com/install.sh | bash; then
+              INSTALL_SUCCESS=true
+              break
+            fi
             echo "::warning::MoonBit CLI installation failed, retry ${i}..."
             sleep 5
           done
-          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+          if [ "$INSTALL_SUCCESS" = true ]; then
+            echo "$HOME/.moon/bin" >> $GITHUB_PATH
+          else
+            echo "::error::MoonBit CLI installation failed after all retries"
+            exit 1
+          fi
 
       - name: Verify MoonBit Installation & Install Dependencies
         run: |
