@@ -51,9 +51,10 @@ jobs:
             exit 1
           fi
 
-      - name: Verify MoonBit Installation & Install Dependencies
+      - name: Update Registry Index & Install Dependencies
         run: |
           moon version
+          moon update
           moon install
 
       - name: Run moon check
