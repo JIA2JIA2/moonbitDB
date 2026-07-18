@@ -75,6 +75,44 @@ priv type MoonBit_Async_Test_Driver_Impl
 ///|
 impl MoonBit_Async_Test_Driver for MoonBit_Async_Test_Driver_Impl
 
+///|
+extend MoonBit_Test_Driver_Internal_No_Args with MoonBit_Test_Driver::{run_test}
+
+///|
+extend MoonBit_Test_Driver_Internal_With_Args with MoonBit_Test_Driver::{
+  run_test,
+}
+
+///|
+extend MoonBit_Test_Driver_Internal_Async_No_Args with MoonBit_Test_Driver::{
+  run_test,
+}
+
+///|
+extend MoonBit_Test_Driver_Internal_Async_With_Args with MoonBit_Test_Driver::{
+  run_test,
+}
+
+///|
+extend MoonBit_Test_Driver_Internal_With_Bench_Args with MoonBit_Test_Driver::{
+  run_test,
+}
+
+///|
+extend MoonBit_Async_Test_Driver_Impl with MoonBit_Async_Test_Driver::{
+  run_async_tests,
+  is_being_cancelled,
+}
+
+///|
+// `is_being_cancelled` is only called from async-test templates. This shared
+// scaffold is also generated for packages without async tests, so reference
+// the method value to keep strict warning lists from treating the explicit
+// extend as unused without invoking cancellation logic during initialization.
+fn init {
+  ignore(MoonBit_Async_Test_Driver_Impl::is_being_cancelled)
+}
+
 // #endregion
 
 // #region Utility Types
@@ -462,6 +500,15 @@ let moonbit_test_driver_internal_no_args_tests : MoonBitTestDriverInternalTestMa
     61: (__test_64617461626173652e6d6274_61, ["server_extended_edge_cases"]),
     62: (__test_64617461626173652e6d6274_62, ["deque_internal_operations"]),
     63: (__test_64617461626173652e6d6274_63, ["zset_score_edge_cases"]),
+    64: (__test_64617461626173652e6d6274_64, ["keys_pattern_expired_key"]),
+    65: (__test_64617461626173652e6d6274_65, ["rpoplpush_expired_destination"]),
+    66: (__test_64617461626173652e6d6274_66, ["renamenx_expired_newkey"]),
+    67: (__test_64617461626173652e6d6274_67, ["incr_decr_ttl_preserved"]),
+    68: (__test_64617461626173652e6d6274_68, ["int_to_string_min_value"]),
+    69: (__test_64617461626173652e6d6274_69, ["parse_int_sign_only"]),
+    70: (__test_64617461626173652e6d6274_70, ["append_cross_type_safety"]),
+    71: (__test_64617461626173652e6d6274_71, ["ttl_ceil_rounding"]),
+    72: (__test_64617461626173652e6d6274_72, ["pttl_precision"]),
   },
 }
 

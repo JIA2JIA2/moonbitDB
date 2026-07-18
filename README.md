@@ -1,5 +1,7 @@
 # moonbitDB
 
+[![CI](https://github.com/JIA2JIA2/moonbitdb/actions/workflows/ci.yml/badge.svg)](https://github.com/JIA2JIA2/moonbitdb/actions/workflows/ci.yml)
+
 基于 [MoonBit](https://www.moonbitlang.com/) 语言特性实现的内存型非关系型数据库，参考 Redis 设计。
 
 ## 快速开始
