@@ -288,3 +288,67 @@ moon run examples/cli_repl --target native
 参考 [examples/cli_repl/main.mbt](examples/cli_repl/main.mbt)
 
 支持解析和执行 60+ 命令，包括 SET/GET/HSET/LPUSH/SADD/ZADD/MSET 等全部命令类型。
+
+## 许可证
+
+本项目采用 [Apache License 2.0](LICENSE) 许可证（SPDX 标识符：`Apache-2.0`）。
+
+详见项目根目录 [LICENSE](LICENSE) 文件。
+
+## Redis 参考范围说明
+
+本项目参考 [Redis](https://redis.io/) 的 API 设计思路，基于 MoonBit 语言独立实现。本项目**不是** Redis 的移植或 fork，所有代码均为原创实现。
+
+### 参考范围
+
+本项目参考了 Redis 的以下功能设计：
+
+**数据结构**（5 种）：
+- String — 字符串值
+- Hash — 哈希表（字段-值映射）
+- List — 列表（双端队列）
+- Set — 集合（无序唯一元素）
+- Sorted Set — 有序集合（分数排序）
+
+**命令语义**（8 大命令组，80+ 个命令）：
+
+| 命令组 | 命令数量 | 代表命令 |
+|--------|----------|----------|
+| String | 8 | SET, GET, DEL, EXISTS, APPEND, STRLEN, INCR, DECR |
+| Key | 11 | KEYS, KEYS_PATTERN, TYPE, EXPIRE, PEXPIRE, TTL, PTTL, PERSIST, RENAME, RENAMENX, RANDOMKEY |
+| Hash | 5 | HSET, HGET, HDEL, HGETALL, HLEN |
+| List | 13 | LPUSH, RPUSH, LPOP, RPOP, LLEN, LRANGE, LINDEX, LSET, LREM, LINSERT, LPUSHX, RPUSHX, RPOPLPUSH |
+| Set | 13 | SADD, SMEMBERS, SREM, SCARD, SISMEMBER, SINTER, SINTERSTORE, SUNION, SUNIONSTORE, SDIFF, SDIFFSTORE, SMOVE, SPOP |
+| Sorted Set | 16 | ZADD, ZRANGE, ZCARD, ZSCORE, ZREM, ZRANGEBYSCORE, ZCOUNT, ZREVRANGE, ZREVRANGEBYSCORE, ZRANK, ZREVRANK, ZINCRBY, ZREMRANGEBYRANK, ZREMRANGEBYSCORE, ZPOPMIN, ZPOPMAX |
+| 批量操作 | 5 | MSET, MGET, MDEL, HMSET, HMGET |
+| 服务器 | 9 | DBSIZE, FLUSHDB, FLUSHALL, PING, ECHO, INFO, TIME, COMMAND, OBJECT_ENCODING |
+
+**Key 过期机制**：
+- EXPIRE / PEXPIRE — 设置过期时间（秒/毫秒）
+- TTL / PTTL — 查询剩余生存时间
+- PERSIST — 移除过期时间
+- 惰性过期检查策略
+
+**内部编码命名**（OBJECT_ENCODING 命令）：
+- `embstr` — String 类型编码
+- `listpack` — Hash/List/Set/ZSet 小规模编码
+- `hashtable` — Hash/Set 大规模编码
+- `skiplist` — ZSet 大规模编码
+- `quicklist` — List 大规模编码
+
+### 独立实现声明
+
+- 本项目所有代码均为基于 MoonBit 语言的原创实现
+- 仅参考了 Redis 的 API 设计思路和命名约定
+- 未使用任何 Redis 源代码
+- 数据结构和算法均为独立设计（如使用 Deque 替代 Redis 的 quicklist 实现）
+
+### Redis 许可证
+
+Redis 采用 [BSD-3-Clause](https://redis.io/docs/about/license/) 许可证。
+
+## 第三方依赖
+
+| 依赖 | 版本 | 来源 | 许可证 |
+|------|------|------|--------|
+| moonbitlang/x | 0.4.38 | MoonBit 官方扩展库 | Apache-2.0 |
