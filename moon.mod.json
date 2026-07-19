@@ -1,8 +1,5 @@
 {
   "name": "JIA2JIA2/moonbitdb",
-  "version": "0.1.0",
-  "license": "Apache-2.0",
-  "deps": {
-    "moonbitlang/x": "0.4.38"
-  }
+  "version": "0.1.1",
+  "license": "Apache-2.0"
 }
