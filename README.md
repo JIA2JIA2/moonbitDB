@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**64 个测试用例，全部通过**。
+当前测试覆盖：**88 个测试用例，全部通过**。
 
 ## 库导入指南
 
@@ -81,7 +81,7 @@ moon test
 {
   "name": "your-name/your-project",
   "deps": {
-    "JIA2JIA2/moonbitdb": "0.1.1"
+    "JIA2JIA2/moonbitdb": "0.1.2"
   }
 }
 ```
@@ -146,7 +146,7 @@ moonbitDB/
 
 ## 支持的命令
 
-共支持 **80+ 个命令**，覆盖 Redis 核心功能。
+共支持 **92 个命令**，覆盖 Redis 核心功能。
 
 ### String 命令
 
@@ -160,6 +160,10 @@ moonbitDB/
 | `STRLEN` | `(key) -> Int` | 字符串长度 |
 | `INCR` | `(key) -> Int?` | 自增 1（非数字返回 None） |
 | `DECR` | `(key) -> Int?` | 自减 1（非数字返回 None） |
+| `SETNX` | `(key, value) -> Bool` | 仅当 key 不存在时设置 |
+| `SETEX` | `(key, seconds, value) -> Bool` | 设置值并指定过期时间（秒） |
+| `GETDEL` | `(key) -> String?` | 获取值并删除 key |
+| `GETSET` | `(key, value) -> String?` | 设置新值并返回旧值（清除 TTL） |
 
 ### Key 命令
 
@@ -170,6 +174,8 @@ moonbitDB/
 | `TYPE` | `(key) -> String` | 返回值类型（string/hash/list/set/zset/none） |
 | `EXPIRE` | `(key, seconds) -> Bool` | 设置过期时间（秒） |
 | `PEXPIRE` | `(key, ms) -> Bool` | 设置过期时间（毫秒） |
+| `EXPIREAT` | `(key, unix_seconds) -> Bool` | 设置过期时间戳（秒） |
+| `PEXPIREAT` | `(key, unix_ms) -> Bool` | 设置过期时间戳（毫秒） |
 | `TTL` | `(key) -> Int` | 剩余生存时间（秒），-1 永久，-2 不存在 |
 | `PTTL` | `(key) -> Int` | 剩余生存时间（毫秒） |
 | `PERSIST` | `(key) -> Bool` | 移除过期时间 |
@@ -181,7 +187,7 @@ moonbitDB/
 
 | 命令 | 签名 | 说明 |
 |------|------|------|
-| `HSET` | `(key, field, value) -> Unit` | 设置 hash 字段 |
+| `HSET` | `(key, field, value) -> Int` | 设置 hash 字段，返回新建字段数（0/1） |
 | `HGET` | `(key, field) -> String?` | 获取 hash 字段 |
 | `HDEL` | `(key, field) -> Bool` | 删除 hash 字段 |
 | `HGETALL` | `(key) -> Map[String, String]` | 获取所有字段和值 |
@@ -189,8 +195,8 @@ moonbitDB/
 | `HEXISTS` | `(key, field) -> Bool` | 检查 hash 字段是否存在 |
 | `HKEYS` | `(key) -> Array[String]` | 获取 hash 所有字段名 |
 | `HVALS` | `(key) -> Array[String]` | 获取 hash 所有字段值 |
-
-> **注意**：HEXISTS、HKEYS、HVALS 在 `command()` 返回列表中已声明，但源码中尚未实现对应方法，待后续版本补充。
+| `HINCRBY` | `(key, field, increment) -> Int?` | hash 字段整数值自增（非数字返回 None） |
+| `HSTRLEN` | `(key, field) -> Int` | hash 字段值长度 |
 
 ### List 命令
 
@@ -209,6 +215,7 @@ moonbitDB/
 | `LPUSHX` | `(key, value) -> Int` | 仅当列表存在时左端插入 |
 | `RPUSHX` | `(key, value) -> Int` | 仅当列表存在时右端插入 |
 | `RPOPLPUSH` | `(source, dest) -> String?` | source 右端弹出插入 dest 左端 |
+| `LTRIM` | `(key, start, end) -> Bool` | 裁剪列表至指定区间（区间外删除） |
 
 ### Set 命令
 
@@ -227,6 +234,7 @@ moonbitDB/
 | `SDIFFSTORE` | `(dest, keys) -> Int` | 差集存储到 dest |
 | `SMOVE` | `(source, dest, value) -> Bool` | 跨集合移动元素 |
 | `SPOP` | `(key) -> String?` | 随机弹出元素 |
+| `SRANDMEMBER` | `(key) -> String?` | 随机返回一个成员（不删除） |
 
 ### Sorted Set 命令
 
@@ -248,6 +256,7 @@ moonbitDB/
 | `ZREMRANGEBYSCORE` | `(key, min, max) -> Int` | 按分数范围删除 |
 | `ZPOPMIN` | `(key) -> (String, Float)?` | 弹出最小分数成员 |
 | `ZPOPMAX` | `(key) -> (String, Float)?` | 弹出最大分数成员 |
+| `ZMSCORE` | `(key, members) -> Array[Float?]` | 批量获取成员分数 |
 
 ### 批量命令
 
@@ -300,6 +309,10 @@ moonbitDB/
 | `strlen` | `(self : Database, key : String) -> Int` | 字符串长度 |
 | `incr` | `(self : Database, key : String) -> Int?` | 自增 1 |
 | `decr` | `(self : Database, key : String) -> Int?` | 自减 1 |
+| `setnx` | `(self : Database, key : String, value : String) -> Bool` | 仅当 key 不存在时设置 |
+| `setex` | `(self : Database, key : String, seconds : Int, value : String) -> Bool` | 设置值并指定过期时间 |
+| `getdel` | `(self : Database, key : String) -> String?` | 获取值并删除 key |
+| `getset` | `(self : Database, key : String, value : String) -> String?` | 设置新值并返回旧值 |
 
 #### Key 操作
 
@@ -310,6 +323,8 @@ moonbitDB/
 | `type_of` | `(self : Database, key : String) -> String` | 返回值类型 |
 | `expire` | `(self : Database, key : String, seconds : Int) -> Bool` | 设置过期时间（秒） |
 | `pexpire` | `(self : Database, key : String, milliseconds : Int) -> Bool` | 设置过期时间（毫秒） |
+| `expireat` | `(self : Database, key : String, unix_seconds : Int) -> Bool` | 设置过期时间戳（秒） |
+| `pexpireat` | `(self : Database, key : String, unix_milliseconds : Int) -> Bool` | 设置过期时间戳（毫秒） |
 | `ttl` | `(self : Database, key : String) -> Int` | 剩余生存时间（秒） |
 | `pttl` | `(self : Database, key : String) -> Int` | 剩余生存时间（毫秒） |
 | `persist` | `(self : Database, key : String) -> Bool` | 移除过期时间 |
@@ -321,7 +336,7 @@ moonbitDB/
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `hset` | `(self : Database, key : String, field : String, value : String) -> Unit` | 设置 hash 字段 |
+| `hset` | `(self : Database, key : String, field : String, value : String) -> Int` | 设置 hash 字段，返回新建字段数 |
 | `hget` | `(self : Database, key : String, field : String) -> String?` | 获取 hash 字段 |
 | `hdel` | `(self : Database, key : String, field : String) -> Bool` | 删除 hash 字段 |
 | `hgetall` | `(self : Database, key : String) -> Map[String, String]` | 获取所有字段和值 |
@@ -329,8 +344,8 @@ moonbitDB/
 | `hexists` | `(self : Database, key : String, field : String) -> Bool` | 检查 hash 字段是否存在 |
 | `hkeys` | `(self : Database, key : String) -> Array[String]` | 获取 hash 所有字段名 |
 | `hvals` | `(self : Database, key : String) -> Array[String]` | 获取 hash 所有字段值 |
-
-> **注意**：`hexists`、`hkeys`、`hvals` 在 `command()` 返回列表中已声明，但当前版本源码中尚未实现。
+| `hincrby` | `(self : Database, key : String, field : String, increment : Int) -> Int?` | hash 字段整数自增 |
+| `hstrlen` | `(self : Database, key : String, field : String) -> Int` | hash 字段值长度 |
 
 #### List 操作
 
@@ -349,6 +364,7 @@ moonbitDB/
 | `lpushx` | `(self : Database, key : String, value : String) -> Int` | 仅当列表存在时左端插入 |
 | `rpushx` | `(self : Database, key : String, value : String) -> Int` | 仅当列表存在时右端插入 |
 | `rpoplpush` | `(self : Database, source : String, destination : String) -> String?` | source 右端弹出插入 dest 左端 |
+| `ltrim` | `(self : Database, key : String, start : Int, end : Int) -> Bool` | 裁剪列表至指定区间 |
 
 #### Set 操作
 
@@ -367,6 +383,7 @@ moonbitDB/
 | `sdiffstore` | `(self : Database, destination : String, keys : Array[String]) -> Int` | 差集存储到 dest |
 | `smove` | `(self : Database, source : String, destination : String, value : String) -> Bool` | 跨集合移动元素 |
 | `spop` | `(self : Database, key : String) -> String?` | 随机弹出元素 |
+| `srandmember` | `(self : Database, key : String) -> String?` | 随机返回一个成员（不删除） |
 
 #### Sorted Set 操作
 
@@ -388,6 +405,7 @@ moonbitDB/
 | `zremrangebyscore` | `(self : Database, key : String, min_score : Float, max_score : Float) -> Int` | 按分数范围删除 |
 | `zpopmin` | `(self : Database, key : String) -> (String, Float)?` | 弹出最小分数成员 |
 | `zpopmax` | `(self : Database, key : String) -> (String, Float)?` | 弹出最大分数成员 |
+| `zmscore` | `(self : Database, key : String, members : Array[String]) -> Array[Float?]` | 批量获取成员分数 |
 
 #### 批量操作
 
@@ -579,20 +597,21 @@ moon run examples/cli_repl --target native
 
 | 命令组 | 命令数量 | 代表命令 |
 |--------|----------|----------|
-| String | 8 | SET, GET, DEL, EXISTS, APPEND, STRLEN, INCR, DECR |
-| Key | 11 | KEYS, KEYS_PATTERN, TYPE, EXPIRE, PEXPIRE, TTL, PTTL, PERSIST, RENAME, RENAMENX, RANDOMKEY |
-| Hash | 8 | HSET, HGET, HDEL, HGETALL, HLEN, HEXISTS, HKEYS, HVALS |
-| List | 13 | LPUSH, RPUSH, LPOP, RPOP, LLEN, LRANGE, LINDEX, LSET, LREM, LINSERT, LPUSHX, RPUSHX, RPOPLPUSH |
-| Set | 13 | SADD, SMEMBERS, SREM, SCARD, SISMEMBER, SINTER, SINTERSTORE, SUNION, SUNIONSTORE, SDIFF, SDIFFSTORE, SMOVE, SPOP |
-| Sorted Set | 16 | ZADD, ZRANGE, ZCARD, ZSCORE, ZREM, ZRANGEBYSCORE, ZCOUNT, ZREVRANGE, ZREVRANGEBYSCORE, ZRANK, ZREVRANK, ZINCRBY, ZREMRANGEBYRANK, ZREMRANGEBYSCORE, ZPOPMIN, ZPOPMAX |
+| String | 12 | SET, GET, DEL, EXISTS, APPEND, STRLEN, INCR, DECR, SETNX, SETEX, GETDEL, GETSET |
+| Key | 13 | KEYS, KEYS_PATTERN, TYPE, EXPIRE, PEXPIRE, EXPIREAT, PEXPIREAT, TTL, PTTL, PERSIST, RENAME, RENAMENX, RANDOMKEY |
+| Hash | 10 | HSET, HGET, HDEL, HGETALL, HLEN, HEXISTS, HKEYS, HVALS, HINCRBY, HSTRLEN |
+| List | 14 | LPUSH, RPUSH, LPOP, RPOP, LLEN, LRANGE, LINDEX, LSET, LREM, LINSERT, LPUSHX, RPUSHX, RPOPLPUSH, LTRIM |
+| Set | 14 | SADD, SMEMBERS, SREM, SCARD, SISMEMBER, SINTER, SINTERSTORE, SUNION, SUNIONSTORE, SDIFF, SDIFFSTORE, SMOVE, SPOP, SRANDMEMBER |
+| Sorted Set | 17 | ZADD, ZRANGE, ZCARD, ZSCORE, ZREM, ZRANGEBYSCORE, ZCOUNT, ZREVRANGE, ZREVRANGEBYSCORE, ZRANK, ZREVRANK, ZINCRBY, ZREMRANGEBYRANK, ZREMRANGEBYSCORE, ZPOPMIN, ZPOPMAX, ZMSCORE |
 | 批量操作 | 5 | MSET, MGET, MDEL, HMSET, HMGET |
 | 服务器 | 9 | DBSIZE, FLUSHDB, FLUSHALL, PING, ECHO, INFO, TIME, COMMAND, OBJECT_ENCODING |
 
 **Key 过期机制**：
-- EXPIRE / PEXPIRE — 设置过期时间（秒/毫秒）
+- EXPIRE / PEXPIRE / EXPIREAT / PEXPIREAT — 设置过期时间（秒/毫秒、相对/绝对时间戳）
 - TTL / PTTL — 查询剩余生存时间
 - PERSIST — 移除过期时间
 - 惰性过期检查策略
+- 容器删除最后成员后自动清理 key（对齐 Redis 语义）
 
 **内部编码命名**（OBJECT_ENCODING 命令）：
 - `embstr` — String 类型编码

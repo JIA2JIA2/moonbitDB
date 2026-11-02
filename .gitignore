@@ -27,3 +27,5 @@ _build/*
 .c*/*
 .m*/*
 z
+pkg.generated.mbti
+.mooncakes/

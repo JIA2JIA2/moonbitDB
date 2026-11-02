@@ -1,0 +1,8 @@
+import {
+  "JIA2JIA2/moonbitdb/lib",
+}
+
+options(
+  name: "moonbitdb",
+  is_main: true,
+)
