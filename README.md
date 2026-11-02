@@ -81,7 +81,7 @@ moon test
 {
   "name": "your-name/your-project",
   "deps": {
-    "JIA2JIA2/moonbitdb": "0.1.2"
+    "JIA2JIA2/moonbitdb": "0.1.3"
   }
 }
 ```
