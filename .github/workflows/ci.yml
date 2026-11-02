@@ -21,7 +21,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.moon
-          key: moon-deps-${{ hashFiles('moon.mod.json') }}
+          key: moon-deps-${{ hashFiles('moon.mod') }}
           restore-keys: moon-deps-
 
       - name: Install MoonBit CLI
@@ -51,11 +51,10 @@ jobs:
             exit 1
           fi
 
-      - name: Update Registry Index & Install Dependencies
+      - name: Update Registry Index
         run: |
           moon version
           moon update
-          moon install
 
       - name: Run moon check
         run: moon check
