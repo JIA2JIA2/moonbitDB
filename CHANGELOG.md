@@ -4,6 +4,35 @@
 
 ### Added
 
+- 新增事务支持：`MULTI`、`EXEC`、`DISCARD`（Set/Incr/Decr/HSet/HDel/LPush/RPush/SAdd/SRem/ZAdd/ZRem）
+- 新增批量弹出：`LMPOP`、`ZMPOP`
+- 新增 `HRANDFIELD ... WITHVALUES`：`hrandfield_with_values`
+- 新增 `ZRANDMEMBER ... WITHSCORES`：`zrandmember_with_scores`
+- 新增 `COMMAND INFO`：`command_info`
+- 新增 ZSet 二分插入优化：`find_insert_position`
+
+### Fixed
+
+- 事务中命令排队正确性（set/incr/decr/hset/hdel/lpush/rpush/sadd/srem/zadd/zrem）
+- 事务嵌套 MULTI 报错
+- 事务 EXEC/DISCARD 无 MULTI 报错
+
+### Performance
+
+- `update_sorted_items` 使用二分查找定位插入点
+- zrange 1000: 18.83µs → 13.72µs
+- zrank 1000: 271.56ns → 150.81ns
+- copy zset 500: 203.80µs → 114.72µs
+
+### Engineering
+
+- 命令数 126 → 131
+- 测试数 149 → 159
+
+## 0.2.0 — 2026-11-03
+
+### Added
+
 - 新增 String/Key 命令：`INCRBY`、`DECRBY`、`GETRANGE`、`SETRANGE`、`GETEX`、`MSETNX`、`SCAN`、`COPY`、`TOUCH`、`UNLINK`
 - 新增 Hash/List 命令：`HSETNX`、`HSCAN`、`LMOVE`
 - 新增 Set 命令：`SINTERCARD`、`SMISMEMBER`、`SSCAN`
