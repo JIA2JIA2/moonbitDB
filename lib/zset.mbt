@@ -170,7 +170,10 @@ fn Database::get_sorted_zset(self : Database, key : String) -> Array[(String, Fl
   match self.data.get(key) {
     Some(RedisValue::ZSet(zset)) =>
       match self.zset_sorted_cache.get(key) {
-        Some(cached) => cached
+        Some(cached) => {
+          self.touch_zset_cache(key)
+          cached
+        }
         None => {
           let items : Array[(String, Float)] = []
           for m, s in zset {
@@ -183,6 +186,7 @@ fn Database::get_sorted_zset(self : Database, key : String) -> Array[(String, Fl
             ranks.set(sorted[i].0, i)
           }
           self.zset_rank_cache.set(key, ranks)
+          self.touch_zset_cache(key)
           sorted
         }
       }

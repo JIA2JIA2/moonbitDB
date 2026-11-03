@@ -20,6 +20,8 @@ pub enum TransactionOp {
   ZRem(String, String)
 }
 
+const MAX_CACHE_SIZE : Int = 100
+
 pub struct Database {
   mut data : Map[String, RedisValue]
   mut expires : Map[String, Int64]
@@ -28,6 +30,7 @@ pub struct Database {
   mut zset_sorted_cache : Map[String, Array[(String, Float)]]
   mut zset_rank_cache : Map[String, Map[String, Int]]
   mut zset_lex_cache : Map[String, Array[String]]
+  mut zset_cache_lru : Array[String]
   mut scan_snapshot : Array[String]?
   mut hscan_snapshots : Map[String, Array[String]]
   mut sscan_snapshots : Map[String, Array[String]]
@@ -37,7 +40,7 @@ pub struct Database {
 }
 
 pub fn Database::new() -> Database {
-  Database::{ data: Map([], capacity=1000), expires: Map([], capacity=1000), current_time: 0, rand_state: 123456789, zset_sorted_cache: Map([], capacity=100), zset_rank_cache: Map([], capacity=100), zset_lex_cache: Map([], capacity=100), scan_snapshot: None, hscan_snapshots: Map([], capacity=10), sscan_snapshots: Map([], capacity=10), expire_heap: [], in_transaction: false, transaction_queue: [] }
+  Database::{ data: Map([], capacity=1000), expires: Map([], capacity=1000), current_time: 0, rand_state: 123456789, zset_sorted_cache: Map([], capacity=100), zset_rank_cache: Map([], capacity=100), zset_lex_cache: Map([], capacity=100), zset_cache_lru: [], scan_snapshot: None, hscan_snapshots: Map([], capacity=10), sscan_snapshots: Map([], capacity=10), expire_heap: [], in_transaction: false, transaction_queue: [] }
 }
 
 pub fn Database::set_time(self : Database, time_ms : Int64) -> Unit {
@@ -55,6 +58,35 @@ fn Database::invalidate_zset_cache(self : Database, key : String) -> Unit {
   self.zset_sorted_cache.remove(key)
   self.zset_rank_cache.remove(key)
   self.zset_lex_cache.remove(key)
+  let new_lru : Array[String] = []
+  for k in self.zset_cache_lru {
+    if k != key {
+      new_lru.push(k)
+    }
+  }
+  self.zset_cache_lru = new_lru
+}
+
+fn Database::touch_zset_cache(self : Database, key : String) -> Unit {
+  let mut new_lru : Array[String] = []
+  for k in self.zset_cache_lru {
+    if k != key {
+      new_lru.push(k)
+    }
+  }
+  new_lru.push(key)
+  if new_lru.length() > MAX_CACHE_SIZE {
+    let oldest = new_lru[0]
+    self.zset_sorted_cache.remove(oldest)
+    self.zset_rank_cache.remove(oldest)
+    self.zset_lex_cache.remove(oldest)
+    let remaining : Array[String] = []
+    for i = 1; i < new_lru.length(); i = i + 1 {
+      remaining.push(new_lru[i])
+    }
+    new_lru = remaining
+  }
+  self.zset_cache_lru = new_lru
 }
 
 fn Database::maybe_compact_expire_heap(self : Database) -> Unit {
