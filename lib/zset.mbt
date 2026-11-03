@@ -59,8 +59,40 @@ pub fn Database::zrange(self : Database, key : String, start : Int, end : Int) -
   }
 }
 
+fn insertion_sort(arr : Array[(String, Float)]) -> Array[(String, Float)] {
+  let mut result : Array[(String, Float)] = []
+  for item in arr {
+    let mut i = result.length()
+    while i > 0 {
+      let prev = result[i - 1]
+      if prev.1 < item.1 || (prev.1 == item.1 && prev.0.lexical_compare(item.0) <= 0) {
+        break
+      }
+      i = i - 1
+    }
+    if i == result.length() {
+      result.push(item)
+    } else {
+      let new_result : Array[(String, Float)] = []
+      for j = 0; j < i; j = j + 1 {
+        new_result.push(result[j])
+      }
+      new_result.push(item)
+      for j = i; j < result.length(); j = j + 1 {
+        new_result.push(result[j])
+      }
+      result = new_result
+    }
+  }
+  result
+}
+
 pub fn sort_by_score(items : Array[(String, Float)]) -> Array[(String, Float)] {
-  merge_sort(items)
+  if items.length() <= 16 {
+    insertion_sort(items)
+  } else {
+    merge_sort(items)
+  }
 }
 
 pub fn merge_sort(arr : Array[(String, Float)]) -> Array[(String, Float)] {
