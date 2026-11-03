@@ -35,6 +35,21 @@ pub fn Database::setex(self : Database, key : String, seconds : Int, value : Str
   }
 }
 
+pub fn Database::psetex(self : Database, key : String, milliseconds : Int64, value : String) -> Bool {
+  if milliseconds <= 0 {
+    false
+  } else {
+    match checked_add_i64(self.current_time, milliseconds) {
+      Some(expire_time) => {
+        self.put(key, RedisValue::String(value))
+        self.set_expire(key, expire_time)
+        true
+      }
+      None => false
+    }
+  }
+}
+
 pub fn Database::getdel(self : Database, key : String) -> String? {
   let value = self.get(key)
   match value {

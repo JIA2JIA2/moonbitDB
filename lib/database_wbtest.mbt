@@ -3183,8 +3183,8 @@ test "zset_extended_commands" {
     [("a", 1.0), ("b", 12.0), ("c", 23.0), ("d", 30.0)],
   )
   @test.assert_eq(db.zinter(["z1", "z2"]), [("b", 12.0), ("c", 23.0)])
-  @test.assert_eq(db.zdiff(["z1", "z2"]), [("a", 1.0)])
-  @test.assert_eq(db.zdiff(["z1", "missing"]), [("a", 1.0), ("b", 2.0), ("c", 3.0)])
+  @test.assert_eq(db.zdiff_with_scores(["z1", "z2"]), [("a", 1.0)])
+  @test.assert_eq(db.zdiff_with_scores(["z1", "missing"]), [("a", 1.0), ("b", 2.0), ("c", 3.0)])
   @test.assert_eq(
     match db.zrandmember("z1") {
       Some(_) => true

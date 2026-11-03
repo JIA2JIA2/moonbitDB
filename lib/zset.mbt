@@ -1,4 +1,7 @@
 pub fn Database::try_zadd(self : Database, key : String, score : Float, member_val : String) -> Result[Bool, RedisError] {
+  if score != score {
+    return Err(RedisError::InvalidArgument)
+  }
   self.check_expired(key) |> ignore
   let zset = match self.data.get(key) {
     Some(RedisValue::ZSet(z)) => z
@@ -975,7 +978,7 @@ pub fn Database::zinter(self : Database, keys : Array[String]) -> Array[(String,
   sort_by_score(items)
 }
 
-pub fn Database::zdiff(self : Database, keys : Array[String]) -> Array[(String, Float)] {
+pub fn Database::zdiff_with_scores(self : Database, keys : Array[String]) -> Array[(String, Float)] {
   if keys.length() == 0 {
     return []
   }
@@ -1008,6 +1011,15 @@ pub fn Database::zdiff(self : Database, keys : Array[String]) -> Array[(String, 
     }
   }
   sort_by_score(items)
+}
+
+pub fn Database::zdiff(self : Database, keys : Array[String]) -> Array[String] {
+  let items = self.zdiff_with_scores(keys)
+  let result : Array[String] = []
+  for item in items {
+    result.push(item.0)
+  }
+  result
 }
 
 pub fn Database::zscan_with_match(
@@ -1113,7 +1125,7 @@ pub fn Database::try_zdiff(self : Database, keys : Array[String]) -> Result[Arra
   if !self.zsets_valid(keys) {
     Err(RedisError::WrongType)
   } else {
-    Ok(self.zdiff(keys))
+    Ok(self.zdiff_with_scores(keys))
   }
 }
 
@@ -1175,7 +1187,7 @@ pub fn Database::try_zdiffstore(
   if !self.zsets_valid(keys) {
     return Err(RedisError::WrongType)
   }
-  let result = self.zdiff(keys)
+  let result = self.zdiff_with_scores(keys)
   let scores : Map[String, Float] = Map([], capacity=result.length())
   for pair in result {
     scores.set(pair.0, pair.1)
