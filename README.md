@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**149 个测试用例，全部通过**。
+当前测试覆盖：**159 个测试用例，全部通过**。
 
 ### 运行基准与覆盖率
 
@@ -263,6 +263,7 @@ moonbitDB/
 | `LMOVE` | `(source, dest, from_left, to_left) -> String?` | 从 source 指定端弹出并插入 dest 指定端 |
 | `LPOS` | `(key, value) -> Int?` | 返回元素首次出现的索引 |
 | `LTRIM` | `(key, start, end) -> Bool` | 裁剪列表至指定区间（区间外删除） |
+| `LMPOP` | `(keys, left, count) -> (String, Array[String])?` | 从多个列表中弹出第一个非空列表的元素 |
 
 ### Set 命令
 
@@ -310,6 +311,7 @@ moonbitDB/
 | `ZREMRANGEBYSCORE` | `(key, min, max) -> Int` | 按分数范围删除 |
 | `ZPOPMIN` | `(key) -> (String, Float)?` | 弹出最小分数成员 |
 | `ZPOPMAX` | `(key) -> (String, Float)?` | 弹出最大分数成员 |
+| `ZMPOP` | `(keys, min, count) -> (String, Array[(String, Float)])?` | 从多个有序集合中弹出第一个非空集合的元素 |
 | `ZMSCORE` | `(key, members) -> Array[Float?]` | 批量获取成员分数 |
 | `ZRANDMEMBER` | `(key) -> String?` | 随机返回一个成员（不删除） |
 | `ZUNION` | `(keys) -> Array[(String, Float)]` | 多集合并集（分数求和） |
@@ -349,6 +351,9 @@ moonbitDB/
 | `TIME` | `() -> (Int64, Int64)` | 当前时间（秒, 微秒） |
 | `COMMAND` | `() -> Array[String]` | 支持的命令列表 |
 | `OBJECT_ENCODING` | `(key) -> String?` | 对象内部编码（embstr/listpack/hashtable/skiplist/quicklist） |
+| `MULTI` | `() -> String` | 开启事务（返回 "OK"） |
+| `EXEC` | `() -> String` | 执行事务队列（返回 "OK"） |
+| `DISCARD` | `() -> String` | 清空事务队列（返回 "OK"） |
 
 ## 完整公共 API 文档
 
@@ -776,18 +781,18 @@ moon run examples/cli_repl --target native
 - Set — 集合（无序唯一元素）
 - Sorted Set — 有序集合（分数排序）
 
-**命令语义**（8 大命令组，126 个命令）：
+**命令语义**（8 大命令组，131 个命令）：
 
 | 命令组 | 命令数量 | 代表命令 |
 |--------|----------|----------|
 | String | 17 | SET, GET, DEL, EXISTS, APPEND, STRLEN, GETRANGE, SETRANGE, INCR, DECR, INCRBY, DECRBY, SETNX, SETEX, GETDEL, GETSET, GETEX |
 | Key | 17 | KEYS, KEYS_PATTERN, SCAN, TYPE, EXPIRE, PEXPIRE, EXPIREAT, PEXPIREAT, TTL, PTTL, PERSIST, RENAME, RENAMENX, RANDOMKEY, COPY, TOUCH, UNLINK |
 | Hash | 13 | HSET, HSETNX, HGET, HDEL, HGETALL, HLEN, HEXISTS, HKEYS, HVALS, HINCRBY, HSTRLEN, HSCAN, HRANDFIELD |
-| List | 16 | LPUSH, RPUSH, LPOP, RPOP, LLEN, LRANGE, LINDEX, LSET, LREM, LINSERT, LPUSHX, RPUSHX, RPOPLPUSH, LMOVE, LPOS, LTRIM |
+| List | 17 | LPUSH, RPUSH, LPOP, RPOP, LLEN, LRANGE, LINDEX, LSET, LREM, LINSERT, LPUSHX, RPUSHX, RPOPLPUSH, LMOVE, LPOS, LTRIM, LMPOP |
 | Set | 17 | SADD, SMEMBERS, SREM, SCARD, SISMEMBER, SMISMEMBER, SINTER, SINTERCARD, SINTERSTORE, SUNION, SUNIONSTORE, SDIFF, SDIFFSTORE, SMOVE, SPOP, SRANDMEMBER, SSCAN |
-| Sorted Set | 31 | ZADD, ZRANGE, ZCARD, ZSCORE, ZREM, ZRANGEBYSCORE, ZRANGEBYLEX, ZREVRANGEBYLEX, ZLEXCOUNT, ZCOUNT, ZREVRANGE, ZREVRANGEBYSCORE, ZRANK, ZREVRANK, ZINCRBY, ZREMRANGEBYRANK, ZREMRANGEBYSCORE, ZREMRANGEBYLEX, ZPOPMIN, ZPOPMAX, ZMSCORE, ZRANDMEMBER, ZUNION, ZUNIONSTORE, ZINTER, ZINTERSTORE, ZINTERCARD, ZDIFF, ZDIFFSTORE, ZRANGESTORE, ZSCAN |
+| Sorted Set | 32 | ZADD, ZRANGE, ZCARD, ZSCORE, ZREM, ZRANGEBYSCORE, ZRANGEBYLEX, ZREVRANGEBYLEX, ZLEXCOUNT, ZCOUNT, ZREVRANGE, ZREVRANGEBYSCORE, ZRANK, ZREVRANK, ZINCRBY, ZREMRANGEBYRANK, ZREMRANGEBYSCORE, ZREMRANGEBYLEX, ZPOPMIN, ZPOPMAX, ZMSCORE, ZRANDMEMBER, ZUNION, ZUNIONSTORE, ZINTER, ZINTERSTORE, ZINTERCARD, ZDIFF, ZDIFFSTORE, ZRANGESTORE, ZSCAN, ZMPOP |
 | 批量操作 | 6 | MSET, MSETNX, MGET, MDEL, HMSET, HMGET |
-| 服务器 | 9 | DBSIZE, FLUSHDB, FLUSHALL, PING, ECHO, INFO, TIME, COMMAND, OBJECT_ENCODING |
+| 服务器 | 12 | DBSIZE, FLUSHDB, FLUSHALL, PING, ECHO, INFO, TIME, COMMAND, OBJECT_ENCODING, MULTI, EXEC, DISCARD |
 
 **Key 过期机制**：
 - EXPIRE / PEXPIRE / EXPIREAT / PEXPIREAT — 设置过期时间（秒/毫秒、相对/绝对时间戳）
