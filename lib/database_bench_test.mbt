@@ -34,6 +34,16 @@ test "bench scan" (it : @bench.T) {
   })
 }
 
+test "bench copy zset" (it : @bench.T) {
+  let db = @lib.Database::new()
+  for i = 0; i < 500; i = i + 1 {
+    db.zadd("src", Float::from_int(i), "member:\{i}") |> ignore
+  }
+  it.bench(name="copy zset 500", () => {
+    db.copy_with_replace("src", "dst", true) |> ignore
+  })
+}
+
 test "bench list lrem" (it : @bench.T) {
   let db = @lib.Database::new()
   for i = 0; i < 1000; i = i + 1 {

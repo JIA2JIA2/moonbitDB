@@ -2,6 +2,10 @@ import {
   "moonbitlang/core/bench",
 } for "test"
 
+import {
+  "moonbitlang/core/test",
+} for "wbtest"
+
 options(
   name: "lib",
 )

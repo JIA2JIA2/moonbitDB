@@ -57,13 +57,13 @@ jobs:
           moon update
 
       - name: Run moon check
-        run: moon check
+        run: moon check --deny-warn
 
       - name: Run moon build
         run: moon build
 
       - name: Run moon test
-        run: moon test
+        run: moon test --deny-warn
 
       - name: Run moon bench
         run: moon bench
