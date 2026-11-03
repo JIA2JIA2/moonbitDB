@@ -239,6 +239,8 @@ pub fn Database::rename(self : Database, old_key : String, new_key : String) -> 
       self.put(new_key, value)
       self.data.remove(old_key)
       self.invalidate_zset_cache(old_key)
+      self.hscan_snapshots.remove(old_key)
+      self.sscan_snapshots.remove(old_key)
       match self.expires.get(old_key) {
         Some(expire_time) => {
           self.set_expire(new_key, expire_time)
@@ -404,6 +406,12 @@ pub fn Database::scan_type(
     }
   }
   (next, result)
+}
+
+pub fn Database::clear_scan_caches(self : Database) -> Unit {
+  self.scan_snapshot = None
+  self.hscan_snapshots = Map([], capacity=10)
+  self.sscan_snapshots = Map([], capacity=10)
 }
 
 pub fn Database::touch(self : Database, keys : Array[String]) -> Int {

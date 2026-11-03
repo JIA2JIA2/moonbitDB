@@ -107,6 +107,7 @@ pub fn Database::hdel(self : Database, key : String, field : String) -> Bool {
         let existed = h.contains(field)
         if existed {
           h.remove(field)
+          self.hscan_snapshots.remove(key)
           self.remove_if_empty(key, h.length())
         }
         existed
@@ -260,14 +261,22 @@ pub fn Database::hscan(
   }
   match self.data.get(key) {
     Some(RedisValue::Hash(hash)) => {
-      let fields : Array[String] = []
-      for field, _ in hash {
-        fields.push(field)
+      let fields = match self.hscan_snapshots.get(key) {
+        Some(cached) => cached
+        None => {
+          let collected : Array[String] = []
+          for field, _ in hash {
+            collected.push(field)
+          }
+          self.hscan_snapshots.set(key, collected)
+          collected
+        }
       }
       let len = fields.length()
       let limit = if count <= 0 { 10 } else { count }
       let start = if cursor < 0 { 0 } else { cursor }
       if start >= len {
+        self.hscan_snapshots.remove(key)
         return (0, [])
       }
       let end = if start + limit > len { len } else { start + limit }
@@ -280,6 +289,9 @@ pub fn Database::hscan(
         }
       }
       let next = if end >= len { 0 } else { end }
+      if next == 0 {
+        self.hscan_snapshots.remove(key)
+      }
       (next, result)
     }
     _ => (0, [])

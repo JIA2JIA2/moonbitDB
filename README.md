@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**137 个测试用例，全部通过**。
+当前测试覆盖：**139 个测试用例，全部通过**。
 
 ### 运行基准与覆盖率
 
@@ -142,7 +142,7 @@ moonbitDB/
 │   ├── util.mbt                # 整数解析与通配符匹配
 │   ├── error.mbt               # RedisError 错误模型
 │   ├── server.mbt              # 服务器命令
-│   ├── database_wbtest.mbt     # 白盒测试（137 个用例）
+│   ├── database_wbtest.mbt     # 白盒测试（139 个用例）
 │   ├── database_property_wbtest.mbt # 属性测试
 │   ├── database_bench_test.mbt # 基准测试
 │   └── moon.pkg
@@ -313,7 +313,7 @@ moonbitDB/
 | `ZDIFF` | `(keys) -> Array[(String, Float)]` | 多集合差集（保留第一个集合分数） |
 | `ZSCAN` | `(key, cursor, count) -> (Int, Array[(String, Float)])` | 增量遍历成员与分数 |
 
-> 分数相同时按 member 字典序排列（与 Redis 语义一致）。`ZRANGEBYSCORE`/`ZCOUNT` 使用二分查找定位分数区间。
+> 分数相同时按 member 字典序排列（与 Redis 语义一致）。`ZRANGEBYSCORE`/`ZCOUNT` 使用二分查找定位分数区间；`ZRANGEBYLEX`/`ZREVRANGEBYLEX`/`ZLEXCOUNT`/`ZREMRANGEBYLEX` 使用 lex 有序缓存 + 二分定位成员区间。
 > `ZRANGE ... WITHSCORES` 对应 `zrange_with_scores`/`zrevrange_with_scores` 方法，返回 `(member, score)` 数组。`ZRANGEBYLEX` 要求集合内分数一致，否则结果不具备 Redis 语义。
 
 ### 批量命令
@@ -416,6 +416,7 @@ match db.try_incrby("name", 1) {
 | `scan` | `(self : Database, cursor : Int, count : Int) -> (Int, Array[String])` | 游标遍历 key |
 | `scan_match` | `(self : Database, cursor : Int, count : Int, pattern : String) -> (Int, Array[String])` | 带模式匹配的游标遍历 |
 | `scan_type` | `(self : Database, cursor : Int, count : Int, type_name : String) -> (Int, Array[String])` | 带类型过滤的游标遍历 |
+| `clear_scan_caches` | `(self : Database) -> Unit` | 释放 SCAN/HSCAN/SSCAN 快照缓存 |
 | `type_of` | `(self : Database, key : String) -> String` | 返回值类型 |
 | `expire` | `(self : Database, key : String, seconds : Int) -> Bool` | 设置过期时间（秒） |
 | `pexpire` | `(self : Database, key : String, milliseconds : Int64) -> Bool` | 设置过期时间（毫秒） |
@@ -440,7 +441,7 @@ match db.try_incrby("name", 1) {
 | `try_hget` | `(self : Database, key : String, field : String) -> Result[String, RedisError]` | 精确错误版获取 hash 字段 |
 | `try_hset` | `(self : Database, key : String, field : String, value : String) -> Result[Int, RedisError]` | 精确错误版设置字段 |
 | `hsetnx` | `(self : Database, key : String, field : String, value : String) -> Bool` | 仅当字段不存在时设置 |
-| `hscan` | `(self : Database, key : String, cursor : Int, count : Int) -> (Int, Array[(String, String)])` | 增量遍历 hash 字段 |
+| `hscan` | `(self : Database, key : String, cursor : Int, count : Int) -> (Int, Array[(String, String)])` | 增量遍历 hash 字段（快照缓存） |
 | `hget` | `(self : Database, key : String, field : String) -> String?` | 获取 hash 字段 |
 | `hdel` | `(self : Database, key : String, field : String) -> Bool` | 删除 hash 字段 |
 | `hgetall` | `(self : Database, key : String) -> Map[String, String]` | 获取所有字段和值 |
@@ -493,7 +494,7 @@ match db.try_incrby("name", 1) {
 | `sismember` | `(self : Database, key : String, value : String) -> Bool` | 检查成员是否存在 |
 | `smismember` | `(self : Database, key : String, members : Array[String]) -> Array[Bool]` | 批量检查成员是否存在 |
 | `sintercard` | `(self : Database, keys : Array[String], limit : Int) -> Int` | 交集基数 |
-| `sscan` | `(self : Database, key : String, cursor : Int, count : Int) -> (Int, Array[String])` | 增量遍历集合成员 |
+| `sscan` | `(self : Database, key : String, cursor : Int, count : Int) -> (Int, Array[String])` | 增量遍历集合成员（快照缓存） |
 | `sinter` | `(self : Database, keys : Array[String]) -> Array[String]` | 多集合交集（类型错误返回空数组） |
 | `try_sinter` | `(self : Database, keys : Array[String]) -> Result[Array[String], RedisError]` | 精确错误版多集合交集 |
 | `sinterstore` | `(self : Database, destination : String, keys : Array[String]) -> Int` | 交集存储到 dest |

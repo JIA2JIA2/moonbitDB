@@ -10,6 +10,8 @@ pub fn Database::flushdb(self : Database) -> Unit {
   self.zset_rank_cache = Map([], capacity=100)
   self.zset_lex_cache = Map([], capacity=100)
   self.scan_snapshot = None
+  self.hscan_snapshots = Map([], capacity=10)
+  self.sscan_snapshots = Map([], capacity=10)
   self.expire_heap = []
 }
 

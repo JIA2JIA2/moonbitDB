@@ -651,37 +651,49 @@ fn lex_bound_valid(bound : String) -> Bool {
   }
 }
 
-fn lex_lower_ok(member_val : String, bound : String) -> Bool {
+fn lex_lower_index(members : Array[String], bound : String) -> Int {
   if bound == "-" {
-    true
+    0
   } else if bound == "+" {
-    false
+    members.length()
   } else {
     let inclusive = bound[0] == '['
     let target = bound[1:bound.length()].to_owned()
-    let cmp = member_val.lexical_compare(target)
-    if inclusive {
-      cmp >= 0
-    } else {
-      cmp > 0
+    let mut lo = 0
+    let mut hi = members.length()
+    while lo < hi {
+      let mid = (lo + hi) / 2
+      let cmp = members[mid].lexical_compare(target)
+      if cmp < 0 || (!inclusive && cmp == 0) {
+        lo = mid + 1
+      } else {
+        hi = mid
+      }
     }
+    lo
   }
 }
 
-fn lex_upper_ok(member_val : String, bound : String) -> Bool {
+fn lex_upper_index(members : Array[String], bound : String) -> Int {
   if bound == "+" {
-    true
+    members.length()
   } else if bound == "-" {
-    false
+    0
   } else {
     let inclusive = bound[0] == '['
     let target = bound[1:bound.length()].to_owned()
-    let cmp = member_val.lexical_compare(target)
-    if inclusive {
-      cmp <= 0
-    } else {
-      cmp < 0
+    let mut lo = 0
+    let mut hi = members.length()
+    while lo < hi {
+      let mid = (lo + hi) / 2
+      let cmp = members[mid].lexical_compare(target)
+      if cmp < 0 || (inclusive && cmp == 0) {
+        lo = mid + 1
+      } else {
+        hi = mid
+      }
     }
+    lo
   }
 }
 
@@ -695,11 +707,11 @@ pub fn Database::zrangebylex(self : Database, key : String, min_bound : String, 
   match self.data.get(key) {
     Some(RedisValue::ZSet(_)) => {
       let members = self.get_sorted_lex(key)
-      let result = []
-      for member_val in members {
-        if lex_lower_ok(member_val, min_bound) && lex_upper_ok(member_val, max_bound) {
-          result.push(member_val)
-        }
+      let start = lex_lower_index(members, min_bound)
+      let end = lex_upper_index(members, max_bound)
+      let result : Array[String] = []
+      for i = start; i < end; i = i + 1 {
+        result.push(members[i])
       }
       result
     }
@@ -722,13 +734,12 @@ pub fn Database::zrevrangebylex(
   match self.data.get(key) {
     Some(RedisValue::ZSet(_)) => {
       let members = self.get_sorted_lex(key)
-      let result = []
-      let mut index = members.length() - 1
-      while index >= 0 {
-        let member_val = members[index]
-        if lex_lower_ok(member_val, min_bound) && lex_upper_ok(member_val, max_bound) {
-          result.push(member_val)
-        }
+      let start = lex_lower_index(members, min_bound)
+      let end = lex_upper_index(members, max_bound)
+      let result : Array[String] = []
+      let mut index = end - 1
+      while index >= start {
+        result.push(members[index])
         index = index - 1
       }
       result
@@ -752,13 +763,13 @@ pub fn Database::zlexcount(
   match self.data.get(key) {
     Some(RedisValue::ZSet(_)) => {
       let members = self.get_sorted_lex(key)
-      let mut count = 0
-      for member_val in members {
-        if lex_lower_ok(member_val, min_bound) && lex_upper_ok(member_val, max_bound) {
-          count = count + 1
-        }
+      let start = lex_lower_index(members, min_bound)
+      let end = lex_upper_index(members, max_bound)
+      if end > start {
+        end - start
+      } else {
+        0
       }
-      count
     }
     _ => 0
   }
@@ -779,11 +790,11 @@ pub fn Database::zremrangebylex(
   match self.data.get(key) {
     Some(RedisValue::ZSet(zset)) => {
       let members = self.get_sorted_lex(key)
+      let start = lex_lower_index(members, min_bound)
+      let end = lex_upper_index(members, max_bound)
       let to_remove : Array[String] = []
-      for member_val in members {
-        if lex_lower_ok(member_val, min_bound) && lex_upper_ok(member_val, max_bound) {
-          to_remove.push(member_val)
-        }
+      for i = start; i < end; i = i + 1 {
+        to_remove.push(members[i])
       }
       for member_val in to_remove {
         zset.remove(member_val)

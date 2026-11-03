@@ -149,6 +149,7 @@ pub fn Database::srem(self : Database, key : String, value : String) -> Bool {
         let existed = set.contains(value)
         if existed {
           set.remove(value)
+          self.sscan_snapshots.remove(key)
           self.remove_if_empty(key, set.length())
         }
         existed
@@ -405,6 +406,7 @@ pub fn Database::smove(self : Database, source : String, destination : String, v
         return false
       }
       src_set.remove(value)
+      self.sscan_snapshots.remove(source)
       self.remove_if_empty(source, src_set.length())
       dest_set.set(value, true)
       self.put(destination, RedisValue::Set(dest_set))
@@ -436,6 +438,7 @@ pub fn Database::spop(self : Database, key : String) -> String? {
         match popped {
           Some(v) => {
             set.remove(v)
+            self.sscan_snapshots.remove(key)
             self.remove_if_empty(key, set.length())
             Some(v)
           }
@@ -484,14 +487,22 @@ pub fn Database::sscan(
   }
   match self.data.get(key) {
     Some(RedisValue::Set(set)) => {
-      let members : Array[String] = []
-      for member_val, _ in set {
-        members.push(member_val)
+      let members = match self.sscan_snapshots.get(key) {
+        Some(cached) => cached
+        None => {
+          let collected : Array[String] = []
+          for member_val, _ in set {
+            collected.push(member_val)
+          }
+          self.sscan_snapshots.set(key, collected)
+          collected
+        }
       }
       let len = members.length()
       let limit = if count <= 0 { 10 } else { count }
       let start = if cursor < 0 { 0 } else { cursor }
       if start >= len {
+        self.sscan_snapshots.remove(key)
         return (0, [])
       }
       let end = if start + limit > len { len } else { start + limit }
@@ -500,6 +511,9 @@ pub fn Database::sscan(
         result.push(members[i])
       }
       let next = if end >= len { 0 } else { end }
+      if next == 0 {
+        self.sscan_snapshots.remove(key)
+      }
       (next, result)
     }
     _ => (0, [])

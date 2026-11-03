@@ -3256,3 +3256,65 @@ test "scan_variants" {
   @test.assert_eq(members.length(), 3)
   @test.assert_eq(members.contains("c"), true)
 }
+
+test "zrangebylex_binary_bounds" {
+  let db = Database::new()
+  for member_val in ["a", "aa", "ab", "b", "ba", "c"] {
+    db.zadd("z", 0.0, member_val) |> ignore
+  }
+  @test.assert_eq(db.zrangebylex("z", "[aa", "(b"), ["aa", "ab"])
+  @test.assert_eq(db.zrangebylex("z", "-", "(b"), ["a", "aa", "ab"])
+  @test.assert_eq(db.zrangebylex("z", "(b", "+"), ["ba", "c"])
+  @test.assert_eq(db.zrevrangebylex("z", "+", "[aa"), ["c", "ba", "b", "ab", "aa"])
+  @test.assert_eq(db.zlexcount("z", "[aa", "(b"), 2)
+  @test.assert_eq(db.zremrangebylex("z", "[aa", "(b"), 2)
+  @test.assert_eq(db.zrangebylex("z", "-", "+"), ["a", "b", "ba", "c"])
+}
+
+test "scan_snapshot_cache_invalidation" {
+  let db = Database::new()
+  db.hmset("h", ["f1", "f2", "f3", "f4"], ["v1", "v2", "v3", "v4"])
+  let (h_cursor, h_batch) = db.hscan("h", 0, 2)
+  @test.assert_eq(h_cursor, 2)
+  @test.assert_eq(h_batch.length(), 2)
+  @test.assert_eq(db.hscan_snapshots.contains("h"), true)
+
+  db.hset("h", "f5", "v5") |> ignore
+  @test.assert_eq(db.hscan_snapshots.contains("h"), false)
+  let (h_cursor2, h_batch2) = db.hscan("h", h_cursor, 100)
+  @test.assert_eq(h_batch2.length(), 3)
+  @test.assert_eq(h_cursor2, 0)
+  @test.assert_eq(db.hscan_snapshots.contains("h"), false)
+
+  db.sadd_all("s", ["a", "b", "c", "d"]) |> ignore
+  let (s_cursor, s_batch) = db.sscan("s", 0, 2)
+  @test.assert_eq(s_cursor, 2)
+  @test.assert_eq(s_batch.length(), 2)
+  @test.assert_eq(db.sscan_snapshots.contains("s"), true)
+
+  db.sadd("s", "e") |> ignore
+  @test.assert_eq(db.sscan_snapshots.contains("s"), false)
+  let (s_cursor2, s_batch2) = db.sscan("s", s_cursor, 100)
+  @test.assert_eq(s_batch2.length(), 3)
+  @test.assert_eq(s_cursor2, 0)
+  @test.assert_eq(db.sscan_snapshots.contains("s"), false)
+
+  db.scan(0, 1) |> ignore
+  @test.assert_eq(
+    match db.scan_snapshot {
+      Some(_) => true
+      None => false
+    },
+    true,
+  )
+  db.clear_scan_caches()
+  @test.assert_eq(
+    match db.scan_snapshot {
+      Some(_) => false
+      None => true
+    },
+    true,
+  )
+  @test.assert_eq(db.hscan_snapshots.length(), 0)
+  @test.assert_eq(db.sscan_snapshots.length(), 0)
+}
