@@ -214,16 +214,32 @@ pub fn Database::sinter(self : Database, keys : Array[String]) -> Array[String] 
   if keys.length() == 0 {
     return []
   }
-  let first_set = self.get_set_members(keys[0])
-  if first_set.length() == 0 {
-    return []
+  let sets : Array[Map[String, Bool]] = []
+  for key in keys {
+    let members = self.get_set_members(key)
+    if members.length() == 0 {
+      return []
+    }
+    sets.push(members)
   }
-  let result = Map([], capacity=first_set.length())
-  for m, _ in first_set {
+  let mut min_idx = 0
+  let mut min_len = sets[0].length()
+  for i = 1; i < sets.length(); i = i + 1 {
+    let len = sets[i].length()
+    if len < min_len {
+      min_idx = i
+      min_len = len
+    }
+  }
+  let result = Map([], capacity=min_len)
+  for m, _ in sets[min_idx] {
     result.set(m, true)
   }
-  for i = 1; i < keys.length(); i = i + 1 {
-    let current_set = self.get_set_members(keys[i])
+  for i = 0; i < sets.length(); i = i + 1 {
+    if i == min_idx {
+      continue
+    }
+    let current_set = sets[i]
     let to_remove = []
     for m, _ in result {
       if !current_set.contains(m) {
