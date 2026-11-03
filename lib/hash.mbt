@@ -341,3 +341,31 @@ pub fn Database::hrandfield(self : Database, key : String, count : Int) -> Array
   }
 }
 
+
+pub fn Database::hrandfield_with_values(
+  self : Database,
+  key : String,
+  count : Int,
+) -> Array[(String, String)] {
+  if self.check_expired(key) {
+    return []
+  }
+  match self.data.get(key) {
+    Some(RedisValue::Hash(hash)) => {
+      let fields : Array[String] = []
+      for field, _ in hash {
+        fields.push(field)
+      }
+      let sampled = self.random_sample(fields, count)
+      let result : Array[(String, String)] = []
+      for field in sampled {
+        match hash.get(field) {
+          Some(value) => result.push((field, value))
+          None => ()
+        }
+      }
+      result
+    }
+    _ => []
+  }
+}

@@ -589,3 +589,51 @@ pub fn Database::rpop_count(self : Database, key : String, count : Int) -> Array
   }
 }
 
+pub fn Database::lmpop(
+  self : Database,
+  keys : Array[String],
+  left : Bool,
+  count : Int,
+) -> (String, Array[String])? {
+  if keys.length() == 0 || count <= 0 {
+    return None
+  }
+  for key in keys {
+    if self.check_expired(key) {
+      continue
+    }
+    match self.data.get(key) {
+      Some(RedisValue::List(deque)) => {
+        let take = if count > deque.length() { deque.length() } else { count }
+        if take == 0 {
+          continue
+        }
+        let result : Array[String] = []
+        if left {
+          for _i = 0; _i < take; _i = _i + 1 {
+            match deque.pop_front() {
+              Some(value) => result.push(value)
+              None => break
+            }
+          }
+        } else {
+          for _i = 0; _i < take; _i = _i + 1 {
+            match deque.pop_back() {
+              Some(value) => result.push(value)
+              None => break
+            }
+          }
+        }
+        if deque.length() == 0 {
+          self.remove_if_empty(key, 0)
+        } else {
+          self.put(key, RedisValue::List(deque))
+        }
+        return Some((key, result))
+      }
+      _ => ()
+    }
+  }
+  None
+}
+

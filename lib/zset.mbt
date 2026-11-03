@@ -1295,3 +1295,84 @@ pub fn Database::zpopmax_count(
   }
 }
 
+
+pub fn Database::zmpop(
+  self : Database,
+  keys : Array[String],
+  min : Bool,
+  count : Int,
+) -> (String, Array[(String, Float)])? {
+  if keys.length() == 0 || count <= 0 {
+    return None
+  }
+  for key in keys {
+    if self.check_expired(key) {
+      continue
+    }
+    match self.data.get(key) {
+      Some(RedisValue::ZSet(zset)) => {
+        let sorted = self.get_sorted_zset(key)
+        let len = sorted.length()
+        if len == 0 {
+          continue
+        }
+        let take = if count > len { len } else { count }
+        let result : Array[(String, Float)] = []
+        let removed : Array[String] = []
+        if min {
+          for i = 0; i < take; i = i + 1 {
+            result.push(sorted[i])
+            removed.push(sorted[i].0)
+          }
+        } else {
+          for i = 0; i < take; i = i + 1 {
+            let item = sorted[len - 1 - i]
+            result.push(item)
+            removed.push(item.0)
+          }
+        }
+        for member_val in removed {
+          zset.remove(member_val)
+        }
+        if take > 0 {
+          if zset.length() == 0 {
+            self.remove_if_empty(key, 0)
+          } else {
+            self.write_through_remove_zset_members(key, removed)
+          }
+        }
+        return Some((key, result))
+      }
+      _ => ()
+    }
+  }
+  None
+}
+
+pub fn Database::zrandmember_with_scores(
+  self : Database,
+  key : String,
+  count : Int,
+) -> Array[(String, Float)] {
+  if self.check_expired(key) {
+    return []
+  }
+  match self.data.get(key) {
+    Some(RedisValue::ZSet(zset)) => {
+      let members : Array[String] = []
+      for member_val, _ in zset {
+        members.push(member_val)
+      }
+      let sampled = self.random_sample(members, count)
+      let result : Array[(String, Float)] = []
+      for member_val in sampled {
+        match zset.get(member_val) {
+          Some(score) => result.push((member_val, score))
+          None => ()
+        }
+      }
+      result
+    }
+    _ => []
+  }
+}

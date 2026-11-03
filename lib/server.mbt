@@ -81,6 +81,7 @@ pub fn Database::command() -> Array[String] {
     "ZPOPMIN", "ZPOPMAX", "ZMSCORE", "ZRANDMEMBER", "ZDIFF", "ZDIFFSTORE", "ZUNION", "ZUNIONSTORE", "ZINTER", "ZINTERSTORE", "ZINTERCARD", "ZRANGESTORE", "ZSCAN",
     "DBSIZE", "FLUSHDB", "FLUSHALL", "RANDOMKEY", "RENAME", "RENAMENX", "COPY", "TOUCH", "UNLINK",
     "MULTI", "EXEC", "DISCARD",
+    "LMPOP", "ZMPOP",
     "PING", "ECHO", "INFO", "TIME", "COMMAND", "OBJECT_ENCODING"
   ]
 }
@@ -133,3 +134,22 @@ pub fn Database::discard(self : Database) -> String {
   }
 }
 
+
+pub fn Database::command_info(_ : Database, commands : Array[String]) -> Array[String] {
+  let all_commands = Database::command()
+  let result : Array[String] = []
+  for cmd in commands {
+    let mut found = false
+    for all_cmd in all_commands {
+      if all_cmd == cmd {
+        result.push(cmd)
+        found = true
+        break
+      }
+    }
+    if !found {
+      result.push("")
+    }
+  }
+  result
+}
