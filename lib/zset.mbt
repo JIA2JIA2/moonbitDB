@@ -103,14 +103,26 @@ pub fn Database::zcard(self : Database, key : String) -> Int {
   }
 }
 
-pub fn Database::zscore(self : Database, key : String, member_val : String) -> Float? {
+pub fn Database::try_zscore(self : Database, key : String, member_val : String) -> Result[Float, RedisError] {
   if self.check_expired(key) {
-    None
+    Err(RedisError::NotFound)
   } else {
     match self.data.get(key) {
-      Some(RedisValue::ZSet(z)) => z.get(member_val)
-      _ => None
+      Some(RedisValue::ZSet(z)) =>
+        match z.get(member_val) {
+          Some(score) => Ok(score)
+          None => Err(RedisError::NotFound)
+        }
+      Some(_) => Err(RedisError::WrongType)
+      None => Err(RedisError::NotFound)
     }
+  }
+}
+
+pub fn Database::zscore(self : Database, key : String, member_val : String) -> Float? {
+  match self.try_zscore(key, member_val) {
+    Ok(score) => Some(score)
+    Err(_) => None
   }
 }
 

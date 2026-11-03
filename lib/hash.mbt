@@ -75,14 +75,26 @@ pub fn Database::hset(self : Database, key : String, field : String, value : Str
   }
 }
 
-pub fn Database::hget(self : Database, key : String, field : String) -> String? {
+pub fn Database::try_hget(self : Database, key : String, field : String) -> Result[String, RedisError] {
   if self.check_expired(key) {
-    None
+    Err(RedisError::NotFound)
   } else {
     match self.data.get(key) {
-      Some(RedisValue::Hash(h)) => h.get(field)
-      _ => None
+      Some(RedisValue::Hash(h)) =>
+        match h.get(field) {
+          Some(value) => Ok(value)
+          None => Err(RedisError::NotFound)
+        }
+      Some(_) => Err(RedisError::WrongType)
+      None => Err(RedisError::NotFound)
     }
+  }
+}
+
+pub fn Database::hget(self : Database, key : String, field : String) -> String? {
+  match self.try_hget(key, field) {
+    Ok(value) => Some(value)
+    Err(_) => None
   }
 }
 

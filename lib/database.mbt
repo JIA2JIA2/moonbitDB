@@ -27,7 +27,10 @@ pub fn Database::set_time(self : Database, time_ms : Int64) -> Unit {
 }
 
 pub fn Database::advance_time(self : Database, ms : Int64) -> Unit {
-  self.current_time = self.current_time + ms
+  match checked_add_i64(self.current_time, ms) {
+    Some(next) => self.current_time = next
+    None => ()
+  }
 }
 
 fn Database::invalidate_zset_cache(self : Database, key : String) -> Unit {
@@ -36,11 +39,18 @@ fn Database::invalidate_zset_cache(self : Database, key : String) -> Unit {
   self.zset_lex_cache.remove(key)
 }
 
+fn Database::maybe_compact_expire_heap(self : Database) -> Unit {
+  if self.expire_heap.length() > self.expires.length() * 2 + 16 {
+    self.rebuild_expire_heap()
+  }
+}
+
 fn Database::delete_key(self : Database, key : String) -> Unit {
   self.data.remove(key)
   self.expires.remove(key)
   self.invalidate_zset_cache(key)
   self.scan_snapshot = None
+  self.maybe_compact_expire_heap()
 }
 
 fn Database::put(self : Database, key : String, value : RedisValue) -> Unit {
@@ -107,9 +117,7 @@ fn Database::rebuild_expire_heap(self : Database) -> Unit {
 fn Database::set_expire(self : Database, key : String, expire_time : Int64) -> Unit {
   self.expires.set(key, expire_time)
   self.expire_heap_push(key, expire_time)
-  if self.expire_heap.length() > self.expires.length() * 2 + 16 {
-    self.rebuild_expire_heap()
-  }
+  self.maybe_compact_expire_heap()
 }
 
 fn Database::sets_valid(self : Database, keys : Array[String]) -> Bool {

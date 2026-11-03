@@ -43,6 +43,12 @@ fn main {
   println("GETRANGE name 0 4: \"\{db.getrange("name", 0, 4)}\"")
   println("SETRANGE name 0 A: \{db.setrange("name", 0, "A")}")
   println("GET name after setrange: \{show_opt(db.get("name"))}")
+  let append_result = db.try_append("name", "!")
+  let append_msg = match append_result {
+    Ok(length) => "\{length}"
+    Err(error) => @lib.RedisError::message(error)
+  }
+  println("TRY_APPEND name '!': \{append_msg}")
 
   println("\n=== Hash 操作 ===")
   db.hset("user:1", "username", "alice") |> ignore

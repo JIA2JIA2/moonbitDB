@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**123 个测试用例，全部通过**。
+当前测试覆盖：**127 个测试用例，全部通过**。
 
 ### 运行基准与覆盖率
 
@@ -132,7 +132,7 @@ moonbitDB/
 │   ├── util.mbt                # 整数解析与通配符匹配
 │   ├── error.mbt               # RedisError 错误模型
 │   ├── server.mbt              # 服务器命令
-│   ├── database_wbtest.mbt     # 白盒测试（123 个用例）
+│   ├── database_wbtest.mbt     # 白盒测试（127 个用例）
 │   ├── database_property_wbtest.mbt # 属性测试
 │   ├── database_bench_test.mbt # 基准测试
 │   └── moon.pkg
@@ -171,7 +171,7 @@ moonbitDB/
 | `GET` | `(key) -> String?` | 获取字符串值 |
 | `DEL` | `(key) -> Bool` | 删除 key |
 | `EXISTS` | `(key) -> Bool` | 检查 key 是否存在 |
-| `APPEND` | `(key, value) -> Int` | 追加字符串，返回新长度 |
+| `APPEND` | `(key, value) -> Int` | 追加字符串，返回新长度（单值上限 512MB） |
 | `STRLEN` | `(key) -> Int` | 字符串长度 |
 | `GETRANGE` | `(key, start, end) -> String` | 获取子串（支持负数索引） |
 | `SETRANGE` | `(key, offset, value) -> Int` | 从 offset 覆盖写入，返回新长度（缺失部分以 NUL 填充，单值上限 512MB） |
@@ -183,6 +183,8 @@ moonbitDB/
 | `SETEX` | `(key, seconds, value) -> Bool` | 设置值并指定过期时间（秒） |
 | `GETDEL` | `(key) -> String?` | 获取值并删除 key |
 | `GETSET` | `(key, value) -> String?` | 设置新值并返回旧值（清除 TTL） |
+
+> `STRLEN`/`GETRANGE`/`SETRANGE` 的索引按 **UTF-16 code unit** 计数，与 Redis 的字节索引不同；中文、emoji 等场景需要字节语义时请先自行编码。
 
 ### Key 命令
 
@@ -196,6 +198,8 @@ moonbitDB/
 | `PEXPIRE` | `(key, ms) -> Bool` | 设置过期时间（毫秒） |
 | `EXPIREAT` | `(key, unix_seconds) -> Bool` | 设置过期时间戳（秒） |
 | `PEXPIREAT` | `(key, unix_ms) -> Bool` | 设置过期时间戳（毫秒） |
+
+> `EXPIRE`/`PEXPIRE`/`EXPIREAT` 在时间计算溢出时返回 `false`，不会写入非法 TTL；`advance_time` 溢出时不推进时间。
 | `TTL` | `(key) -> Int64` | 剩余生存时间（秒，四舍五入），-1 永久，-2 不存在 |
 | `PTTL` | `(key) -> Int64` | 剩余生存时间（毫秒） |
 | `PERSIST` | `(key) -> Bool` | 移除过期时间 |
@@ -326,7 +330,7 @@ moonbitDB/
 | `RedisError` | `InvalidArgument` | 参数非法（如负 offset、批量参数长度不一致） |
 | `RedisError` | `Overflow` | 整数自增/自减溢出 |
 
-> 旧方法保持兼容：`get/incrby/...` 仍返回 `Option`，`hset/lpush/...` 仍返回 `-1`/`false` 哨兵值；需要精确错误时调用对应的 `try_*` 方法。`RedisError::message()` 可获取 Redis 风格错误文本。
+> 旧方法保持兼容：`get/incrby/...` 仍返回 `Option`，`hset/lpush/...` 仍返回 `-1`/`false` 哨兵值；读命令的 `try_*`（`try_hget`/`try_lpop`/`try_zscore` 等）可区分 `NotFound` 与 `WrongType`。需要精确错误时调用对应的 `try_*` 方法。`RedisError::message()` 可获取 Redis 风格错误文本。
 
 ```moonbit
 match db.try_incrby("name", 1) {
@@ -353,6 +357,7 @@ match db.try_incrby("name", 1) {
 | `set` | `(self : Database, key : String, value : String) -> Unit` | 设置字符串值 |
 | `get` | `(self : Database, key : String) -> String?` | 获取字符串值 |
 | `try_get` | `(self : Database, key : String) -> Result[String, RedisError]` | 获取字符串值并区分错误 |
+| `try_append` | `(self : Database, key : String, value : String) -> Result[Int, RedisError]` | 精确错误版追加字符串 |
 | `try_incrby` | `(self : Database, key : String, increment : Int64) -> Result[Int64, RedisError]` | 精确错误版自增 |
 | `try_decrby` | `(self : Database, key : String, decrement : Int64) -> Result[Int64, RedisError]` | 精确错误版自减 |
 | `try_setrange` | `(self : Database, key : String, offset : Int, value : String) -> Result[Int, RedisError]` | 精确错误版覆盖写入 |
@@ -400,6 +405,7 @@ match db.try_incrby("name", 1) {
 | 方法 | 签名 | 说明 |
 |------|------|------|
 | `hset` | `(self : Database, key : String, field : String, value : String) -> Int` | 设置 hash 字段，返回新建字段数 |
+| `try_hget` | `(self : Database, key : String, field : String) -> Result[String, RedisError]` | 精确错误版获取 hash 字段 |
 | `try_hset` | `(self : Database, key : String, field : String, value : String) -> Result[Int, RedisError]` | 精确错误版设置字段 |
 | `hsetnx` | `(self : Database, key : String, field : String, value : String) -> Bool` | 仅当字段不存在时设置 |
 | `hget` | `(self : Database, key : String, field : String) -> String?` | 获取 hash 字段 |
@@ -419,6 +425,8 @@ match db.try_incrby("name", 1) {
 |------|------|------|
 | `lpush` | `(self : Database, key : String, value : String) -> Int` | 左端插入 |
 | `try_lpush` | `(self : Database, key : String, value : String) -> Result[Int, RedisError]` | 精确错误版左端插入 |
+| `try_lpop` | `(self : Database, key : String) -> Result[String, RedisError]` | 精确错误版左端弹出 |
+| `try_rpop` | `(self : Database, key : String) -> Result[String, RedisError]` | 精确错误版右端弹出 |
 | `lpush_all` | `(self : Database, key : String, values : Array[String]) -> Int` | 批量左端插入（按 Redis 顺序反转） |
 | `rpush_all` | `(self : Database, key : String, values : Array[String]) -> Int` | 批量右端插入 |
 | `rpush` | `(self : Database, key : String, value : String) -> Int` | 右端插入 |
@@ -445,6 +453,7 @@ match db.try_incrby("name", 1) {
 | `sadd_all` | `(self : Database, key : String, values : Array[String]) -> Int` | 批量添加，返回新增数量 |
 | `srem_all` | `(self : Database, key : String, values : Array[String]) -> Int` | 批量删除，返回删除数量 |
 | `smembers` | `(self : Database, key : String) -> Array[String]` | 所有成员 |
+| `try_smembers` | `(self : Database, key : String) -> Result[Array[String], RedisError]` | 精确错误版获取所有成员 |
 | `srem` | `(self : Database, key : String, value : String) -> Bool` | 删除成员 |
 | `scard` | `(self : Database, key : String) -> Int` | 成员数量 |
 | `sismember` | `(self : Database, key : String, value : String) -> Bool` | 检查成员是否存在 |
@@ -473,6 +482,7 @@ match db.try_incrby("name", 1) {
 | `zrange` | `(self : Database, key : String, start : Int, end : Int) -> Array[String]` | 按排名升序获取范围 |
 | `zcard` | `(self : Database, key : String) -> Int` | 成员数量 |
 | `zscore` | `(self : Database, key : String, member_val : String) -> Float?` | 获取成员分数 |
+| `try_zscore` | `(self : Database, key : String, member_val : String) -> Result[Float, RedisError]` | 精确错误版获取成员分数 |
 | `zrem` | `(self : Database, key : String, member_val : String) -> Bool` | 删除成员 |
 | `zrangebyscore` | `(self : Database, key : String, min_score : Float, max_score : Float) -> Array[String]` | 按分数范围获取 |
 | `zrangebylex` | `(self : Database, key : String, min_bound : String, max_bound : String) -> Array[String]` | 按成员字典序范围获取 |

@@ -48,6 +48,12 @@ fn main() -> Unit {
   println("  INCRBY counter 5 = \{show_opt_int64(db.incrby("counter", 5))}")
   println("  GETRANGE greeting 0 4 = \"\{db.getrange("greeting", 0, 4)}\"")
   println("  SETRANGE greeting 7 'MoonBit' = \{db.setrange("greeting", 7, "MoonBit")} (新长度)")
+  let append_result = db.try_append("greeting", "!")
+  let append_msg = match append_result {
+    Ok(length) => "\{length}"
+    Err(error) => @lib.RedisError::message(error)
+  }
+  println("  TRY_APPEND greeting '!' = \{append_msg}")
 
   println("\n📌 2. Hash 用户信息存储")
   println("----------------------------------------")

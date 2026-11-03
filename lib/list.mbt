@@ -84,41 +84,63 @@ pub fn Database::rpush_all(self : Database, key : String, values : Array[String]
   }
 }
 
-pub fn Database::lpop(self : Database, key : String) -> String? {
+pub fn Database::try_lpop(self : Database, key : String) -> Result[String, RedisError] {
   if self.check_expired(key) {
-    None
+    Err(RedisError::NotFound)
   } else {
     match self.data.get(key) {
-      Some(RedisValue::List(deque)) => {
-        let val = deque.pop_front()
-        if deque.length() == 0 {
-          self.remove_if_empty(key, 0)
-        } else {
-          self.put(key, RedisValue::List(deque))
+      Some(RedisValue::List(deque)) =>
+        match deque.pop_front() {
+          Some(value) => {
+            if deque.length() == 0 {
+              self.remove_if_empty(key, 0)
+            } else {
+              self.put(key, RedisValue::List(deque))
+            }
+            Ok(value)
+          }
+          None => Err(RedisError::NotFound)
         }
-        val
-      }
-      _ => None
+      Some(_) => Err(RedisError::WrongType)
+      None => Err(RedisError::NotFound)
+    }
+  }
+}
+
+pub fn Database::lpop(self : Database, key : String) -> String? {
+  match self.try_lpop(key) {
+    Ok(value) => Some(value)
+    Err(_) => None
+  }
+}
+
+pub fn Database::try_rpop(self : Database, key : String) -> Result[String, RedisError] {
+  if self.check_expired(key) {
+    Err(RedisError::NotFound)
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::List(deque)) =>
+        match deque.pop_back() {
+          Some(value) => {
+            if deque.length() == 0 {
+              self.remove_if_empty(key, 0)
+            } else {
+              self.put(key, RedisValue::List(deque))
+            }
+            Ok(value)
+          }
+          None => Err(RedisError::NotFound)
+        }
+      Some(_) => Err(RedisError::WrongType)
+      None => Err(RedisError::NotFound)
     }
   }
 }
 
 pub fn Database::rpop(self : Database, key : String) -> String? {
-  if self.check_expired(key) {
-    None
-  } else {
-    match self.data.get(key) {
-      Some(RedisValue::List(deque)) => {
-        let val = deque.pop_back()
-        if deque.length() == 0 {
-          self.remove_if_empty(key, 0)
-        } else {
-          self.put(key, RedisValue::List(deque))
-        }
-        val
-      }
-      _ => None
-    }
+  match self.try_rpop(key) {
+    Ok(value) => Some(value)
+    Err(_) => None
   }
 }
 

@@ -2775,3 +2775,181 @@ test "read_set_type_errors" {
     1,
   )
 }
+
+test "append_limit_and_error_channel" {
+  let db = Database::new()
+  db.set("s", "abc") |> ignore
+  @test.assert_eq(
+    match db.try_append("s", "d") {
+      Ok(length) => length
+      Err(_) => -1
+    },
+    4,
+  )
+  @test.assert_eq(db.get("s"), Some("abcd"))
+
+  db.hset("h", "f", "v") |> ignore
+  @test.assert_eq(
+    match db.try_append("h", "x") {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(db.append("h", "x"), -1)
+  @test.assert_eq(db.type_of("h"), "hash")
+}
+
+test "ttl_arithmetic_overflow_protection" {
+  let db = Database::new()
+  let max_value : Int64 = 9223372036854775807L
+
+  db.set_time(1)
+  db.set("k", "v") |> ignore
+  @test.assert_eq(db.pexpire("k", max_value), false)
+  @test.assert_eq(db.exists("k"), true)
+  @test.assert_eq(db.ttl("k"), -1)
+
+  db.set_time(0)
+  @test.assert_eq(db.expireat("k", 9223372036854776L), false)
+  @test.assert_eq(db.expireat("k", 9223372036854775L), true)
+
+  db.set_time(max_value - 500L)
+  @test.assert_eq(db.setex("k2", 1, "v"), false)
+  @test.assert_eq(db.exists("k2"), false)
+
+  db.set("timeout", "v") |> ignore
+  db.pexpire("timeout", 5) |> ignore
+  db.advance_time(1000)
+  @test.assert_eq(db.exists("timeout"), true)
+  db.advance_time(5)
+  @test.assert_eq(db.exists("timeout"), false)
+  db.set_time(0)
+}
+
+test "try_read_error_channels" {
+  let db = Database::new()
+  db.set("str", "v") |> ignore
+
+  @test.assert_eq(
+    match db.try_hget("str", "f") {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    true,
+  )
+  db.hset("h", "f", "v") |> ignore
+  @test.assert_eq(
+    match db.try_hget("h", "f") {
+      Ok(value) => value
+      Err(_) => ""
+    },
+    "v",
+  )
+  @test.assert_eq(
+    match db.try_hget("h", "missing") {
+      Err(RedisError::NotFound) => true
+      _ => false
+    },
+    true,
+  )
+
+  @test.assert_eq(
+    match db.try_lpop("str") {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(
+    match db.try_lpop("empty") {
+      Err(RedisError::NotFound) => true
+      _ => false
+    },
+    true,
+  )
+  db.rpush("list", "a") |> ignore
+  @test.assert_eq(
+    match db.try_lpop("list") {
+      Ok(value) => value
+      Err(_) => ""
+    },
+    "a",
+  )
+  db.rpush_all("list2", ["x", "y"]) |> ignore
+  @test.assert_eq(
+    match db.try_rpop("list2") {
+      Ok(value) => value
+      Err(_) => ""
+    },
+    "y",
+  )
+
+  @test.assert_eq(
+    match db.try_zscore("str", "m") {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    true,
+  )
+  db.zadd("z", 1.5, "m") |> ignore
+  @test.assert_eq(
+    match db.try_zscore("z", "m") {
+      Ok(score) => score
+      Err(_) => 0.0
+    },
+    1.5,
+  )
+  @test.assert_eq(
+    match db.try_zscore("z", "none") {
+      Err(RedisError::NotFound) => true
+      _ => false
+    },
+    true,
+  )
+
+  @test.assert_eq(
+    match db.try_smembers("str") {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(
+    match db.try_smembers("missing") {
+      Ok(values) => values.length()
+      Err(_) => -1
+    },
+    0,
+  )
+  db.sadd("set", "a") |> ignore
+  @test.assert_eq(
+    match db.try_smembers("set") {
+      Ok(values) => values.length()
+      Err(_) => -1
+    },
+    1,
+  )
+}
+
+test "expire_heap_compacts_after_delete_and_persist" {
+  let db = Database::new()
+  for i = 0; i < 200; i = i + 1 {
+    db.set("ttl:\{i}", "v") |> ignore
+    db.pexpire("ttl:\{i}", 1000) |> ignore
+  }
+  for i = 0; i < 190; i = i + 1 {
+    db.del("ttl:\{i}") |> ignore
+  }
+  @test.assert_eq(db.expire_heap.length() <= 36, true)
+
+  let db2 = Database::new()
+  for i = 0; i < 200; i = i + 1 {
+    db2.set("ttl:\{i}", "v") |> ignore
+    db2.pexpire("ttl:\{i}", 1000) |> ignore
+  }
+  for i = 0; i < 190; i = i + 1 {
+    db2.persist("ttl:\{i}") |> ignore
+  }
+  @test.assert_eq(db2.expire_heap.length() <= 36, true)
+}

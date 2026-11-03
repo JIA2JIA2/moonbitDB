@@ -88,9 +88,9 @@ pub fn Database::srem_all(self : Database, key : String, values : Array[String])
   }
 }
 
-pub fn Database::smembers(self : Database, key : String) -> Array[String] {
+pub fn Database::try_smembers(self : Database, key : String) -> Result[Array[String], RedisError] {
   if self.check_expired(key) {
-    []
+    Ok([])
   } else {
     match self.data.get(key) {
       Some(RedisValue::Set(s)) => {
@@ -98,10 +98,18 @@ pub fn Database::smembers(self : Database, key : String) -> Array[String] {
         for m, _ in s {
           result.push(m)
         }
-        result
+        Ok(result)
       }
-      _ => []
+      Some(_) => Err(RedisError::WrongType)
+      None => Ok([])
     }
+  }
+}
+
+pub fn Database::smembers(self : Database, key : String) -> Array[String] {
+  match self.try_smembers(key) {
+    Ok(values) => values
+    Err(_) => []
   }
 }
 

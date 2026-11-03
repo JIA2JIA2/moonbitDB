@@ -1,3 +1,6 @@
+const I64_MAX : Int64 = 9223372036854775807L
+const I64_MIN : Int64 = -9223372036854775807L - 1L
+
 pub fn match_pattern(pattern : String, str : String) -> Bool {
   match_pattern_helper(pattern, str, 0, 0)
 }

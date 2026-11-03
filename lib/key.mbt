@@ -3,8 +3,13 @@ pub fn Database::expire(self : Database, key : String, seconds : Int) -> Bool {
     return false
   }
   if self.data.contains(key) {
-    self.set_expire(key, self.current_time + seconds.to_int64() * 1000)
-    true
+    match checked_add_i64(self.current_time, seconds.to_int64() * 1000) {
+      Some(expire_time) => {
+        self.set_expire(key, expire_time)
+        true
+      }
+      None => false
+    }
   } else {
     false
   }
@@ -15,8 +20,13 @@ pub fn Database::pexpire(self : Database, key : String, milliseconds : Int64) ->
     return false
   }
   if self.data.contains(key) {
-    self.set_expire(key, self.current_time + milliseconds)
-    true
+    match checked_add_i64(self.current_time, milliseconds) {
+      Some(expire_time) => {
+        self.set_expire(key, expire_time)
+        true
+      }
+      None => false
+    }
   } else {
     false
   }
@@ -24,6 +34,11 @@ pub fn Database::pexpire(self : Database, key : String, milliseconds : Int64) ->
 
 pub fn Database::expireat(self : Database, key : String, unix_seconds : Int64) -> Bool {
   if self.check_expired(key) {
+    return false
+  }
+  let max_seconds = I64_MAX / 1000
+  let min_seconds = I64_MIN / 1000
+  if unix_seconds > max_seconds || unix_seconds < min_seconds {
     return false
   }
   if self.data.contains(key) {
@@ -84,6 +99,7 @@ pub fn Database::persist(self : Database, key : String) -> Bool {
   }
   if self.data.contains(key) && self.expires.contains(key) {
     self.expires.remove(key)
+    self.maybe_compact_expire_heap()
     true
   } else {
     false
@@ -169,8 +185,7 @@ pub fn Database::rename(self : Database, old_key : String, new_key : String) -> 
       }
       self.put(new_key, value)
       self.data.remove(old_key)
-      self.zset_sorted_cache.remove(old_key)
-      self.zset_sorted_cache.remove(new_key)
+      self.invalidate_zset_cache(old_key)
       match self.expires.get(old_key) {
         Some(expire_time) => {
           self.set_expire(new_key, expire_time)
@@ -178,6 +193,7 @@ pub fn Database::rename(self : Database, old_key : String, new_key : String) -> 
         }
         None => self.expires.remove(new_key)
       }
+      self.maybe_compact_expire_heap()
       true
     }
     None => false

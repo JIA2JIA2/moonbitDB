@@ -20,9 +20,14 @@ pub fn Database::setex(self : Database, key : String, seconds : Int, value : Str
   if seconds <= 0 {
     false
   } else {
-    self.put(key, RedisValue::String(value))
-    self.set_expire(key, self.current_time + seconds.to_int64() * 1000)
-    true
+    match checked_add_i64(self.current_time, seconds.to_int64() * 1000) {
+      Some(expire_time) => {
+        self.put(key, RedisValue::String(value))
+        self.set_expire(key, expire_time)
+        true
+      }
+      None => false
+    }
   }
 }
 
@@ -123,25 +128,25 @@ pub fn Database::get(self : Database, key : String) -> String? {
   }
 }
 
+pub fn Database::try_append(self : Database, key : String, value : String) -> Result[Int, RedisError] {
+  self.check_expired(key) |> ignore
+  let current = match self.data.get(key) {
+    Some(RedisValue::String(s)) => s
+    None => ""
+    Some(_) => return Err(RedisError::WrongType)
+  }
+  if current.length().to_int64() + value.length().to_int64() > MAX_STRING_SIZE {
+    return Err(RedisError::InvalidArgument)
+  }
+  let new_val = current + value
+  self.put(key, RedisValue::String(new_val))
+  Ok(new_val.length())
+}
+
 pub fn Database::append(self : Database, key : String, value : String) -> Int {
-  if self.check_expired(key) {
-    let new_val = value
-    self.put(key, RedisValue::String(new_val))
-    new_val.length()
-  } else {
-    match self.data.get(key) {
-      Some(RedisValue::String(s)) => {
-        let new_val = s + value
-        self.put(key, RedisValue::String(new_val))
-        new_val.length()
-      }
-      Some(_) => -1
-      None => {
-        let new_val = value
-        self.put(key, RedisValue::String(new_val))
-        new_val.length()
-      }
-    }
+  match self.try_append(key, value) {
+    Ok(length) => length
+    Err(_) => -1
   }
 }
 
