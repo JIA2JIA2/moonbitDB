@@ -406,7 +406,7 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       if parts.length() < 2 { ["ERR wrong number"] }
       else {
         match parse_int(parts[1]) {
-          Some(m) => { db.advance_time(m); ["OK (advanced \{m}ms)"] }
+          Some(m) => { db.advance_time(m.to_int64()); ["OK (advanced \{m}ms)"] }
           None => ["ERR value is not an integer"]
         }
       }

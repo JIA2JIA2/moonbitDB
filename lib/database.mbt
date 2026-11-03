@@ -169,8 +169,8 @@ pub enum RedisValue {
 
 pub struct Database {
   mut data : Map[String, RedisValue]
-  mut expires : Map[String, Int]
-  mut current_time : Int
+  mut expires : Map[String, Int64]
+  mut current_time : Int64
   mut rand_state : Int
   mut zset_sorted_cache : Map[String, Array[(String, Float)]]
 }
@@ -179,21 +179,44 @@ pub fn Database::new() -> Database {
   Database::{ data: Map([], capacity=1000), expires: Map([], capacity=1000), current_time: 0, rand_state: 123456789, zset_sorted_cache: Map([], capacity=100) }
 }
 
-pub fn Database::set_time(self : Database, time_ms : Int) -> Unit {
+pub fn Database::set_time(self : Database, time_ms : Int64) -> Unit {
   self.current_time = time_ms
 }
 
-pub fn Database::advance_time(self : Database, ms : Int) -> Unit {
+pub fn Database::advance_time(self : Database, ms : Int64) -> Unit {
   self.current_time = self.current_time + ms
+}
+
+fn Database::delete_key(self : Database, key : String) -> Unit {
+  self.data.remove(key)
+  self.expires.remove(key)
+  self.zset_sorted_cache.remove(key)
+}
+
+fn Database::put(self : Database, key : String, value : RedisValue) -> Unit {
+  self.zset_sorted_cache.remove(key)
+  self.data.set(key, value)
+}
+
+fn Database::sets_valid(self : Database, keys : Array[String]) -> Bool {
+  for key in keys {
+    if self.check_expired(key) {
+      continue
+    }
+    match self.data.get(key) {
+      Some(RedisValue::Set(_)) => ()
+      None => ()
+      Some(_) => return false
+    }
+  }
+  true
 }
 
 pub fn Database::check_expired(self : Database, key : String) -> Bool {
   match self.expires.get(key) {
     Some(expire_time) => {
       if expire_time <= self.current_time {
-        self.data.remove(key)
-        self.expires.remove(key)
-        self.zset_sorted_cache.remove(key)
+        self.delete_key(key)
         true
       } else {
         false
@@ -211,17 +234,13 @@ fn Database::collect_expired(self : Database) -> Unit {
     }
   }
   for key in expired {
-    self.data.remove(key)
-    self.expires.remove(key)
-    self.zset_sorted_cache.remove(key)
+    self.delete_key(key)
   }
 }
 
 fn Database::remove_if_empty(self : Database, key : String, count : Int) -> Unit {
   if count == 0 {
-    self.data.remove(key)
-    self.expires.remove(key)
-    self.zset_sorted_cache.remove(key)
+    self.delete_key(key)
   }
 }
 
@@ -236,19 +255,19 @@ fn Database::next_rand(self : Database) -> Int {
 }
 
 pub fn Database::set(self : Database, key : String, value : String) -> Unit {
-  self.data.set(key, RedisValue::String(value))
+  self.put(key, RedisValue::String(value))
   self.expires.remove(key)
 }
 
 pub fn Database::setnx(self : Database, key : String, value : String) -> Bool {
   if self.check_expired(key) {
-    self.data.set(key, RedisValue::String(value))
+    self.put(key, RedisValue::String(value))
     return true
   }
   if self.data.contains(key) {
     false
   } else {
-    self.data.set(key, RedisValue::String(value))
+    self.put(key, RedisValue::String(value))
     true
   }
 }
@@ -257,8 +276,8 @@ pub fn Database::setex(self : Database, key : String, seconds : Int, value : Str
   if seconds <= 0 {
     false
   } else {
-    self.data.set(key, RedisValue::String(value))
-    self.expires.set(key, self.current_time + seconds * 1000)
+    self.put(key, RedisValue::String(value))
+    self.expires.set(key, self.current_time + seconds.to_int64() * 1000)
     true
   }
 }
@@ -266,10 +285,7 @@ pub fn Database::setex(self : Database, key : String, seconds : Int, value : Str
 pub fn Database::getdel(self : Database, key : String) -> String? {
   let value = self.get(key)
   match value {
-    Some(_) => {
-      self.data.remove(key)
-      self.expires.remove(key)
-    }
+    Some(_) => self.delete_key(key)
     None => ()
   }
   value
@@ -277,16 +293,22 @@ pub fn Database::getdel(self : Database, key : String) -> String? {
 
 pub fn Database::getset(self : Database, key : String, value : String) -> String? {
   if self.check_expired(key) {
-    self.data.set(key, RedisValue::String(value))
+    self.put(key, RedisValue::String(value))
     None
   } else {
-    let old = match self.data.get(key) {
-      Some(RedisValue::String(s)) => Some(s)
-      _ => None
+    match self.data.get(key) {
+      Some(RedisValue::String(s)) => {
+        self.put(key, RedisValue::String(value))
+        self.expires.remove(key)
+        Some(s)
+      }
+      Some(_) => None
+      None => {
+        self.put(key, RedisValue::String(value))
+        self.expires.remove(key)
+        None
+      }
     }
-    self.data.set(key, RedisValue::String(value))
-    self.expires.remove(key)
-    old
   }
 }
 
@@ -295,14 +317,14 @@ pub fn Database::expire(self : Database, key : String, seconds : Int) -> Bool {
     return false
   }
   if self.data.contains(key) {
-    self.expires.set(key, self.current_time + seconds * 1000)
+    self.expires.set(key, self.current_time + seconds.to_int64() * 1000)
     true
   } else {
     false
   }
 }
 
-pub fn Database::pexpire(self : Database, key : String, milliseconds : Int) -> Bool {
+pub fn Database::pexpire(self : Database, key : String, milliseconds : Int64) -> Bool {
   if self.check_expired(key) {
     return false
   }
@@ -314,7 +336,7 @@ pub fn Database::pexpire(self : Database, key : String, milliseconds : Int) -> B
   }
 }
 
-pub fn Database::expireat(self : Database, key : String, unix_seconds : Int) -> Bool {
+pub fn Database::expireat(self : Database, key : String, unix_seconds : Int64) -> Bool {
   if self.check_expired(key) {
     return false
   }
@@ -326,7 +348,7 @@ pub fn Database::expireat(self : Database, key : String, unix_seconds : Int) -> 
   }
 }
 
-pub fn Database::pexpireat(self : Database, key : String, unix_milliseconds : Int) -> Bool {
+pub fn Database::pexpireat(self : Database, key : String, unix_milliseconds : Int64) -> Bool {
   if self.check_expired(key) {
     return false
   }
@@ -338,14 +360,13 @@ pub fn Database::pexpireat(self : Database, key : String, unix_milliseconds : In
   }
 }
 
-pub fn Database::ttl(self : Database, key : String) -> Int {
+pub fn Database::ttl(self : Database, key : String) -> Int64 {
   if !self.data.contains(key) {
     -2
   } else if self.expires.contains(key) {
     let remaining = self.expires.get(key).unwrap() - self.current_time
     if remaining <= 0 {
-      self.data.remove(key)
-      self.expires.remove(key)
+      self.delete_key(key)
       -2
     } else {
       (remaining + 999) / 1000
@@ -355,14 +376,13 @@ pub fn Database::ttl(self : Database, key : String) -> Int {
   }
 }
 
-pub fn Database::pttl(self : Database, key : String) -> Int {
+pub fn Database::pttl(self : Database, key : String) -> Int64 {
   if !self.data.contains(key) {
     -2
   } else if self.expires.contains(key) {
     let remaining = self.expires.get(key).unwrap() - self.current_time
     if remaining <= 0 {
-      self.data.remove(key)
-      self.expires.remove(key)
+      self.delete_key(key)
       -2
     } else {
       remaining
@@ -386,7 +406,7 @@ pub fn Database::persist(self : Database, key : String) -> Bool {
 
 pub fn Database::mset(self : Database, keys : Array[String], values : Array[String]) -> Unit {
   for i = 0; i < keys.length() && i < values.length(); i = i + 1 {
-    self.data.set(keys[i], RedisValue::String(values[i]))
+    self.put(keys[i], RedisValue::String(values[i]))
     self.expires.remove(keys[i])
   }
 }
@@ -412,8 +432,7 @@ pub fn Database::mdel(self : Database, keys : Array[String]) -> Int {
     if !self.check_expired(key) {
       let existed = self.data.contains(key)
       if existed {
-        self.data.remove(key)
-        self.expires.remove(key)
+        self.delete_key(key)
         count = count + 1
       }
     }
@@ -425,12 +444,13 @@ pub fn Database::hmset(self : Database, key : String, fields : Array[String], va
   self.check_expired(key) |> ignore
   let hash = match self.data.get(key) {
     Some(RedisValue::Hash(h)) => h
-    _ => Map([], capacity=10)
+    None => Map([], capacity=10)
+    Some(_) => return
   }
   for i = 0; i < fields.length() && i < values.length(); i = i + 1 {
     hash.set(fields[i], values[i])
   }
-  self.data.set(key, RedisValue::Hash(hash))
+  self.put(key, RedisValue::Hash(hash))
 }
 
 pub fn Database::hmget(self : Database, key : String, fields : Array[String]) -> Array[String?] {
@@ -477,8 +497,7 @@ pub fn Database::del(self : Database, key : String) -> Bool {
   } else {
     let existed = self.data.contains(key)
     if existed {
-      self.data.remove(key)
-      self.expires.remove(key)
+      self.delete_key(key)
     }
     existed
   }
@@ -562,19 +581,19 @@ pub fn Database::type_of(self : Database, key : String) -> String {
 pub fn Database::append(self : Database, key : String, value : String) -> Int {
   if self.check_expired(key) {
     let new_val = value
-    self.data.set(key, RedisValue::String(new_val))
+    self.put(key, RedisValue::String(new_val))
     new_val.length()
   } else {
     match self.data.get(key) {
       Some(RedisValue::String(s)) => {
         let new_val = s + value
-        self.data.set(key, RedisValue::String(new_val))
+        self.put(key, RedisValue::String(new_val))
         new_val.length()
       }
       Some(_) => -1
       None => {
         let new_val = value
-        self.data.set(key, RedisValue::String(new_val))
+        self.put(key, RedisValue::String(new_val))
         new_val.length()
       }
     }
@@ -650,6 +669,32 @@ pub fn parse_int(s : String) -> Int? {
   }
 }
 
+pub fn parse_int64(s : String) -> Int64? {
+  if s.length() == 0 {
+    None
+  } else {
+    let mut result : Int64 = 0
+    let mut sign : Int64 = 1
+    let mut start = 0
+    if s[0] == 45 {
+      sign = -1
+      start = 1
+    } else if s[0] == 43 {
+      start = 1
+    }
+    if start >= s.length() {
+      return None
+    }
+    for i = start; i < s.length(); i = i + 1 {
+      match uint16_to_digit(s[i]) {
+        Some(digit) => result = result * 10 + digit.to_int64()
+        None => return None
+      }
+    }
+    Some(result * sign)
+  }
+}
+
 pub fn int_to_string(n : Int) -> String {
   if n == 0 {
     "0"
@@ -704,32 +749,34 @@ pub fn int_to_string(n : Int) -> String {
   }
 }
 
-pub fn Database::incr(self : Database, key : String) -> Int? {
+pub fn Database::incr(self : Database, key : String) -> Int64? {
   self.check_expired(key) |> ignore
   let current = match self.data.get(key) {
     Some(RedisValue::String(s)) => s
-    _ => "0"
+    None => "0"
+    Some(_) => return None
   }
-  match parse_int(current) {
+  match parse_int64(current) {
     Some(n) => {
-      let new_val = int_to_string(n + 1)
-      self.data.set(key, RedisValue::String(new_val))
+      let new_val = "\{(n + 1)}"
+      self.put(key, RedisValue::String(new_val))
       Some(n + 1)
     }
     None => None
   }
 }
 
-pub fn Database::decr(self : Database, key : String) -> Int? {
+pub fn Database::decr(self : Database, key : String) -> Int64? {
   self.check_expired(key) |> ignore
   let current = match self.data.get(key) {
     Some(RedisValue::String(s)) => s
-    _ => "0"
+    None => "0"
+    Some(_) => return None
   }
-  match parse_int(current) {
+  match parse_int64(current) {
     Some(n) => {
-      let new_val = int_to_string(n - 1)
-      self.data.set(key, RedisValue::String(new_val))
+      let new_val = "\{(n - 1)}"
+      self.put(key, RedisValue::String(new_val))
       Some(n - 1)
     }
     None => None
@@ -740,11 +787,12 @@ pub fn Database::hset(self : Database, key : String, field : String, value : Str
   self.check_expired(key) |> ignore
   let hash = match self.data.get(key) {
     Some(RedisValue::Hash(h)) => h
-    _ => Map([], capacity=10)
+    None => Map([], capacity=10)
+    Some(_) => return -1
   }
   let existed = hash.contains(field)
   hash.set(field, value)
-  self.data.set(key, RedisValue::Hash(hash))
+  self.put(key, RedisValue::Hash(hash))
   if existed {
     0
   } else {
@@ -786,7 +834,13 @@ pub fn Database::hgetall(self : Database, key : String) -> Map[String, String] {
     Map([], capacity=0)
   } else {
     match self.data.get(key) {
-      Some(RedisValue::Hash(h)) => h
+      Some(RedisValue::Hash(h)) => {
+        let copy = Map([], capacity=h.length())
+        for field, value in h {
+          copy.set(field, value)
+        }
+        copy
+      }
       _ => Map([], capacity=0)
     }
   }
@@ -855,22 +909,23 @@ pub fn Database::hstrlen(self : Database, key : String, field : String) -> Int {
   }
 }
 
-pub fn Database::hincrby(self : Database, key : String, field : String, increment : Int) -> Int? {
+pub fn Database::hincrby(self : Database, key : String, field : String, increment : Int64) -> Int64? {
   self.check_expired(key) |> ignore
   let hash = match self.data.get(key) {
     Some(RedisValue::Hash(h)) => h
-    _ => Map([], capacity=10)
+    None => Map([], capacity=10)
+    Some(_) => return None
   }
   let current = match hash.get(field) {
     Some(value) =>
-      match parse_int(value) {
+      match parse_int64(value) {
         Some(n) => n
         None => return None
       }
     None => 0
   }
-  hash.set(field, int_to_string(current + increment))
-  self.data.set(key, RedisValue::Hash(hash))
+  hash.set(field, "\{(current + increment)}")
+  self.put(key, RedisValue::Hash(hash))
   Some(current + increment)
 }
 
@@ -878,10 +933,11 @@ pub fn Database::lpush(self : Database, key : String, value : String) -> Int {
   self.check_expired(key) |> ignore
   let deque = match self.data.get(key) {
     Some(RedisValue::List(d)) => d
-    _ => Deque::new()
+    None => Deque::new()
+    Some(_) => return -1
   }
   deque.push_front(value)
-  self.data.set(key, RedisValue::List(deque))
+  self.put(key, RedisValue::List(deque))
   deque.length()
 }
 
@@ -889,10 +945,11 @@ pub fn Database::rpush(self : Database, key : String, value : String) -> Int {
   self.check_expired(key) |> ignore
   let deque = match self.data.get(key) {
     Some(RedisValue::List(d)) => d
-    _ => Deque::new()
+    None => Deque::new()
+    Some(_) => return -1
   }
   deque.push_back(value)
-  self.data.set(key, RedisValue::List(deque))
+  self.put(key, RedisValue::List(deque))
   deque.length()
 }
 
@@ -906,7 +963,7 @@ pub fn Database::lpop(self : Database, key : String) -> String? {
         if deque.length() == 0 {
           self.remove_if_empty(key, 0)
         } else {
-          self.data.set(key, RedisValue::List(deque))
+          self.put(key, RedisValue::List(deque))
         }
         val
       }
@@ -925,7 +982,7 @@ pub fn Database::rpop(self : Database, key : String) -> String? {
         if deque.length() == 0 {
           self.remove_if_empty(key, 0)
         } else {
-          self.data.set(key, RedisValue::List(deque))
+          self.put(key, RedisValue::List(deque))
         }
         val
       }
@@ -992,7 +1049,7 @@ pub fn Database::lset(self : Database, key : String, index : Int, value : String
       Some(RedisValue::List(deque)) => {
         let adjusted_idx = if index < 0 { deque.length() + index } else { index }
         let result = deque.set_at(adjusted_idx, value)
-        self.data.set(key, RedisValue::List(deque))
+        self.put(key, RedisValue::List(deque))
         result
       }
       _ => false
@@ -1051,7 +1108,7 @@ pub fn Database::lrem(self : Database, key : String, count : Int, value : String
         if new_deque.length() == 0 {
           self.remove_if_empty(key, 0)
         } else {
-          self.data.set(key, RedisValue::List(new_deque))
+          self.put(key, RedisValue::List(new_deque))
         }
         removed_count
       }
@@ -1072,7 +1129,7 @@ pub fn Database::linsert(self : Database, key : String, before : Bool, pivot : S
         } else {
           let insert_idx = if before { idx } else { idx + 1 }
           deque.insert_at(insert_idx, value) |> ignore
-          self.data.set(key, RedisValue::List(deque))
+          self.put(key, RedisValue::List(deque))
           deque.length()
         }
       }
@@ -1088,7 +1145,7 @@ pub fn Database::lpushx(self : Database, key : String, value : String) -> Int {
     match self.data.get(key) {
       Some(RedisValue::List(deque)) => {
         deque.push_front(value)
-        self.data.set(key, RedisValue::List(deque))
+        self.put(key, RedisValue::List(deque))
         deque.length()
       }
       _ => 0
@@ -1103,7 +1160,7 @@ pub fn Database::rpushx(self : Database, key : String, value : String) -> Int {
     match self.data.get(key) {
       Some(RedisValue::List(deque)) => {
         deque.push_back(value)
-        self.data.set(key, RedisValue::List(deque))
+        self.put(key, RedisValue::List(deque))
         deque.length()
       }
       _ => 0
@@ -1113,29 +1170,43 @@ pub fn Database::rpushx(self : Database, key : String, value : String) -> Int {
 
 pub fn Database::rpoplpush(self : Database, source : String, destination : String) -> String? {
   if self.check_expired(source) {
-    None
-  } else {
+    return None
+  }
+  if source == destination {
     match self.data.get(source) {
-      Some(RedisValue::List(source_deque)) => {
-        match source_deque.pop_back() {
+      Some(RedisValue::List(deque)) =>
+        match deque.pop_back() {
           Some(val) => {
-            if source_deque.length() == 0 {
-              self.remove_if_empty(source, 0)
-            } else {
-              self.data.set(source, RedisValue::List(source_deque))
-            }
-            self.check_expired(destination) |> ignore
-            let dest_deque = match self.data.get(destination) {
-              Some(RedisValue::List(d)) => d
-              _ => Deque::new()
-            }
-            dest_deque.push_front(val)
-            self.data.set(destination, RedisValue::List(dest_deque))
+            deque.push_front(val)
+            self.put(source, RedisValue::List(deque))
             Some(val)
           }
           None => None
         }
-      }
+      _ => None
+    }
+  } else {
+    self.check_expired(destination) |> ignore
+    let dest_deque = match self.data.get(destination) {
+      Some(RedisValue::List(d)) => d
+      None => Deque::new()
+      Some(_) => return None
+    }
+    match self.data.get(source) {
+      Some(RedisValue::List(source_deque)) =>
+        match source_deque.pop_back() {
+          Some(val) => {
+            if source_deque.length() == 0 {
+              self.delete_key(source)
+            } else {
+              self.put(source, RedisValue::List(source_deque))
+            }
+            dest_deque.push_front(val)
+            self.put(destination, RedisValue::List(dest_deque))
+            Some(val)
+          }
+          None => None
+        }
       _ => None
     }
   }
@@ -1162,7 +1233,7 @@ pub fn Database::ltrim(self : Database, key : String, start : Int, end : Int) ->
       if new_deque.length() == 0 {
         self.remove_if_empty(key, 0)
       } else {
-        self.data.set(key, RedisValue::List(new_deque))
+        self.put(key, RedisValue::List(new_deque))
       }
       true
     }
@@ -1174,13 +1245,14 @@ pub fn Database::sadd(self : Database, key : String, value : String) -> Bool {
   self.check_expired(key) |> ignore
   let set = match self.data.get(key) {
     Some(RedisValue::Set(s)) => s
-    _ => Map([], capacity=10)
+    None => Map([], capacity=10)
+    Some(_) => return false
   }
   if set.contains(value) {
     false
   } else {
     set.set(value, true)
-    self.data.set(key, RedisValue::Set(set))
+    self.put(key, RedisValue::Set(set))
     true
   }
 }
@@ -1285,12 +1357,15 @@ pub fn Database::sinter(self : Database, keys : Array[String]) -> Array[String] 
 }
 
 pub fn Database::sinterstore(self : Database, destination : String, keys : Array[String]) -> Int {
+  if !self.sets_valid(keys) {
+    return -1
+  }
   let result = self.sinter(keys)
   let new_set = Map([], capacity=result.length())
   for item in result {
     new_set.set(item, true)
   }
-  self.data.set(destination, RedisValue::Set(new_set))
+  self.put(destination, RedisValue::Set(new_set))
   self.expires.remove(destination)
   result.length()
 }
@@ -1311,12 +1386,15 @@ pub fn Database::sunion(self : Database, keys : Array[String]) -> Array[String] 
 }
 
 pub fn Database::sunionstore(self : Database, destination : String, keys : Array[String]) -> Int {
+  if !self.sets_valid(keys) {
+    return -1
+  }
   let result = self.sunion(keys)
   let new_set = Map([], capacity=result.length())
   for item in result {
     new_set.set(item, true)
   }
-  self.data.set(destination, RedisValue::Set(new_set))
+  self.put(destination, RedisValue::Set(new_set))
   self.expires.remove(destination)
   result.length()
 }
@@ -1350,12 +1428,15 @@ pub fn Database::sdiff(self : Database, keys : Array[String]) -> Array[String] {
 }
 
 pub fn Database::sdiffstore(self : Database, destination : String, keys : Array[String]) -> Int {
+  if !self.sets_valid(keys) {
+    return -1
+  }
   let result = self.sdiff(keys)
   let new_set = Map([], capacity=result.length())
   for item in result {
     new_set.set(item, true)
   }
-  self.data.set(destination, RedisValue::Set(new_set))
+  self.put(destination, RedisValue::Set(new_set))
   self.expires.remove(destination)
   result.length()
 }
@@ -1372,17 +1453,18 @@ pub fn Database::smove(self : Database, source : String, destination : String, v
   }
   match self.data.get(source) {
     Some(RedisValue::Set(src_set)) => {
+      let dest_set = match self.data.get(destination) {
+        Some(RedisValue::Set(d)) => d
+        None => Map([], capacity=10)
+        Some(_) => return false
+      }
       if !src_set.contains(value) {
         return false
       }
       src_set.remove(value)
       self.remove_if_empty(source, src_set.length())
-      let dest_set = match self.data.get(destination) {
-        Some(RedisValue::Set(d)) => d
-        _ => Map([], capacity=10)
-      }
       dest_set.set(value, true)
-      self.data.set(destination, RedisValue::Set(dest_set))
+      self.put(destination, RedisValue::Set(dest_set))
       true
     }
     _ => false
@@ -1447,12 +1529,12 @@ pub fn Database::zadd(self : Database, key : String, score : Float, member_val :
   self.check_expired(key) |> ignore
   let zset = match self.data.get(key) {
     Some(RedisValue::ZSet(z)) => z
-    _ => Map([], capacity=10)
+    None => Map([], capacity=10)
+    Some(_) => return false
   }
   let existed = zset.contains(member_val)
   zset.set(member_val, score)
-  self.data.set(key, RedisValue::ZSet(zset))
-  self.zset_sorted_cache.remove(key)
+  self.put(key, RedisValue::ZSet(zset))
   !existed
 }
 
@@ -1690,7 +1772,8 @@ pub fn Database::zincrby(self : Database, key : String, increment : Float, membe
   self.check_expired(key) |> ignore
   let zset = match self.data.get(key) {
     Some(RedisValue::ZSet(z)) => z
-    _ => Map([], capacity=10)
+    None => Map([], capacity=10)
+    Some(_) => return 0.0
   }
   let current_score = match zset.get(member_val) {
     Some(s) => s
@@ -1698,8 +1781,7 @@ pub fn Database::zincrby(self : Database, key : String, increment : Float, membe
   }
   let new_score = current_score + increment
   zset.set(member_val, new_score)
-  self.data.set(key, RedisValue::ZSet(zset))
-  self.zset_sorted_cache.remove(key)
+  self.put(key, RedisValue::ZSet(zset))
   new_score
 }
 
@@ -1865,7 +1947,7 @@ pub fn Database::rename(self : Database, old_key : String, new_key : String) -> 
       if old_key == new_key {
         return true
       }
-      self.data.set(new_key, value)
+      self.put(new_key, value)
       self.data.remove(old_key)
       self.zset_sorted_cache.remove(old_key)
       self.zset_sorted_cache.remove(new_key)
@@ -1919,7 +2001,7 @@ pub fn Database::info(self : Database) -> String {
   info_arr.join("\n")
 }
 
-pub fn Database::time(self : Database) -> (Int, Int) {
+pub fn Database::time(self : Database) -> (Int64, Int64) {
   let seconds = self.current_time / 1000
   let microseconds = (self.current_time % 1000) * 1000
   (seconds, microseconds)
@@ -3422,22 +3504,105 @@ test "cross_type_safety" {
   let db = Database::new()
   
   db.set("str_key", "hello") |> ignore
-  db.lpush("str_key", "item") |> ignore
-  debug_inspect(db.type_of("str_key"), content="\"list\"")
+  debug_inspect(db.lpush("str_key", "item"), content="-1")
+  debug_inspect(db.type_of("str_key"), content="\"string\"")
+  debug_inspect(db.get("str_key"), content="Some(\"hello\")")
   
   db.lpush("list_key", "item1") |> ignore
-  db.hset("list_key", "field", "value") |> ignore
-  debug_inspect(db.type_of("list_key"), content="\"hash\"")
+  debug_inspect(db.hset("list_key", "field", "value"), content="-1")
+  debug_inspect(db.type_of("list_key"), content="\"list\"")
   
   db.sadd("set_key", "member") |> ignore
-  db.zadd("set_key", 1.0, "zmember") |> ignore
-  debug_inspect(db.type_of("set_key"), content="\"zset\"")
+  debug_inspect(db.zadd("set_key", 1.0, "zmember"), content="false")
+  debug_inspect(db.type_of("set_key"), content="\"set\"")
+  
+  db.hset("hash_key", "f", "v") |> ignore
+  debug_inspect(db.incr("hash_key"), content="None")
+  debug_inspect(db.type_of("hash_key"), content="\"hash\"")
+  debug_inspect(db.append("hash_key", "x"), content="-1")
+  debug_inspect(db.type_of("hash_key"), content="\"hash\"")
   
   db.hset("hash_key", "f", "v") |> ignore
   db.set("hash_key", "string_value") |> ignore
   debug_inspect(db.type_of("hash_key"), content="\"string\"")
   
   debug_inspect(db.type_of("nonexistent"), content="\"none\"")
+}
+
+test "hmset_wrong_type_noop" {
+  let db = Database::new()
+  db.set("k", "v") |> ignore
+  db.hmset("k", ["a"], ["1"])
+  debug_inspect(db.type_of("k"), content="\"string\"")
+  debug_inspect(db.get("k"), content="Some(\"v\")")
+}
+
+test "getset_wrong_type_noop" {
+  let db = Database::new()
+  db.hset("h", "f", "v") |> ignore
+  debug_inspect(db.getset("h", "new"), content="None")
+  debug_inspect(db.type_of("h"), content="\"hash\"")
+  debug_inspect(db.hget("h", "f"), content="Some(\"v\")")
+}
+
+test "large_ttl_no_overflow" {
+  let db = Database::new()
+  db.set("k", "v") |> ignore
+  debug_inspect(db.expire("k", 2592000), content="true")
+  debug_inspect(db.ttl("k"), content="2592000")
+  debug_inspect(db.pttl("k"), content="2592000000")
+  db.advance_time(2592000000)
+  debug_inspect(db.exists("k"), content="false")
+
+  db.set_time(0)
+  db.set("k2", "v") |> ignore
+  debug_inspect(db.expireat("k2", 1700000000), content="true")
+  debug_inspect(db.pttl("k2"), content="1700000000000")
+}
+
+test "incr_supports_int64" {
+  let db = Database::new()
+  db.set("n", "2147483648") |> ignore
+  match db.incr("n") {
+    Some(v) => debug_inspect("\{v}", content="\"2147483649\"")
+    None => debug_inspect("none", content="2147483649")
+  }
+}
+
+test "hgetall_returns_copy" {
+  let db = Database::new()
+  db.hset("h", "f", "v") |> ignore
+  let snapshot = db.hgetall("h")
+  snapshot.set("f", "changed")
+  snapshot.set("new", "x")
+  debug_inspect(db.hget("h", "f"), content="Some(\"v\")")
+  debug_inspect(db.hexists("h", "new"), content="false")
+}
+
+test "zset_cache_invalidated_on_delete_and_overwrite" {
+  let db = Database::new()
+  db.zadd("z", 1.0, "a") |> ignore
+  db.zrange("z", 0, -1) |> ignore
+  db.del("z") |> ignore
+  db.zadd("z", 2.0, "b") |> ignore
+  let r = db.zrange("z", 0, -1)
+  debug_inspect(r.length(), content="1")
+  debug_inspect(r[0], content="\"b\"")
+
+  db.zadd("z2", 1.0, "a") |> ignore
+  db.zrange("z2", 0, -1) |> ignore
+  db.set("z2", "str") |> ignore
+  db.del("z2") |> ignore
+  db.zadd("z2", 5.0, "c") |> ignore
+  debug_inspect(db.zrange("z2", 0, -1)[0], content="\"c\"")
+}
+
+test "rpoplpush_same_key_preserves_ttl" {
+  let db = Database::new()
+  db.rpush("q", "only") |> ignore
+  db.expire("q", 100) |> ignore
+  debug_inspect(db.rpoplpush("q", "q"), content="Some(\"only\")")
+  debug_inspect(db.ttl("q") >= 0, content="true")
 }
 
 test "batch_extended_edge_cases" {

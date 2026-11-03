@@ -12,6 +12,13 @@ fn show_opt_int(opt : Int?) -> String {
   }
 }
 
+fn show_opt_int64(opt : Int64?) -> String {
+  match opt {
+    Some(v) => "\{v}"
+    None => "(nil)"
+  }
+}
+
 fn show_opt_float(opt : Float?) -> String {
   match opt {
     Some(v) => "\{v}"
@@ -30,8 +37,8 @@ fn main {
   println("STRLEN name: \{db.strlen("name")}")
   println("APPEND name ' Smith': \{db.append("name", " Smith")}")
   println("GET name after append: \{show_opt(db.get("name"))}")
-  println("INCR age: \{show_opt_int(db.incr("age"))}")
-  println("DECR age: \{show_opt_int(db.decr("age"))}")
+  println("INCR age: \{show_opt_int64(db.incr("age"))}")
+  println("DECR age: \{show_opt_int64(db.decr("age"))}")
 
   println("\n=== Hash 操作 ===")
   db.hset("user:1", "username", "alice") |> ignore

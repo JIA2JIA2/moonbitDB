@@ -12,6 +12,13 @@ fn show_opt_int(opt : Int?) -> String {
   }
 }
 
+fn show_opt_int64(opt : Int64?) -> String {
+  match opt {
+    Some(v) => "\{v}"
+    None => "(nil)"
+  }
+}
+
 fn show_opt_float(opt : Float?) -> String {
   match opt {
     Some(v) => "\{v}"
@@ -35,9 +42,9 @@ fn main() -> Unit {
   
   db.set("counter", "10")
   println("  SET counter 10")
-  println("  INCR counter = \{show_opt_int(db.incr("counter"))}")
-  println("  INCR counter = \{show_opt_int(db.incr("counter"))}")
-  println("  DECR counter = \{show_opt_int(db.decr("counter"))}")
+  println("  INCR counter = \{show_opt_int64(db.incr("counter"))}")
+  println("  INCR counter = \{show_opt_int64(db.incr("counter"))}")
+  println("  DECR counter = \{show_opt_int64(db.decr("counter"))}")
   
   println("\n📌 2. Hash 用户信息存储")
   println("----------------------------------------")

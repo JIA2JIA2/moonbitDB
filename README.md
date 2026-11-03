@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**88 个测试用例，全部通过**。
+当前测试覆盖：**95 个测试用例，全部通过**。
 
 ## 库导入指南
 
@@ -147,6 +147,8 @@ moonbitDB/
 ## 支持的命令
 
 共支持 **92 个命令**，覆盖 Redis 核心功能。
+
+> **类型安全约定**：对已存在但类型不匹配的 key，写操作**不会覆盖**原数据。失败返回值约定如下：`HSET`/`LPUSH`/`RPUSH`/`APPEND` 返回 `-1`，`SADD`/`ZADD` 返回 `false`，`INCR`/`DECR`/`HINCRBY` 返回 `None`，`HMSET` 为空操作，`SINTERSTORE`/`SUNIONSTORE`/`SDIFFSTORE` 返回 `-1`。时间相关 API 使用 `Int64` 毫秒，可安全表示真实 Unix 时间戳与超过 24 天的 TTL。
 
 ### String 命令
 
@@ -293,8 +295,8 @@ moonbitDB/
 | 方法 | 签名 | 说明 |
 |------|------|------|
 | `new` | `() -> Database` | 创建空数据库 |
-| `set_time` | `(self : Database, time_ms : Int) -> Unit` | 设置当前时间（毫秒） |
-| `advance_time` | `(self : Database, ms : Int) -> Unit` | 推进时间（毫秒） |
+| `set_time` | `(self : Database, time_ms : Int64) -> Unit` | 设置当前时间（毫秒） |
+| `advance_time` | `(self : Database, ms : Int64) -> Unit` | 推进时间（毫秒） |
 | `check_expired` | `(self : Database, key : String) -> Bool` | 检查 key 是否已过期（惰性清理） |
 
 #### String 操作
@@ -307,8 +309,8 @@ moonbitDB/
 | `exists` | `(self : Database, key : String) -> Bool` | 检查 key 是否存在 |
 | `append` | `(self : Database, key : String, value : String) -> Int` | 追加字符串，返回新长度 |
 | `strlen` | `(self : Database, key : String) -> Int` | 字符串长度 |
-| `incr` | `(self : Database, key : String) -> Int?` | 自增 1 |
-| `decr` | `(self : Database, key : String) -> Int?` | 自减 1 |
+| `incr` | `(self : Database, key : String) -> Int64?` | 自增 1 |
+| `decr` | `(self : Database, key : String) -> Int64?` | 自减 1 |
 | `setnx` | `(self : Database, key : String, value : String) -> Bool` | 仅当 key 不存在时设置 |
 | `setex` | `(self : Database, key : String, seconds : Int, value : String) -> Bool` | 设置值并指定过期时间 |
 | `getdel` | `(self : Database, key : String) -> String?` | 获取值并删除 key |
@@ -322,11 +324,11 @@ moonbitDB/
 | `keys_pattern` | `(self : Database, pattern : String) -> Array[String]` | 模式匹配 key |
 | `type_of` | `(self : Database, key : String) -> String` | 返回值类型 |
 | `expire` | `(self : Database, key : String, seconds : Int) -> Bool` | 设置过期时间（秒） |
-| `pexpire` | `(self : Database, key : String, milliseconds : Int) -> Bool` | 设置过期时间（毫秒） |
-| `expireat` | `(self : Database, key : String, unix_seconds : Int) -> Bool` | 设置过期时间戳（秒） |
-| `pexpireat` | `(self : Database, key : String, unix_milliseconds : Int) -> Bool` | 设置过期时间戳（毫秒） |
-| `ttl` | `(self : Database, key : String) -> Int` | 剩余生存时间（秒） |
-| `pttl` | `(self : Database, key : String) -> Int` | 剩余生存时间（毫秒） |
+| `pexpire` | `(self : Database, key : String, milliseconds : Int64) -> Bool` | 设置过期时间（毫秒） |
+| `expireat` | `(self : Database, key : String, unix_seconds : Int64) -> Bool` | 设置过期时间戳（秒） |
+| `pexpireat` | `(self : Database, key : String, unix_milliseconds : Int64) -> Bool` | 设置过期时间戳（毫秒） |
+| `ttl` | `(self : Database, key : String) -> Int64` | 剩余生存时间（秒） |
+| `pttl` | `(self : Database, key : String) -> Int64` | 剩余生存时间（毫秒） |
 | `persist` | `(self : Database, key : String) -> Bool` | 移除过期时间 |
 | `rename` | `(self : Database, old_key : String, new_key : String) -> Bool` | 重命名 key |
 | `renamenx` | `(self : Database, old_key : String, new_key : String) -> Bool` | 仅在新 key 不存在时重命名 |
@@ -344,7 +346,7 @@ moonbitDB/
 | `hexists` | `(self : Database, key : String, field : String) -> Bool` | 检查 hash 字段是否存在 |
 | `hkeys` | `(self : Database, key : String) -> Array[String]` | 获取 hash 所有字段名 |
 | `hvals` | `(self : Database, key : String) -> Array[String]` | 获取 hash 所有字段值 |
-| `hincrby` | `(self : Database, key : String, field : String, increment : Int) -> Int?` | hash 字段整数自增 |
+| `hincrby` | `(self : Database, key : String, field : String, increment : Int64) -> Int64?` | hash 字段整数自增 |
 | `hstrlen` | `(self : Database, key : String, field : String) -> Int` | hash 字段值长度 |
 
 #### List 操作
@@ -427,7 +429,7 @@ moonbitDB/
 | `ping` | `() -> String` | 返回 "PONG" |
 | `echo` | `(self : Database, message : String) -> String` | 回显消息 |
 | `info` | `(self : Database) -> String` | 服务器信息 |
-| `time` | `(self : Database) -> (Int, Int)` | 当前时间 |
+| `time` | `(self : Database) -> (Int64, Int64)` | 当前时间 |
 | `command` | `() -> Array[String]` | 支持的命令列表 |
 | `object_encoding` | `(self : Database, key : String) -> String?` | 对象内部编码 |
 
