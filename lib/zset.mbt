@@ -707,3 +707,260 @@ pub fn Database::zrangebylex(self : Database, key : String, min_bound : String, 
   }
 }
 
+pub fn Database::zrevrangebylex(
+  self : Database,
+  key : String,
+  max_bound : String,
+  min_bound : String,
+) -> Array[String] {
+  if !lex_bound_valid(min_bound) || !lex_bound_valid(max_bound) {
+    return []
+  }
+  if self.check_expired(key) {
+    return []
+  }
+  match self.data.get(key) {
+    Some(RedisValue::ZSet(_)) => {
+      let members = self.get_sorted_lex(key)
+      let result = []
+      let mut index = members.length() - 1
+      while index >= 0 {
+        let member_val = members[index]
+        if lex_lower_ok(member_val, min_bound) && lex_upper_ok(member_val, max_bound) {
+          result.push(member_val)
+        }
+        index = index - 1
+      }
+      result
+    }
+    _ => []
+  }
+}
+
+pub fn Database::zlexcount(
+  self : Database,
+  key : String,
+  min_bound : String,
+  max_bound : String,
+) -> Int {
+  if !lex_bound_valid(min_bound) || !lex_bound_valid(max_bound) {
+    return 0
+  }
+  if self.check_expired(key) {
+    return 0
+  }
+  match self.data.get(key) {
+    Some(RedisValue::ZSet(_)) => {
+      let members = self.get_sorted_lex(key)
+      let mut count = 0
+      for member_val in members {
+        if lex_lower_ok(member_val, min_bound) && lex_upper_ok(member_val, max_bound) {
+          count = count + 1
+        }
+      }
+      count
+    }
+    _ => 0
+  }
+}
+
+pub fn Database::zremrangebylex(
+  self : Database,
+  key : String,
+  min_bound : String,
+  max_bound : String,
+) -> Int {
+  if !lex_bound_valid(min_bound) || !lex_bound_valid(max_bound) {
+    return 0
+  }
+  if self.check_expired(key) {
+    return 0
+  }
+  match self.data.get(key) {
+    Some(RedisValue::ZSet(zset)) => {
+      let members = self.get_sorted_lex(key)
+      let to_remove : Array[String] = []
+      for member_val in members {
+        if lex_lower_ok(member_val, min_bound) && lex_upper_ok(member_val, max_bound) {
+          to_remove.push(member_val)
+        }
+      }
+      for member_val in to_remove {
+        zset.remove(member_val)
+      }
+      if to_remove.length() > 0 {
+        if zset.length() == 0 {
+          self.remove_if_empty(key, 0)
+        } else {
+          self.write_through_remove_zset_members(key, to_remove)
+        }
+      }
+      to_remove.length()
+    }
+    _ => 0
+  }
+}
+
+pub fn Database::zrandmember(self : Database, key : String) -> String? {
+  if self.check_expired(key) {
+    return None
+  }
+  match self.data.get(key) {
+    Some(RedisValue::ZSet(zset)) => {
+      if zset.length() == 0 {
+        None
+      } else {
+        let target = self.next_rand() % zset.length()
+        let mut index = 0
+        let mut result : String? = None
+        for member_val, _ in zset {
+          if index == target {
+            result = Some(member_val)
+            break
+          }
+          index = index + 1
+        }
+        result
+      }
+    }
+    _ => None
+  }
+}
+
+pub fn Database::zunion(self : Database, keys : Array[String]) -> Array[(String, Float)] {
+  let scores : Map[String, Float] = Map([], capacity=10)
+  for key in keys {
+    if self.check_expired(key) {
+      continue
+    }
+    match self.data.get(key) {
+      Some(RedisValue::ZSet(zset)) =>
+        for member_val, score in zset {
+          let current = match scores.get(member_val) {
+            Some(value) => value
+            None => 0.0
+          }
+          scores.set(member_val, current + score)
+        }
+      _ => ()
+    }
+  }
+  let items : Array[(String, Float)] = []
+  for member_val, score in scores {
+    items.push((member_val, score))
+  }
+  sort_by_score(items)
+}
+
+pub fn Database::zinter(self : Database, keys : Array[String]) -> Array[(String, Float)] {
+  if keys.length() == 0 {
+    return []
+  }
+  let first = if self.check_expired(keys[0]) {
+    return []
+  } else {
+    match self.data.get(keys[0]) {
+      Some(RedisValue::ZSet(zset)) => zset
+      _ => return []
+    }
+  }
+  let scores : Map[String, Float] = Map([], capacity=10)
+  for member_val, first_score in first {
+    let mut total = first_score
+    let mut present = true
+    for i = 1; i < keys.length(); i = i + 1 {
+      if self.check_expired(keys[i]) {
+        present = false
+        break
+      }
+      match self.data.get(keys[i]) {
+        Some(RedisValue::ZSet(zset)) =>
+          match zset.get(member_val) {
+            Some(score) => total = total + score
+            None => {
+              present = false
+              break
+            }
+          }
+        _ => {
+          present = false
+          break
+        }
+      }
+    }
+    if present {
+      scores.set(member_val, total)
+    }
+  }
+  let items : Array[(String, Float)] = []
+  for member_val, score in scores {
+    items.push((member_val, score))
+  }
+  sort_by_score(items)
+}
+
+pub fn Database::zdiff(self : Database, keys : Array[String]) -> Array[(String, Float)] {
+  if keys.length() == 0 {
+    return []
+  }
+  let first = if self.check_expired(keys[0]) {
+    return []
+  } else {
+    match self.data.get(keys[0]) {
+      Some(RedisValue::ZSet(zset)) => zset
+      _ => return []
+    }
+  }
+  let items : Array[(String, Float)] = []
+  for member_val, score in first {
+    let mut keep = true
+    for i = 1; i < keys.length(); i = i + 1 {
+      if self.check_expired(keys[i]) {
+        continue
+      }
+      match self.data.get(keys[i]) {
+        Some(RedisValue::ZSet(zset)) =>
+          if zset.contains(member_val) {
+            keep = false
+            break
+          }
+        _ => ()
+      }
+    }
+    if keep {
+      items.push((member_val, score))
+    }
+  }
+  sort_by_score(items)
+}
+
+pub fn Database::zscan(
+  self : Database,
+  key : String,
+  cursor : Int,
+  count : Int,
+) -> (Int, Array[(String, Float)]) {
+  if self.check_expired(key) {
+    return (0, [])
+  }
+  match self.data.get(key) {
+    Some(RedisValue::ZSet(_)) => {
+      let items = self.get_sorted_zset(key)
+      let len = items.length()
+      let limit = if count <= 0 { 10 } else { count }
+      let start = if cursor < 0 { 0 } else { cursor }
+      if start >= len {
+        return (0, [])
+      }
+      let end = if start + limit > len { len } else { start + limit }
+      let result : Array[(String, Float)] = []
+      for i = start; i < end; i = i + 1 {
+        result.push(items[i])
+      }
+      let next = if end >= len { 0 } else { end }
+      (next, result)
+    }
+    _ => (0, [])
+  }
+}
+

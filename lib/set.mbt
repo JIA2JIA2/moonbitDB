@@ -113,6 +113,33 @@ pub fn Database::smembers(self : Database, key : String) -> Array[String] {
   }
 }
 
+pub fn Database::smismember(
+  self : Database,
+  key : String,
+  members : Array[String],
+) -> Array[Bool] {
+  let result : Array[Bool] = []
+  if self.check_expired(key) {
+    for _ in members {
+      result.push(false)
+    }
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::Set(set)) => {
+        for member_val in members {
+          result.push(set.contains(member_val))
+        }
+      }
+      _ => {
+        for _ in members {
+          result.push(false)
+        }
+      }
+    }
+  }
+  result
+}
+
 pub fn Database::srem(self : Database, key : String, value : String) -> Bool {
   if self.check_expired(key) {
     false
@@ -201,6 +228,38 @@ pub fn Database::sinter(self : Database, keys : Array[String]) -> Array[String] 
     arr.push(m)
   }
   arr
+}
+
+pub fn Database::sintercard(self : Database, keys : Array[String], limit : Int) -> Int {
+  if !self.sets_valid(keys) {
+    return -1
+  }
+  if keys.length() == 0 {
+    return 0
+  }
+  let sets : Array[Map[String, Bool]] = []
+  for key in keys {
+    sets.push(self.get_set_members(key))
+  }
+  let first = sets[0]
+  let cap = if limit <= 0 { 2147483647 } else { limit }
+  let mut count = 0
+  for member_val, _ in first {
+    let mut present = true
+    for i = 1; i < sets.length(); i = i + 1 {
+      if !sets[i].contains(member_val) {
+        present = false
+        break
+      }
+    }
+    if present {
+      count = count + 1
+      if count >= cap {
+        break
+      }
+    }
+  }
+  count
 }
 
 pub fn Database::try_sinterstore(self : Database, destination : String, keys : Array[String]) -> Result[Int, RedisError] {
@@ -411,6 +470,39 @@ pub fn Database::srandmember(self : Database, key : String) -> String? {
       }
     }
     _ => None
+  }
+}
+
+pub fn Database::sscan(
+  self : Database,
+  key : String,
+  cursor : Int,
+  count : Int,
+) -> (Int, Array[String]) {
+  if self.check_expired(key) {
+    return (0, [])
+  }
+  match self.data.get(key) {
+    Some(RedisValue::Set(set)) => {
+      let members : Array[String] = []
+      for member_val, _ in set {
+        members.push(member_val)
+      }
+      let len = members.length()
+      let limit = if count <= 0 { 10 } else { count }
+      let start = if cursor < 0 { 0 } else { cursor }
+      if start >= len {
+        return (0, [])
+      }
+      let end = if start + limit > len { len } else { start + limit }
+      let result : Array[String] = []
+      for i = start; i < end; i = i + 1 {
+        result.push(members[i])
+      }
+      let next = if end >= len { 0 } else { end }
+      (next, result)
+    }
+    _ => (0, [])
   }
 }
 

@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**130 个测试用例，全部通过**。
+当前测试覆盖：**134 个测试用例，全部通过**。
 
 ### 运行基准与覆盖率
 
@@ -132,7 +132,7 @@ moonbitDB/
 │   ├── util.mbt                # 整数解析与通配符匹配
 │   ├── error.mbt               # RedisError 错误模型
 │   ├── server.mbt              # 服务器命令
-│   ├── database_wbtest.mbt     # 白盒测试（130 个用例）
+│   ├── database_wbtest.mbt     # 白盒测试（134 个用例）
 │   ├── database_property_wbtest.mbt # 属性测试
 │   ├── database_bench_test.mbt # 基准测试
 │   └── moon.pkg
@@ -159,7 +159,7 @@ moonbitDB/
 
 ## 支持的命令
 
-共支持 **104 个命令**，覆盖 Redis 核心功能。
+共支持 **119 个命令**，覆盖 Redis 核心功能。
 
 > **类型安全约定**：对已存在但类型不匹配的 key，写操作**不会覆盖**原数据。失败返回值约定如下：`HSET`/`LPUSH`/`RPUSH`/`APPEND`/`SETRANGE` 返回 `-1`，`SADD`/`ZADD`/`HSETNX` 返回 `false`，`INCR`/`DECR`/`INCRBY`/`DECRBY`/`HINCRBY` 返回 `None`，`HMSET` 为空操作，`SINTERSTORE`/`SUNIONSTORE`/`SDIFFSTORE` 返回 `-1`。时间相关 API 使用 `Int64` 毫秒，可安全表示真实 Unix 时间戳与超过 24 天的 TTL。
 
@@ -183,6 +183,7 @@ moonbitDB/
 | `SETEX` | `(key, seconds, value) -> Bool` | 设置值并指定过期时间（秒） |
 | `GETDEL` | `(key) -> String?` | 获取值并删除 key |
 | `GETSET` | `(key, value) -> String?` | 设置新值并返回旧值（清除 TTL） |
+| `GETEX` | `(key, expire_ms) -> String?` | 获取值并设置/移除 TTL（`None` 表示 PERSIST） |
 
 > `STRLEN`/`GETRANGE`/`SETRANGE` 的索引按 **UTF-16 code unit** 计数，与 Redis 的字节索引不同；中文、emoji 等场景需要字节语义时请先自行编码。
 
@@ -198,10 +199,6 @@ moonbitDB/
 | `PEXPIRE` | `(key, ms) -> Bool` | 设置过期时间（毫秒） |
 | `EXPIREAT` | `(key, unix_seconds) -> Bool` | 设置过期时间戳（秒） |
 | `PEXPIREAT` | `(key, unix_ms) -> Bool` | 设置过期时间戳（毫秒） |
-
-> `EXPIRE`/`PEXPIRE`/`EXPIREAT` 在时间计算溢出时返回 `false`，不会写入非法 TTL；`advance_time` 溢出时不推进时间。
-
-> `KEYS_PATTERN` 对含字面前缀的模式（如 `user:1*`）复用有序 key 快照并二分定位候选区间；纯通配符模式仍走全量扫描。
 | `TTL` | `(key) -> Int64` | 剩余生存时间（秒，四舍五入），-1 永久，-2 不存在 |
 | `PTTL` | `(key) -> Int64` | 剩余生存时间（毫秒） |
 | `PERSIST` | `(key) -> Bool` | 移除过期时间 |
@@ -211,6 +208,10 @@ moonbitDB/
 | `COPY` | `(source, destination) -> Bool` | 复制 key（深拷贝，不复制 TTL，目标已存在则失败） |
 | `TOUCH` | `(keys) -> Int` | 返回存在的 key 数量 |
 | `UNLINK` | `(key) -> Bool` | 删除 key（与 DEL 语义一致） |
+
+> `EXPIRE`/`PEXPIRE`/`EXPIREAT` 在时间计算溢出时返回 `false`，不会写入非法 TTL；`advance_time` 溢出时不推进时间。
+
+> `KEYS_PATTERN` 对含字面前缀的模式（如 `user:1*`）复用有序 key 快照并二分定位候选区间；纯通配符模式仍走全量扫描。
 
 ### Hash 命令
 
@@ -227,6 +228,7 @@ moonbitDB/
 | `HVALS` | `(key) -> Array[String]` | 获取 hash 所有字段值 |
 | `HINCRBY` | `(key, field, increment) -> Int64?` | hash 字段整数值自增（非数字返回 None） |
 | `HSTRLEN` | `(key, field) -> Int` | hash 字段值长度 |
+| `HSCAN` | `(key, cursor, count) -> (Int, Array[(String, String)])` | 增量遍历 hash 字段 |
 
 ### List 命令
 
@@ -245,6 +247,7 @@ moonbitDB/
 | `LPUSHX` | `(key, value) -> Int` | 仅当列表存在时左端插入 |
 | `RPUSHX` | `(key, value) -> Int` | 仅当列表存在时右端插入 |
 | `RPOPLPUSH` | `(source, dest) -> String?` | source 右端弹出插入 dest 左端 |
+| `LMOVE` | `(source, dest, from_left, to_left) -> String?` | 从 source 指定端弹出并插入 dest 指定端 |
 | `LTRIM` | `(key, start, end) -> Bool` | 裁剪列表至指定区间（区间外删除） |
 
 ### Set 命令
@@ -256,6 +259,8 @@ moonbitDB/
 | `SREM` | `(key, value) -> Bool` | 删除成员 |
 | `SCARD` | `(key) -> Int` | 成员数量 |
 | `SISMEMBER` | `(key, value) -> Bool` | 检查成员是否存在 |
+| `SMISMEMBER` | `(key, members) -> Array[Bool]` | 批量检查成员是否存在 |
+| `SINTERCARD` | `(keys, limit) -> Int` | 交集基数（limit<=0 不限制） |
 | `SINTER` | `(keys) -> Array[String]` | 多集合交集 |
 | `SINTERSTORE` | `(dest, keys) -> Int` | 交集存储到 dest |
 | `SUNION` | `(keys) -> Array[String]` | 多集合并集 |
@@ -265,6 +270,7 @@ moonbitDB/
 | `SMOVE` | `(source, dest, value) -> Bool` | 跨集合移动元素 |
 | `SPOP` | `(key) -> String?` | 随机弹出元素 |
 | `SRANDMEMBER` | `(key) -> String?` | 随机返回一个成员（不删除） |
+| `SSCAN` | `(key, cursor, count) -> (Int, Array[String])` | 增量遍历集合成员 |
 
 ### Sorted Set 命令
 
@@ -277,6 +283,9 @@ moonbitDB/
 | `ZREM` | `(key, member) -> Bool` | 删除成员 |
 | `ZRANGEBYSCORE` | `(key, min, max) -> Array[String]` | 按分数范围获取 |
 | `ZRANGEBYLEX` | `(key, min, max) -> Array[String]` | 按成员字典序范围获取（`-`/`+`/`[a`/`(a`） |
+| `ZREVRANGEBYLEX` | `(key, max, min) -> Array[String]` | 按成员字典序降序获取 |
+| `ZLEXCOUNT` | `(key, min, max) -> Int` | 统计字典序范围内成员数 |
+| `ZREMRANGEBYLEX` | `(key, min, max) -> Int` | 按字典序范围删除 |
 | `ZCOUNT` | `(key, min, max) -> Int` | 统计分数范围内成员数 |
 | `ZREVRANGE` | `(key, start, end) -> Array[String]` | 按排名降序获取范围 |
 | `ZREVRANGEBYSCORE` | `(key, max, min) -> Array[String]` | 按分数降序范围获取 |
@@ -288,6 +297,11 @@ moonbitDB/
 | `ZPOPMIN` | `(key) -> (String, Float)?` | 弹出最小分数成员 |
 | `ZPOPMAX` | `(key) -> (String, Float)?` | 弹出最大分数成员 |
 | `ZMSCORE` | `(key, members) -> Array[Float?]` | 批量获取成员分数 |
+| `ZRANDMEMBER` | `(key) -> String?` | 随机返回一个成员（不删除） |
+| `ZUNION` | `(keys) -> Array[(String, Float)]` | 多集合并集（分数求和） |
+| `ZINTER` | `(keys) -> Array[(String, Float)]` | 多集合交集（分数求和） |
+| `ZDIFF` | `(keys) -> Array[(String, Float)]` | 多集合差集（保留第一个集合分数） |
+| `ZSCAN` | `(key, cursor, count) -> (Int, Array[(String, Float)])` | 增量遍历成员与分数 |
 
 > 分数相同时按 member 字典序排列（与 Redis 语义一致）。`ZRANGEBYSCORE`/`ZCOUNT` 使用二分查找定位分数区间。
 > `ZRANGE ... WITHSCORES` 对应 `zrange_with_scores`/`zrevrange_with_scores` 方法，返回 `(member, score)` 数组。`ZRANGEBYLEX` 要求集合内分数一致，否则结果不具备 Redis 语义。
@@ -297,6 +311,7 @@ moonbitDB/
 | 命令 | 签名 | 说明 |
 |------|------|------|
 | `MSET` | `(keys, values) -> Unit` | 批量设置多个 key-value |
+| `MSETNX` | `(keys, values) -> Bool` | 仅当所有 key 都不存在时批量设置 |
 | `MGET` | `(keys) -> Array[String?]` | 批量获取多个 key 的值 |
 | `MDEL` | `(keys) -> Int` | 批量删除，返回删除数量 |
 | `HMSET` | `(key, fields, values) -> Unit` | 批量设置 hash 字段 |
@@ -374,9 +389,13 @@ match db.try_incrby("name", 1) {
 | `incrby` | `(self : Database, key : String, increment : Int64) -> Int64?` | 增加指定整数 |
 | `decrby` | `(self : Database, key : String, decrement : Int64) -> Int64?` | 减少指定整数 |
 | `setnx` | `(self : Database, key : String, value : String) -> Bool` | 仅当 key 不存在时设置 |
+| `setxx` | `(self : Database, key : String, value : String) -> Bool` | 仅当 key 存在时设置 |
+| `set_with_options` | `(self : Database, key : String, value : String, nx : Bool, xx : Bool, ex_seconds : Int?, px_milliseconds : Int64?, keep_ttl : Bool) -> Result[Bool, RedisError]` | 完整 SET 选项 |
 | `setex` | `(self : Database, key : String, seconds : Int, value : String) -> Bool` | 设置值并指定过期时间 |
 | `getdel` | `(self : Database, key : String) -> String?` | 获取值并删除 key |
 | `getset` | `(self : Database, key : String, value : String) -> String?` | 设置新值并返回旧值 |
+| `getex` | `(self : Database, key : String, expire_ms : Int64?) -> String?` | 获取值并设置/移除 TTL |
+| `try_getex` | `(self : Database, key : String, expire_ms : Int64?) -> Result[String, RedisError]` | 精确错误版 GETEX |
 
 #### Key 操作
 
@@ -386,6 +405,7 @@ match db.try_incrby("name", 1) {
 | `keys_pattern` | `(self : Database, pattern : String) -> Array[String]` | 模式匹配 key |
 | `scan` | `(self : Database, cursor : Int, count : Int) -> (Int, Array[String])` | 游标遍历 key |
 | `scan_match` | `(self : Database, cursor : Int, count : Int, pattern : String) -> (Int, Array[String])` | 带模式匹配的游标遍历 |
+| `scan_type` | `(self : Database, cursor : Int, count : Int, type_name : String) -> (Int, Array[String])` | 带类型过滤的游标遍历 |
 | `type_of` | `(self : Database, key : String) -> String` | 返回值类型 |
 | `expire` | `(self : Database, key : String, seconds : Int) -> Bool` | 设置过期时间（秒） |
 | `pexpire` | `(self : Database, key : String, milliseconds : Int64) -> Bool` | 设置过期时间（毫秒） |
@@ -410,6 +430,7 @@ match db.try_incrby("name", 1) {
 | `try_hget` | `(self : Database, key : String, field : String) -> Result[String, RedisError]` | 精确错误版获取 hash 字段 |
 | `try_hset` | `(self : Database, key : String, field : String, value : String) -> Result[Int, RedisError]` | 精确错误版设置字段 |
 | `hsetnx` | `(self : Database, key : String, field : String, value : String) -> Bool` | 仅当字段不存在时设置 |
+| `hscan` | `(self : Database, key : String, cursor : Int, count : Int) -> (Int, Array[(String, String)])` | 增量遍历 hash 字段 |
 | `hget` | `(self : Database, key : String, field : String) -> String?` | 获取 hash 字段 |
 | `hdel` | `(self : Database, key : String, field : String) -> Bool` | 删除 hash 字段 |
 | `hgetall` | `(self : Database, key : String) -> Map[String, String]` | 获取所有字段和值 |
@@ -445,6 +466,7 @@ match db.try_incrby("name", 1) {
 | `rpushx` | `(self : Database, key : String, value : String) -> Int` | 仅当列表存在时右端插入 |
 | `rpoplpush` | `(self : Database, source : String, destination : String) -> String?` | source 右端弹出插入 dest 左端 |
 | `ltrim` | `(self : Database, key : String, start : Int, end : Int) -> Bool` | 裁剪列表至指定区间 |
+| `lmove` | `(self : Database, source : String, destination : String, from_left : Bool, to_left : Bool) -> String?` | 在列表间移动元素 |
 
 #### Set 操作
 
@@ -459,6 +481,9 @@ match db.try_incrby("name", 1) {
 | `srem` | `(self : Database, key : String, value : String) -> Bool` | 删除成员 |
 | `scard` | `(self : Database, key : String) -> Int` | 成员数量 |
 | `sismember` | `(self : Database, key : String, value : String) -> Bool` | 检查成员是否存在 |
+| `smismember` | `(self : Database, key : String, members : Array[String]) -> Array[Bool]` | 批量检查成员是否存在 |
+| `sintercard` | `(self : Database, keys : Array[String], limit : Int) -> Int` | 交集基数 |
+| `sscan` | `(self : Database, key : String, cursor : Int, count : Int) -> (Int, Array[String])` | 增量遍历集合成员 |
 | `sinter` | `(self : Database, keys : Array[String]) -> Array[String]` | 多集合交集（类型错误返回空数组） |
 | `try_sinter` | `(self : Database, keys : Array[String]) -> Result[Array[String], RedisError]` | 精确错误版多集合交集 |
 | `sinterstore` | `(self : Database, destination : String, keys : Array[String]) -> Int` | 交集存储到 dest |
@@ -485,9 +510,17 @@ match db.try_incrby("name", 1) {
 | `zcard` | `(self : Database, key : String) -> Int` | 成员数量 |
 | `zscore` | `(self : Database, key : String, member_val : String) -> Float?` | 获取成员分数 |
 | `try_zscore` | `(self : Database, key : String, member_val : String) -> Result[Float, RedisError]` | 精确错误版获取成员分数 |
+| `zrandmember` | `(self : Database, key : String) -> String?` | 随机返回一个成员 |
+| `zunion` | `(self : Database, keys : Array[String]) -> Array[(String, Float)]` | 多集合并集（分数求和） |
+| `zinter` | `(self : Database, keys : Array[String]) -> Array[(String, Float)]` | 多集合交集（分数求和） |
+| `zdiff` | `(self : Database, keys : Array[String]) -> Array[(String, Float)]` | 多集合差集 |
+| `zscan` | `(self : Database, key : String, cursor : Int, count : Int) -> (Int, Array[(String, Float)])` | 增量遍历成员与分数 |
 | `zrem` | `(self : Database, key : String, member_val : String) -> Bool` | 删除成员 |
 | `zrangebyscore` | `(self : Database, key : String, min_score : Float, max_score : Float) -> Array[String]` | 按分数范围获取 |
 | `zrangebylex` | `(self : Database, key : String, min_bound : String, max_bound : String) -> Array[String]` | 按成员字典序范围获取 |
+| `zrevrangebylex` | `(self : Database, key : String, max_bound : String, min_bound : String) -> Array[String]` | 按成员字典序降序获取 |
+| `zlexcount` | `(self : Database, key : String, min_bound : String, max_bound : String) -> Int` | 统计字典序范围内成员数 |
+| `zremrangebylex` | `(self : Database, key : String, min_bound : String, max_bound : String) -> Int` | 按字典序范围删除 |
 | `zrange_with_scores` | `(self : Database, key : String, start : Int, end : Int) -> Array[(String, Float)]` | 按排名升序返回成员与分数 |
 | `zrevrange_with_scores` | `(self : Database, key : String, start : Int, end : Int) -> Array[(String, Float)]` | 按排名降序返回成员与分数 |
 | `zcount` | `(self : Database, key : String, min_score : Float, max_score : Float) -> Int` | 统计分数范围内成员数 |
@@ -508,6 +541,7 @@ match db.try_incrby("name", 1) {
 | 方法 | 签名 | 说明 |
 |------|------|------|
 | `mset` | `(self : Database, keys : Array[String], values : Array[String]) -> Unit` | 批量设置（长度不一致时整体不写入） |
+| `msetnx` | `(self : Database, keys : Array[String], values : Array[String]) -> Bool` | 仅当所有 key 不存在时批量设置 |
 | `try_mset` | `(self : Database, keys : Array[String], values : Array[String]) -> Result[Unit, RedisError]` | 精确错误版批量设置 |
 | `mget` | `(self : Database, keys : Array[String]) -> Array[String?]` | 批量获取 |
 | `mdel` | `(self : Database, keys : Array[String]) -> Int` | 批量删除 |
@@ -694,17 +728,17 @@ moon run examples/cli_repl --target native
 - Set — 集合（无序唯一元素）
 - Sorted Set — 有序集合（分数排序）
 
-**命令语义**（8 大命令组，104 个命令）：
+**命令语义**（8 大命令组，119 个命令）：
 
 | 命令组 | 命令数量 | 代表命令 |
 |--------|----------|----------|
-| String | 16 | SET, GET, DEL, EXISTS, APPEND, STRLEN, GETRANGE, SETRANGE, INCR, DECR, INCRBY, DECRBY, SETNX, SETEX, GETDEL, GETSET |
+| String | 17 | SET, GET, DEL, EXISTS, APPEND, STRLEN, GETRANGE, SETRANGE, INCR, DECR, INCRBY, DECRBY, SETNX, SETEX, GETDEL, GETSET, GETEX |
 | Key | 17 | KEYS, KEYS_PATTERN, SCAN, TYPE, EXPIRE, PEXPIRE, EXPIREAT, PEXPIREAT, TTL, PTTL, PERSIST, RENAME, RENAMENX, RANDOMKEY, COPY, TOUCH, UNLINK |
-| Hash | 11 | HSET, HSETNX, HGET, HDEL, HGETALL, HLEN, HEXISTS, HKEYS, HVALS, HINCRBY, HSTRLEN |
-| List | 14 | LPUSH, RPUSH, LPOP, RPOP, LLEN, LRANGE, LINDEX, LSET, LREM, LINSERT, LPUSHX, RPUSHX, RPOPLPUSH, LTRIM |
-| Set | 14 | SADD, SMEMBERS, SREM, SCARD, SISMEMBER, SINTER, SINTERSTORE, SUNION, SUNIONSTORE, SDIFF, SDIFFSTORE, SMOVE, SPOP, SRANDMEMBER |
-| Sorted Set | 18 | ZADD, ZRANGE, ZCARD, ZSCORE, ZREM, ZRANGEBYSCORE, ZRANGEBYLEX, ZCOUNT, ZREVRANGE, ZREVRANGEBYSCORE, ZRANK, ZREVRANK, ZINCRBY, ZREMRANGEBYRANK, ZREMRANGEBYSCORE, ZPOPMIN, ZPOPMAX, ZMSCORE |
-| 批量操作 | 5 | MSET, MGET, MDEL, HMSET, HMGET |
+| Hash | 12 | HSET, HSETNX, HGET, HDEL, HGETALL, HLEN, HEXISTS, HKEYS, HVALS, HINCRBY, HSTRLEN, HSCAN |
+| List | 15 | LPUSH, RPUSH, LPOP, RPOP, LLEN, LRANGE, LINDEX, LSET, LREM, LINSERT, LPUSHX, RPUSHX, RPOPLPUSH, LMOVE, LTRIM |
+| Set | 17 | SADD, SMEMBERS, SREM, SCARD, SISMEMBER, SMISMEMBER, SINTER, SINTERCARD, SINTERSTORE, SUNION, SUNIONSTORE, SDIFF, SDIFFSTORE, SMOVE, SPOP, SRANDMEMBER, SSCAN |
+| Sorted Set | 26 | ZADD, ZRANGE, ZCARD, ZSCORE, ZREM, ZRANGEBYSCORE, ZRANGEBYLEX, ZREVRANGEBYLEX, ZLEXCOUNT, ZCOUNT, ZREVRANGE, ZREVRANGEBYSCORE, ZRANK, ZREVRANK, ZINCRBY, ZREMRANGEBYRANK, ZREMRANGEBYSCORE, ZREMRANGEBYLEX, ZPOPMIN, ZPOPMAX, ZMSCORE, ZRANDMEMBER, ZUNION, ZINTER, ZDIFF, ZSCAN |
+| 批量操作 | 6 | MSET, MSETNX, MGET, MDEL, HMSET, HMGET |
 | 服务器 | 9 | DBSIZE, FLUSHDB, FLUSHALL, PING, ECHO, INFO, TIME, COMMAND, OBJECT_ENCODING |
 
 **Key 过期机制**：

@@ -3015,3 +3015,244 @@ test "keys_pattern_prefix_pruning" {
   @test.assert_eq(db.keys_pattern("product:*").length(), 1)
   @test.assert_eq(db.keys_pattern("*").length(), 7)
 }
+
+test "set_options_and_getex" {
+  let db = Database::new()
+
+  @test.assert_eq(
+    match db.set_with_options("k", "v", true, false, None, None, false) {
+      Ok(applied) => applied
+      Err(_) => false
+    },
+    true,
+  )
+  @test.assert_eq(
+    match db.set_with_options("k", "v2", true, false, None, None, false) {
+      Ok(applied) => applied
+      Err(_) => false
+    },
+    false,
+  )
+  @test.assert_eq(db.get("k"), Some("v"))
+  @test.assert_eq(
+    match db.set_with_options("missing", "v", false, true, None, None, false) {
+      Ok(applied) => applied
+      Err(_) => true
+    },
+    false,
+  )
+  @test.assert_eq(db.setxx("k", "v3"), true)
+  @test.assert_eq(db.get("k"), Some("v3"))
+  @test.assert_eq(db.setxx("missing", "v"), false)
+
+  @test.assert_eq(
+    match db.set_with_options("ex", "v", false, false, Some(10), None, false) {
+      Ok(applied) => applied
+      Err(_) => false
+    },
+    true,
+  )
+  @test.assert_eq(db.ttl("ex"), 10)
+  @test.assert_eq(
+    match db.set_with_options("px", "v", false, false, None, Some(1500L), false) {
+      Ok(applied) => applied
+      Err(_) => false
+    },
+    true,
+  )
+  @test.assert_eq(db.pttl("px"), 1500)
+
+  db.set("keep", "v") |> ignore
+  db.expire("keep", 100) |> ignore
+  @test.assert_eq(
+    match db.set_with_options("keep", "v2", false, false, None, None, true) {
+      Ok(applied) => applied
+      Err(_) => false
+    },
+    true,
+  )
+  @test.assert_eq(db.ttl("keep"), 100)
+
+  @test.assert_eq(
+    match db.set_with_options("x", "v", true, true, None, None, false) {
+      Err(RedisError::InvalidArgument) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(
+    match db.set_with_options("x", "v", false, false, Some(10), Some(10L), false) {
+      Err(RedisError::InvalidArgument) => true
+      _ => false
+    },
+    true,
+  )
+
+  db.set("g", "v") |> ignore
+  @test.assert_eq(
+    match db.try_getex("g", Some(20L)) {
+      Ok(value) => value
+      Err(_) => ""
+    },
+    "v",
+  )
+  @test.assert_eq(db.pttl("g"), 20)
+  @test.assert_eq(
+    match db.try_getex("g", None) {
+      Ok(value) => value
+      Err(_) => ""
+    },
+    "v",
+  )
+  @test.assert_eq(db.ttl("g"), -1)
+  @test.assert_eq(
+    match db.try_getex("missing", None) {
+      Err(RedisError::NotFound) => true
+      _ => false
+    },
+    true,
+  )
+
+  @test.assert_eq(db.msetnx(["a", "b"], ["1", "2"]), true)
+  @test.assert_eq(db.msetnx(["b", "c"], ["x", "3"]), false)
+  @test.assert_eq(db.exists("c"), false)
+  @test.assert_eq(db.get("b"), Some("2"))
+}
+
+test "set_and_list_extended_commands" {
+  let db = Database::new()
+  db.sadd_all("s1", ["a", "b", "c"]) |> ignore
+  db.sadd_all("s2", ["b", "c", "d"]) |> ignore
+
+  @test.assert_eq(db.sintercard(["s1", "s2"], 0), 2)
+  @test.assert_eq(db.sintercard(["s1", "s2"], 1), 1)
+  @test.assert_eq(db.smismember("s1", ["a", "z"]), [true, false])
+  @test.assert_eq(db.smismember("missing", ["a"]), [false])
+
+  db.rpush_all("q", ["a", "b", "c"]) |> ignore
+  @test.assert_eq(
+    match db.lmove("q", "q", true, false) {
+      Some(value) => value
+      None => ""
+    },
+    "a",
+  )
+  @test.assert_eq(db.lrange("q", 0, -1), ["b", "c", "a"])
+  @test.assert_eq(
+    match db.lmove("q", "q", false, true) {
+      Some(value) => value
+      None => ""
+    },
+    "a",
+  )
+  @test.assert_eq(db.lrange("q", 0, -1), ["a", "b", "c"])
+  @test.assert_eq(
+    match db.lmove("q", "dest", true, true) {
+      Some(value) => value
+      None => ""
+    },
+    "a",
+  )
+  @test.assert_eq(db.lrange("q", 0, -1), ["b", "c"])
+  @test.assert_eq(db.lrange("dest", 0, -1), ["a"])
+
+  db.set("str", "v") |> ignore
+  @test.assert_eq(
+    match db.lmove("q", "str", true, true) {
+      Some(_) => true
+      None => false
+    },
+    false,
+  )
+  @test.assert_eq(db.lrange("q", 0, -1), ["b", "c"])
+}
+
+test "zset_extended_commands" {
+  let db = Database::new()
+  db.zadd("z1", 1.0, "a") |> ignore
+  db.zadd("z1", 2.0, "b") |> ignore
+  db.zadd("z1", 3.0, "c") |> ignore
+  db.zadd("z2", 10.0, "b") |> ignore
+  db.zadd("z2", 20.0, "c") |> ignore
+  db.zadd("z2", 30.0, "d") |> ignore
+
+  @test.assert_eq(
+    db.zunion(["z1", "z2"]),
+    [("a", 1.0), ("b", 12.0), ("c", 23.0), ("d", 30.0)],
+  )
+  @test.assert_eq(db.zinter(["z1", "z2"]), [("b", 12.0), ("c", 23.0)])
+  @test.assert_eq(db.zdiff(["z1", "z2"]), [("a", 1.0)])
+  @test.assert_eq(db.zdiff(["z1", "missing"]), [("a", 1.0), ("b", 2.0), ("c", 3.0)])
+  @test.assert_eq(
+    match db.zrandmember("z1") {
+      Some(_) => true
+      None => false
+    },
+    true,
+  )
+
+  for member_val in ["a", "aa", "b", "c"] {
+    db.zadd("lex", 0.0, member_val) |> ignore
+  }
+  @test.assert_eq(db.zrevrangebylex("lex", "+", "-"), ["c", "b", "aa", "a"])
+  @test.assert_eq(db.zlexcount("lex", "[a", "(c"), 3)
+  @test.assert_eq(db.zremrangebylex("lex", "[a", "(c"), 3)
+  @test.assert_eq(db.zrangebylex("lex", "-", "+"), ["c"])
+
+  for i = 0; i < 6; i = i + 1 {
+    db.zadd("zs", Float::from_int(i), "m:\{i}") |> ignore
+  }
+  let (next, batch) = db.zscan("zs", 0, 2)
+  @test.assert_eq(batch.length(), 2)
+  @test.assert_eq(next, 2)
+  let (next2, batch2) = db.zscan("zs", next, 100)
+  @test.assert_eq(batch2.length(), 4)
+  @test.assert_eq(next2, 0)
+}
+
+test "scan_variants" {
+  let db = Database::new()
+  db.set("str", "v") |> ignore
+  db.hmset("h", ["f1", "f2", "f3"], ["v1", "v2", "v3"])
+  db.rpush_all("list", ["a", "b"]) |> ignore
+  db.sadd_all("set", ["a", "b", "c"]) |> ignore
+  db.zadd("zset", 1.0, "a") |> ignore
+
+  let (_, strings) = db.scan_type(0, 100, "string")
+  @test.assert_eq(strings, ["str"])
+  let (_, hashes) = db.scan_type(0, 100, "hash")
+  @test.assert_eq(hashes, ["h"])
+  let (_, sets) = db.scan_type(0, 100, "set")
+  @test.assert_eq(sets, ["set"])
+
+  let seen : Map[String, String] = Map([], capacity=3)
+  let mut cursor = 0
+  while true {
+    let (next, pairs) = db.hscan("h", cursor, 2)
+    for item in pairs {
+      let (field, value) = item
+      seen.set(field, value)
+    }
+    if next == 0 {
+      break
+    }
+    cursor = next
+  }
+  @test.assert_eq(seen.length(), 3)
+  @test.assert_eq(seen.get("f2"), Some("v2"))
+
+  let members : Map[String, Bool] = Map([], capacity=3)
+  let mut cursor2 = 0
+  while true {
+    let (next, batch) = db.sscan("set", cursor2, 2)
+    for member_val in batch {
+      members.set(member_val, true)
+    }
+    if next == 0 {
+      break
+    }
+    cursor2 = next
+  }
+  @test.assert_eq(members.length(), 3)
+  @test.assert_eq(members.contains("c"), true)
+}

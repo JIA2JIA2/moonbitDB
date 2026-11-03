@@ -159,5 +159,18 @@ fn main {
   println("TYPE leaderboard: \{db.type_of("leaderboard")}")
   println("TYPE nonexistent: \{db.type_of("nonexistent")}")
 
+  println("\n=== 扩展命令 ===")
+  let (hscan_cursor, hscan_batch) = db.hscan("user:1", 0, 2)
+  println("HSCAN user:1 0 2: cursor=\{hscan_cursor}, fields=\{hscan_batch.length()}")
+  println("LMOVE tasks tasks LEFT RIGHT: \{show_opt(db.lmove("tasks", "tasks", true, false))}")
+  db.sadd_all("tags:other", ["tech", "database"]) |> ignore
+  println("SINTERCARD tags: \{db.sintercard(["tags:post:1", "tags:other"], 0)}")
+  let flags = db.smismember("tags:post:1", ["tech", "database"])
+  println("SMISMEMBER: tech=\{flags[0]}, database=\{flags[1]}")
+  println("MSETNX with existing: \{db.msetnx(["name", "nx"], ["x", "y"])}")
+  println("ZUNION leaderboard: \{db.zunion(["leaderboard"]).length()}")
+  let (zscan_cursor, zscan_batch) = db.zscan("leaderboard", 0, 2)
+  println("ZSCAN leaderboard 0 2: cursor=\{zscan_cursor}, members=\{zscan_batch.length()}")
+
   println("\n✅ 基本使用示例运行完成！")
 }

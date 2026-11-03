@@ -249,3 +249,40 @@ pub fn Database::hsetnx(self : Database, key : String, field : String, value : S
   }
 }
 
+pub fn Database::hscan(
+  self : Database,
+  key : String,
+  cursor : Int,
+  count : Int,
+) -> (Int, Array[(String, String)]) {
+  if self.check_expired(key) {
+    return (0, [])
+  }
+  match self.data.get(key) {
+    Some(RedisValue::Hash(hash)) => {
+      let fields : Array[String] = []
+      for field, _ in hash {
+        fields.push(field)
+      }
+      let len = fields.length()
+      let limit = if count <= 0 { 10 } else { count }
+      let start = if cursor < 0 { 0 } else { cursor }
+      if start >= len {
+        return (0, [])
+      }
+      let end = if start + limit > len { len } else { start + limit }
+      let result : Array[(String, String)] = []
+      for i = start; i < end; i = i + 1 {
+        let field = fields[i]
+        match hash.get(field) {
+          Some(value) => result.push((field, value))
+          None => ()
+        }
+      }
+      let next = if end >= len { 0 } else { end }
+      (next, result)
+    }
+    _ => (0, [])
+  }
+}
+

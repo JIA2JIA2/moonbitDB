@@ -372,6 +372,76 @@ pub fn Database::rpoplpush(self : Database, source : String, destination : Strin
   }
 }
 
+pub fn Database::lmove(
+  self : Database,
+  source : String,
+  destination : String,
+  from_left : Bool,
+  to_left : Bool,
+) -> String? {
+  if self.check_expired(source) {
+    return None
+  }
+  if source == destination {
+    match self.data.get(source) {
+      Some(RedisValue::List(deque)) => {
+        let value = if from_left {
+          deque.pop_front()
+        } else {
+          deque.pop_back()
+        }
+        match value {
+          Some(val) => {
+            if to_left {
+              deque.push_front(val)
+            } else {
+              deque.push_back(val)
+            }
+            self.put(source, RedisValue::List(deque))
+            Some(val)
+          }
+          None => None
+        }
+      }
+      _ => None
+    }
+  } else {
+    self.check_expired(destination) |> ignore
+    let dest_deque = match self.data.get(destination) {
+      Some(RedisValue::List(d)) => d
+      None => Deque::new()
+      Some(_) => return None
+    }
+    match self.data.get(source) {
+      Some(RedisValue::List(source_deque)) => {
+        let value = if from_left {
+          source_deque.pop_front()
+        } else {
+          source_deque.pop_back()
+        }
+        match value {
+          Some(val) => {
+            if source_deque.length() == 0 {
+              self.delete_key(source)
+            } else {
+              self.put(source, RedisValue::List(source_deque))
+            }
+            if to_left {
+              dest_deque.push_front(val)
+            } else {
+              dest_deque.push_back(val)
+            }
+            self.put(destination, RedisValue::List(dest_deque))
+            Some(val)
+          }
+          None => None
+        }
+      }
+      _ => None
+    }
+  }
+}
+
 pub fn Database::ltrim(self : Database, key : String, start : Int, end : Int) -> Bool {
   if self.check_expired(key) {
     return false

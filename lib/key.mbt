@@ -390,6 +390,22 @@ pub fn Database::scan_match(
   (next, result)
 }
 
+pub fn Database::scan_type(
+  self : Database,
+  cursor : Int,
+  count : Int,
+  type_name : String,
+) -> (Int, Array[String]) {
+  let (next, keys) = self.scan(cursor, count)
+  let result : Array[String] = []
+  for key in keys {
+    if self.type_of(key) == type_name {
+      result.push(key)
+    }
+  }
+  (next, result)
+}
+
 pub fn Database::touch(self : Database, keys : Array[String]) -> Int {
   let mut count = 0
   for key in keys {
