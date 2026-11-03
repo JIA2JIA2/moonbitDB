@@ -2459,108 +2459,108 @@ test "zset_rank_and_lex_cache" {
 
 test "try_api_error_model" {
   let db = Database::new()
-  debug_inspect(
+  @test.assert_eq(
     match db.try_get("missing") {
       Err(RedisError::NotFound) => true
       _ => false
     },
-    content="true",
+    true,
   )
   db.hset("h", "f", "v") |> ignore
-  debug_inspect(
+  @test.assert_eq(
     match db.try_get("h") {
       Err(RedisError::WrongType) => true
       _ => false
     },
-    content="true",
+    true,
   )
 
   db.set("s", "10") |> ignore
-  debug_inspect(
+  @test.assert_eq(
     match db.try_get("s") {
       Ok(value) => value
       _ => ""
     },
-    content="\"10\"",
+    "10",
   )
-  debug_inspect(
+  @test.assert_eq(
     match db.try_incrby("s", 5) {
       Ok(value) => "\{value}"
       Err(_) => "err"
     },
-    content="\"15\"",
+    "15",
   )
   db.set("bad", "x") |> ignore
-  debug_inspect(
+  @test.assert_eq(
     match db.try_incrby("bad", 1) {
       Err(RedisError::NotInteger) => true
       _ => false
     },
-    content="true",
+    true,
   )
-  debug_inspect(
+  @test.assert_eq(
     match db.try_incrby("h", 1) {
       Err(RedisError::WrongType) => true
       _ => false
     },
-    content="true",
+    true,
   )
 
-  debug_inspect(
+  @test.assert_eq(
     match db.try_hincrby("h", "f", 1) {
       Err(RedisError::NotInteger) => true
       _ => false
     },
-    content="true",
+    true,
   )
-  debug_inspect(
+  @test.assert_eq(
     match db.try_hset("s", "f", "v") {
       Err(RedisError::WrongType) => true
       _ => false
     },
-    content="true",
+    true,
   )
-  debug_inspect(
+  @test.assert_eq(
     match db.try_lpush("s", "x") {
       Err(RedisError::WrongType) => true
       _ => false
     },
-    content="true",
+    true,
   )
-  debug_inspect(
+  @test.assert_eq(
     match db.try_sadd("s", "x") {
       Err(RedisError::WrongType) => true
       _ => false
     },
-    content="true",
+    true,
   )
-  debug_inspect(
+  @test.assert_eq(
     match db.try_zadd("s", 1.0, "x") {
       Err(RedisError::WrongType) => true
       _ => false
     },
-    content="true",
+    true,
   )
-  debug_inspect(
+  @test.assert_eq(
     match db.try_zincrby("s", 1.0, "x") {
       Err(RedisError::WrongType) => true
       _ => false
     },
-    content="true",
+    true,
   )
-  debug_inspect(
+  @test.assert_eq(
     match db.try_setrange("s", -1, "x") {
       Err(RedisError::InvalidArgument) => true
       _ => false
     },
-    content="true",
+    true,
   )
-  debug_inspect(
+  @test.assert_eq(
     match db.try_sinterstore("dest", ["s"]) {
       Err(RedisError::WrongType) => true
       _ => false
     },
-    content="true",
+    true,
   )
   @test.assert_eq(RedisError::WrongType.message().length() > 0, true)
 }

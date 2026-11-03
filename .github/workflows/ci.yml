@@ -84,7 +84,7 @@ jobs:
                   total += int(match.group(2))
           percent = covered * 100.0 / total if total else 0.0
           print(f"lib coverage: {covered}/{total} ({percent:.1f}%)")
-          if percent < 80.0:
-              print("library coverage is below the 80% threshold")
+          if percent < 88.0:
+              print("library coverage is below the 88% threshold")
               sys.exit(1)
           PY

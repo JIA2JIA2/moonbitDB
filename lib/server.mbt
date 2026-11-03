@@ -34,7 +34,7 @@ pub fn Database::info(self : Database) -> String {
   }
   let info_arr : Array[String] = [
     "# Server",
-    "moonbit_db_version:0.1.3",
+    "moonbit_db_version:0.2.0",
     "uptime_in_ms:\{self.current_time}",
     "",
     "# Keyspace",

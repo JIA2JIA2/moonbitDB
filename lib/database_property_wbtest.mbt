@@ -47,6 +47,84 @@ fn prop_sorted_zset(model : Map[String, Float]) -> Array[(String, Float)] {
   items
 }
 
+fn prop_sorted_hash(model : Map[String, String]) -> Array[(String, String)] {
+  let items : Array[(String, String)] = []
+  for field, value in model {
+    items.push((field, value))
+  }
+  items.sort_by((a, b) => a.0.lexical_compare(b.0))
+  items
+}
+
+fn prop_sorted_set(model : Map[String, Bool]) -> Array[String] {
+  let items : Array[String] = []
+  for member_val, _ in model {
+    items.push(member_val)
+  }
+  items.sort_by((a, b) => a.lexical_compare(b))
+  items
+}
+
+fn prop_sorted_strings(items : Array[String]) -> Array[String] {
+  let copy : Array[String] = []
+  for item in items {
+    copy.push(item)
+  }
+  copy.sort_by((a, b) => a.lexical_compare(b))
+  copy
+}
+
+fn prop_lrem_model(
+  model : Array[String],
+  count : Int,
+  value : String,
+) -> (Array[String], Int) {
+  let len = model.length()
+  let result : Array[String] = []
+  let mut removed = 0
+  if count > 0 {
+    for i = 0; i < len; i = i + 1 {
+      if removed < count && model[i] == value {
+        removed = removed + 1
+      } else {
+        result.push(model[i])
+      }
+    }
+  } else if count < 0 {
+    let limit = -count
+    let mut seen = 0
+    let mut cut = -1
+    for i = len - 1; i >= 0; i = i - 1 {
+      if model[i] == value {
+        seen = seen + 1
+        if seen == limit {
+          cut = i
+          break
+        }
+      }
+    }
+    if cut == -1 && seen > 0 {
+      cut = 0
+    }
+    for i = 0; i < len; i = i + 1 {
+      if cut != -1 && i >= cut && model[i] == value {
+        removed = removed + 1
+      } else {
+        result.push(model[i])
+      }
+    }
+  } else {
+    for i = 0; i < len; i = i + 1 {
+      if model[i] == value {
+        removed = removed + 1
+      } else {
+        result.push(model[i])
+      }
+    }
+  }
+  (result, removed)
+}
+
 test "property deque matches array model" {
   let deque = Deque::new()
   let model : Array[String] = []
@@ -215,4 +293,59 @@ test "deque index operations" {
   deque.pop_back() |> ignore
   @test.assert_eq(deque.length(), 0)
   @test.assert_eq(deque.to_array(), [])
+}
+
+test "property hash matches model" {
+  let db = Database::new()
+  let model : Map[String, String] = Map([], capacity=32)
+  let rng = PropRng::new(21)
+  for step = 0; step < 300; step = step + 1 {
+    let field = "f:\{rng.below(20)}"
+    if rng.below(10) < 7 {
+      let value = "v:\{rng.below(100)}"
+      db.hset("h", field, value) |> ignore
+      model.set(field, value)
+    } else {
+      db.hdel("h", field) |> ignore
+      model.remove(field)
+    }
+  }
+  @test.assert_eq(prop_sorted_hash(db.hgetall("h")), prop_sorted_hash(model))
+  @test.assert_eq(db.hlen("h"), model.length())
+}
+
+test "property set matches model" {
+  let db = Database::new()
+  let model : Map[String, Bool] = Map([], capacity=32)
+  let rng = PropRng::new(23)
+  for step = 0; step < 300; step = step + 1 {
+    let member_val = "m:\{rng.below(25)}"
+    if rng.below(10) < 7 {
+      db.sadd("s", member_val) |> ignore
+      model.set(member_val, true)
+    } else {
+      db.srem("s", member_val) |> ignore
+      model.remove(member_val)
+    }
+  }
+  @test.assert_eq(prop_sorted_strings(db.smembers("s")), prop_sorted_set(model))
+  @test.assert_eq(db.scard("s"), model.length())
+}
+
+test "property lrem matches model" {
+  let rng = PropRng::new(31)
+  for _trial = 0; _trial < 40; _trial = _trial + 1 {
+    let db = Database::new()
+    let model : Array[String] = []
+    let len = rng.below(15) + 1
+    for i = 0; i < len; i = i + 1 {
+      let value = if rng.below(3) == 0 { "a" } else { "b" }
+      db.rpush("l", value) |> ignore
+      model.push(value)
+    }
+    let count = rng.below(7) - 3
+    let (expected, expected_removed) = prop_lrem_model(model, count, "a")
+    @test.assert_eq(db.lrem("l", count, "a"), expected_removed)
+    @test.assert_eq(db.lrange("l", 0, -1), expected)
+  }
 }

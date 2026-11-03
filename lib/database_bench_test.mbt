@@ -63,3 +63,28 @@ test "bench keys pattern" (it : @bench.T) {
     db.keys_pattern("user:1*") |> ignore
   })
 }
+
+test "bench write paths" (it : @bench.T) {
+  let chunk = "abcdefghijklmnop"
+  it.bench(name="append 256B", () => {
+    let db = @lib.Database::new()
+    for i = 0; i < 16; i = i + 1 {
+      db.append("s", chunk) |> ignore
+    }
+  })
+  it.bench(name="zadd 1000", () => {
+    let db = @lib.Database::new()
+    for i = 0; i < 1000; i = i + 1 {
+      db.zadd("z", Float::from_int(i), "member:\{i}") |> ignore
+    }
+  })
+  it.bench(name="expire 1000", () => {
+    let db = @lib.Database::new()
+    for i = 0; i < 1000; i = i + 1 {
+      db.set("ttl:\{i}", "v") |> ignore
+      db.pexpire("ttl:\{i}", 1000) |> ignore
+    }
+    db.advance_time(1000)
+    db.dbsize() |> ignore
+  })
+}

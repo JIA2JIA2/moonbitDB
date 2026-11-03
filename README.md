@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**134 个测试用例，全部通过**。
+当前测试覆盖：**137 个测试用例，全部通过**。
 
 ### 运行基准与覆盖率
 
@@ -78,7 +78,17 @@ moon bench
 moon coverage analyze -- -f summary
 ```
 
-CI 同时执行基准测试，并对 `lib/` 覆盖率设置 80% 门槛。
+CI 同时执行基准测试，并对 `lib/` 覆盖率设置 **88%** 门槛。
+
+参考基线（容器环境，仅供趋势对比）：
+
+| 场景 | 参考耗时 |
+|------|----------|
+| `ZCOUNT` 1000 成员 | ≈ 0.14 µs |
+| `ZRANK` 1000 成员 | ≈ 0.14 µs |
+| `SCAN` 1000 key / 批 100 | ≈ 2 µs |
+| `KEYS_PATTERN` 500 key（前缀 `user:1*`） | ≈ 12.5 µs |
+| `LREM` 1000 元素 | ≈ 48 µs |
 
 ## 库导入指南
 
@@ -87,7 +97,7 @@ CI 同时执行基准测试，并对 `lib/` 覆盖率设置 80% 门槛。
 ### 1. 添加模块依赖
 
 ```bash
-moon add JIA2JIA2/moonbitdb@0.1.3
+moon add JIA2JIA2/moonbitdb@0.2.0
 ```
 
 该命令会更新 `moon.mod` 并同步依赖，推荐优先使用。
@@ -132,7 +142,7 @@ moonbitDB/
 │   ├── util.mbt                # 整数解析与通配符匹配
 │   ├── error.mbt               # RedisError 错误模型
 │   ├── server.mbt              # 服务器命令
-│   ├── database_wbtest.mbt     # 白盒测试（134 个用例）
+│   ├── database_wbtest.mbt     # 白盒测试（137 个用例）
 │   ├── database_property_wbtest.mbt # 属性测试
 │   ├── database_bench_test.mbt # 基准测试
 │   └── moon.pkg
