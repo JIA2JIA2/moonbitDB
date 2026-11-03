@@ -65,8 +65,13 @@ jobs:
       - name: Run moon test
         run: moon test --deny-warn
 
+      - name: Check command table consistency
+        run: python3 scripts/check_docs.py
+
       - name: Run moon bench
-        run: moon bench
+        run: |
+          moon bench | tee bench_output.txt
+          python3 scripts/check_bench.py bench_output.txt
 
       - name: Check library coverage
         run: |
@@ -88,3 +93,39 @@ jobs:
               print("library coverage is below the 88% threshold")
               sys.exit(1)
           PY
+
+  cross-target:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [js, wasm-gc]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Restore MoonBit Dependencies Cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.moon
+          key: moon-deps-${{ hashFiles('moon.mod') }}
+          restore-keys: moon-deps-
+
+      - name: Install MoonBit CLI
+        run: |
+          MOONBIT_INSTALL_URL="https://cli.moonbitlang.com/install/unix.sh"
+          MOONBIT_INSTALL_SCRIPT="/tmp/moonbit-install.sh"
+          for i in 1 2 3; do
+            if curl -fsSL -o "$MOONBIT_INSTALL_SCRIPT" "$MOONBIT_INSTALL_URL" && bash "$MOONBIT_INSTALL_SCRIPT"; then
+              export PATH="$HOME/.moon/bin:$PATH"
+              if moon version; then
+                echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+                break
+              fi
+            fi
+            sleep 5
+          done
+
+      - name: Check target ${{ matrix.target }}
+        run: moon check --deny-warn --target ${{ matrix.target }}

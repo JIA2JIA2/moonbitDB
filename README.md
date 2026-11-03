@@ -67,18 +67,20 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**147 个测试用例，全部通过**。
+当前测试覆盖：**149 个测试用例，全部通过**。
 
 ### 运行基准与覆盖率
 
 ```bash
 moon check --deny-warn
 moon test --deny-warn
-moon bench
+moon bench > /tmp/bench.txt
+python3 scripts/check_docs.py
+python3 scripts/check_bench.py /tmp/bench.txt
 moon coverage analyze -- -f summary
 ```
 
-CI 同时执行基准测试，并对 `lib/` 覆盖率设置 **88%** 门槛。
+CI 同时执行命令表一致性校验、基准基线对比，并对 `lib/` 覆盖率设置 **88%** 门槛；另对 `js` / `wasm-gc` 目标做静态检查。
 
 参考基线（容器环境，仅供趋势对比）：
 
@@ -142,7 +144,7 @@ moonbitDB/
 │   ├── util.mbt                # 整数解析与通配符匹配
 │   ├── error.mbt               # RedisError 错误模型
 │   ├── server.mbt              # 服务器命令
-│   ├── database_wbtest.mbt     # 白盒测试（147 个用例）
+│   ├── database_wbtest.mbt     # 白盒测试（149 个用例）
 │   ├── database_property_wbtest.mbt # 属性测试
 │   ├── database_bench_test.mbt # 基准测试
 │   └── moon.pkg

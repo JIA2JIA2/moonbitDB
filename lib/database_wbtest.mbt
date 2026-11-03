@@ -3680,3 +3680,127 @@ test "expire_and_scan_error_paths_more" {
     true,
   )
 }
+
+test "info_avg_ttl" {
+  let db = Database::new()
+  db.set("a", "v") |> ignore
+  db.set("b", "v") |> ignore
+  db.expire("a", 100) |> ignore
+  db.expire("b", 300) |> ignore
+  let info = db.info()
+  @test.assert_eq(info.contains("avg_ttl=0"), false)
+  @test.assert_eq(info.contains("avg_ttl=200000"), true)
+  db.advance_time(150000)
+  let info2 = db.info()
+  @test.assert_eq(info2.contains("expires=1"), true)
+  @test.assert_eq(info2.contains("avg_ttl=150000"), true)
+}
+
+test "coverage_edge_cases" {
+  let db = Database::new()
+  db.zadd("z1", 1.0, "a") |> ignore
+  db.zadd("z1", 2.0, "b") |> ignore
+  @test.assert_eq(db.zrangebylex("z1", "bad", "+").length(), 0)
+
+  db.hmset("h", ["a", "b"], ["1", "2"])
+  @test.assert_eq(db.hrandfield("h", -3).length(), 3)
+  db.sadd_all("s", ["a"]) |> ignore
+  @test.assert_eq(db.srandmember_count("s", -3).length(), 3)
+
+  db.rpush_all("l", ["a", "b", "c"]) |> ignore
+  @test.assert_eq(db.lpop_count("l", 10).length(), 3)
+  @test.assert_eq(db.exists("l"), false)
+
+  db.zadd("zs", 1.0, "a") |> ignore
+  @test.assert_eq(db.zpopmin_count("zs", 10).length(), 1)
+
+  @test.assert_eq(
+    match db.try_zunionstore("u2", ["z1"]) {
+      Ok(count) => count
+      Err(_) => -1
+    },
+    2,
+  )
+  @test.assert_eq(
+    match db.try_zinterstore("i2", ["z1"]) {
+      Ok(count) => count
+      Err(_) => -1
+    },
+    2,
+  )
+  @test.assert_eq(
+    match db.try_zdiffstore("d2", ["z1"]) {
+      Ok(count) => count
+      Err(_) => -1
+    },
+    2,
+  )
+  @test.assert_eq(
+    match db.try_zrangestore("r2", "z1", 0, 0) {
+      Ok(count) => count
+      Err(_) => -1
+    },
+    1,
+  )
+
+  @test.assert_eq(
+    match db.try_sadd_all("s2", ["a", "b"]) {
+      Ok(count) => count
+      Err(_) => -1
+    },
+    2,
+  )
+  @test.assert_eq(
+    match db.try_srem_all("s2", ["a"]) {
+      Ok(count) => count
+      Err(_) => -1
+    },
+    1,
+  )
+  @test.assert_eq(
+    match db.try_rpush_all("l2", ["a", "b"]) {
+      Ok(length) => length
+      Err(_) => -1
+    },
+    2,
+  )
+  @test.assert_eq(
+    match db.try_lpush_all("l2", ["x"]) {
+      Ok(length) => length
+      Err(_) => -1
+    },
+    3,
+  )
+  @test.assert_eq(
+    match db.try_hmset("h2", ["f"], ["v"]) {
+      Ok(_) => 1
+      Err(_) => -1
+    },
+    1,
+  )
+
+  db.set("k", "v") |> ignore
+  @test.assert_eq(db.pexpire_with_options("k", 1000L, true, false, false, false), true)
+  @test.assert_eq(db.pexpire_with_options("k", 2000L, false, false, false, true), false)
+  @test.assert_eq(
+    match db.set_with_options("ex0", "v", false, false, Some(0), None, false) {
+      Err(RedisError::InvalidArgument) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(
+    match db.set_with_options("px0", "v", false, false, None, Some(0L), false) {
+      Err(RedisError::InvalidArgument) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(
+    match db.set_with_options("keep2", "v", false, false, Some(10), None, true) {
+      Err(RedisError::InvalidArgument) => true
+      _ => false
+    },
+    true,
+  )
+}

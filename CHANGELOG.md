@@ -8,8 +8,12 @@
 - 新增 Hash/List 命令：`HSETNX`、`HSCAN`、`LMOVE`
 - 新增 Set 命令：`SINTERCARD`、`SMISMEMBER`、`SSCAN`
 - 新增 Sorted Set 命令：`ZRANGEBYLEX`、`ZREVRANGEBYLEX`、`ZLEXCOUNT`、`ZREMRANGEBYLEX`、`ZRANDMEMBER`、`ZUNION`、`ZINTER`、`ZDIFF`、`ZSCAN`
+- 新增 ZSet 存储/计数命令：`ZUNIONSTORE`、`ZINTERSTORE`、`ZDIFFSTORE`、`ZINTERCARD`、`ZRANGESTORE`
+- 新增 Hash/List 扩展：`HRANDFIELD`、`LPOS`、`LPOP count`、`RPOP count`、`ZPOPMIN count`、`ZPOPMAX count`、`SRANDMEMBER count`、`ZRANDMEMBER count`
+- 新增 `SET ... GET`：`set_get`、`try_set_get`
+- 新增 `EXPIRE` 选项：`expire_with_options`、`pexpire_with_options`（NX/XX/GT/LT）
 - 新增 `SET` 选项 API：`set_with_options`、`setxx`，支持 NX/XX/EX/PX/KEEPTTL
-- 新增错误模型：`RedisError`、`Result` 版 `try_*` API（含读写命令）
+- 新增错误模型：`RedisError`、`Result` 版 `try_*` API（覆盖读写及 R3 新命令）
 - 新增批量 API：`lpush_all`、`rpush_all`、`sadd_all`、`srem_all`、`scan_match`、`copy_with_replace`
 - 新增基准测试与 `CHANGELOG.md`
 
@@ -33,6 +37,9 @@
 - `ZRANGEBYSCORE`/`ZCOUNT` 改为二分定位
 - ZSet 写入、删除、弹出使用缓存写穿，减少重复排序
 - `KEYS_PATTERN` 对有字面前缀的模式使用二分剪枝
+- `ZRANGEBYLEX`/`ZREVRANGEBYLEX`/`ZLEXCOUNT`/`ZREMRANGEBYLEX` 使用 lex 缓存 + 二分定位
+- `HSCAN`/`SSCAN` 使用每 key 快照缓存，避免每批全量重建
+- 新增 `clear_scan_caches` 释放扫描快照
 - 移除 `LREM` 的索引字符串 Map
 
 ### Engineering
@@ -41,6 +48,10 @@
 - 864 处断言迁移为 `@test.assert_eq`，其余多行断言已全部迁移
 - 新增属性测试（Deque、ZSet、Hash、Set、List、SCAN）
 - CI 启用 `--deny-warn`、基准测试与 lib 覆盖率门槛（88%）
+- 新增 `scripts/check_docs.py` 校验命令表/README 一致性
+- 新增 `scripts/check_bench.py` + 基准基线，CI 对明显退化告警
+- CI 增加 `js` / `wasm-gc` 交叉目标静态检查
+- `INFO` 返回真实 `avg_ttl`
 
 ## 0.1.3 — 2026-10-31
 

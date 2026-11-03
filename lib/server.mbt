@@ -31,8 +31,18 @@ pub fn Database::info(self : Database) -> String {
   self.collect_expired()
   let key_count = self.data.length()
   let mut expire_count = 0
-  for _, _ in self.expires {
+  let mut total_ttl : Int64 = 0
+  for _, expire_time in self.expires {
     expire_count = expire_count + 1
+    let remaining = expire_time - self.current_time
+    if remaining > 0 {
+      total_ttl = total_ttl + remaining
+    }
+  }
+  let avg_ttl : Int64 = if expire_count == 0 {
+    0
+  } else {
+    total_ttl / expire_count.to_int64()
   }
   let info_arr : Array[String] = [
     "# Server",
@@ -40,7 +50,7 @@ pub fn Database::info(self : Database) -> String {
     "uptime_in_ms:\{self.current_time}",
     "",
     "# Keyspace",
-    "db0:keys=\{key_count},expires=\{expire_count},avg_ttl=0"
+    "db0:keys=\{key_count},expires=\{expire_count},avg_ttl=\{avg_ttl}"
   ]
   info_arr.join("\n")
 }
