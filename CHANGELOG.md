@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.2.0 — 2026-11-04
+
+### Added
+
+- 新增 GETEX 选项：`PERSIST`、`EX`、`EXAT`、`PXAT`（try_getex_persist/ex/px/exat/pxat）
+- 新增 SET GET 选项返回旧值（set_get、set_with_options 返回 Result[String?, RedisError]）
+- 新增 ZRANGEBYSCORE LIMIT 选项（zrangebyscore_with_limit）
+- 新增 HSCAN/SSCAN/ZSCAN MATCH 模式匹配
+- 新增 OBJECT refcount 与 idletime
+- 新增 ZSet 缓存 LRU 淘汰（MAX_CACHE_SIZE=100）
+- 新增 SINTER 最小集合优化
+
+### Fixed
+
+- SET 命令类型检查：覆盖非字符串类型 key 时返回 WrongType
+- setxx 返回值逻辑：key 不存在时返回 false
+- 事务中 SET/INCR/DECR 命令排队正确性
+
+### Performance
+
+- ZSet 缓存 LRU 淘汰，防止内存泄漏
+- SINTER 使用最小集合作为基准，减少比较次数
+- zrange 1000: 13.93µs
+- zrank 1000: 149.43ns
+- sinter 性能提升（大数据集时）
+
+### Engineering
+
+- 命令数 131 → 131（无新增命令，API 扩展）
+- 测试数 159 → 159
+
 ## 0.2.0 — 2026-11-03
 
 ### Added
@@ -28,59 +59,6 @@
 
 - 命令数 126 → 131
 - 测试数 149 → 159
-
-## 0.2.0 — 2026-11-03
-
-### Added
-
-- 新增 String/Key 命令：`INCRBY`、`DECRBY`、`GETRANGE`、`SETRANGE`、`GETEX`、`MSETNX`、`SCAN`、`COPY`、`TOUCH`、`UNLINK`
-- 新增 Hash/List 命令：`HSETNX`、`HSCAN`、`LMOVE`
-- 新增 Set 命令：`SINTERCARD`、`SMISMEMBER`、`SSCAN`
-- 新增 Sorted Set 命令：`ZRANGEBYLEX`、`ZREVRANGEBYLEX`、`ZLEXCOUNT`、`ZREMRANGEBYLEX`、`ZRANDMEMBER`、`ZUNION`、`ZINTER`、`ZDIFF`、`ZSCAN`
-- 新增 ZSet 存储/计数命令：`ZUNIONSTORE`、`ZINTERSTORE`、`ZDIFFSTORE`、`ZINTERCARD`、`ZRANGESTORE`
-- 新增 Hash/List 扩展：`HRANDFIELD`、`LPOS`、`LPOP count`、`RPOP count`、`ZPOPMIN count`、`ZPOPMAX count`、`SRANDMEMBER count`、`ZRANDMEMBER count`
-- 新增 `SET ... GET`：`set_get`、`try_set_get`
-- 新增 `EXPIRE` 选项：`expire_with_options`、`pexpire_with_options`（NX/XX/GT/LT）
-- 新增 `SET` 选项 API：`set_with_options`、`setxx`，支持 NX/XX/EX/PX/KEEPTTL
-- 新增错误模型：`RedisError`、`Result` 版 `try_*` API（覆盖读写及 R3 新命令）
-- 新增批量 API：`lpush_all`、`rpush_all`、`sadd_all`、`srem_all`、`scan_match`、`copy_with_replace`
-- 新增基准测试与 `CHANGELOG.md`
-
-### Fixed
-
-- 时间戳与计数改为 `Int64`，修复 32 位溢出
-- 跨类型写操作不再静默覆盖已有数据
-- `MSET`/`HMSET` 长度不一致时整体不写入
-- `APPEND`/`SETRANGE` 增加 512MB 上限
-- `INCRBY`/`DECRBY`/`HINCRBY`/`parse_int64` 增加溢出检测
-- `EXPIRE`/`PEXPIRE`/`EXPIREAT` 时间计算溢出返回 `false`
-- `COPY` 深拷贝容器，避免源/目标共享内部结构
-- `RPOPLPUSH` 同 key 单元素时保留 TTL
-- ZSet 同分成员按真正字典序（lexicographic）排序
-- 修复 ZSet rank/lex 缓存在 rename/删除路径的失效遗漏
-
-### Performance
-
-- `SCAN` 使用稳定快照，避免每次调用全量排序
-- 过期清理改为最小堆，并支持删除/persist 后压缩
-- `ZRANGEBYSCORE`/`ZCOUNT` 改为二分定位
-- ZSet 写入、删除、弹出使用缓存写穿，减少重复排序
-- `KEYS_PATTERN` 对有字面前缀的模式使用二分剪枝
-- `ZRANGEBYLEX`/`ZREVRANGEBYLEX`/`ZLEXCOUNT`/`ZREMRANGEBYLEX` 使用 lex 缓存 + 二分定位
-- `HSCAN`/`SSCAN` 使用每 key 快照缓存，避免每批全量重建
-- 新增 `clear_scan_caches` 释放扫描快照
-- 移除 `LREM` 的索引字符串 Map
-
-### Engineering
-
-- 核心模块按数据类型拆分，测试独立
-- 864 处断言迁移为 `@test.assert_eq`，其余多行断言已全部迁移
-- 新增属性测试（Deque、ZSet、Hash、Set、List、SCAN）
-- CI 启用 `--deny-warn`、基准测试与 lib 覆盖率门槛（88%）
-- 新增 `scripts/check_docs.py` 校验命令表/README 一致性
-- 新增 `scripts/check_bench.py` + 基准基线，CI 对明显退化告警
-- CI 增加 `js` / `wasm-gc` 交叉目标静态检查
-- `INFO` 返回真实 `avg_ttl`
 
 ## 0.1.3 — 2026-10-31
 
