@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**99 个测试用例，全部通过**。
+当前测试覆盖：**107 个测试用例，全部通过**。
 
 ### 运行基准与覆盖率
 
@@ -127,7 +127,7 @@ moonbitDB/
 │   ├── deque.mbt               # List 底层双端队列
 │   ├── util.mbt                # 整数解析与通配符匹配
 │   ├── server.mbt              # 服务器命令
-│   ├── database_wbtest.mbt     # 白盒测试（99 个用例）
+│   ├── database_wbtest.mbt     # 白盒测试（107 个用例）
 │   ├── database_bench_test.mbt # 基准测试
 │   └── moon.pkg
 ├── demo.mbt                    # 快速开始演示（主包入口）
@@ -153,9 +153,9 @@ moonbitDB/
 
 ## 支持的命令
 
-共支持 **94 个命令**，覆盖 Redis 核心功能。
+共支持 **104 个命令**，覆盖 Redis 核心功能。
 
-> **类型安全约定**：对已存在但类型不匹配的 key，写操作**不会覆盖**原数据。失败返回值约定如下：`HSET`/`LPUSH`/`RPUSH`/`APPEND` 返回 `-1`，`SADD`/`ZADD` 返回 `false`，`INCR`/`DECR`/`HINCRBY` 返回 `None`，`HMSET` 为空操作，`SINTERSTORE`/`SUNIONSTORE`/`SDIFFSTORE` 返回 `-1`。时间相关 API 使用 `Int64` 毫秒，可安全表示真实 Unix 时间戳与超过 24 天的 TTL。
+> **类型安全约定**：对已存在但类型不匹配的 key，写操作**不会覆盖**原数据。失败返回值约定如下：`HSET`/`LPUSH`/`RPUSH`/`APPEND`/`SETRANGE` 返回 `-1`，`SADD`/`ZADD`/`HSETNX` 返回 `false`，`INCR`/`DECR`/`INCRBY`/`DECRBY`/`HINCRBY` 返回 `None`，`HMSET` 为空操作，`SINTERSTORE`/`SUNIONSTORE`/`SDIFFSTORE` 返回 `-1`。时间相关 API 使用 `Int64` 毫秒，可安全表示真实 Unix 时间戳与超过 24 天的 TTL。
 
 ### String 命令
 
@@ -167,8 +167,12 @@ moonbitDB/
 | `EXISTS` | `(key) -> Bool` | 检查 key 是否存在 |
 | `APPEND` | `(key, value) -> Int` | 追加字符串，返回新长度 |
 | `STRLEN` | `(key) -> Int` | 字符串长度 |
-| `INCR` | `(key) -> Int?` | 自增 1（非数字返回 None） |
-| `DECR` | `(key) -> Int?` | 自减 1（非数字返回 None） |
+| `GETRANGE` | `(key, start, end) -> String` | 获取子串（支持负数索引） |
+| `SETRANGE` | `(key, offset, value) -> Int` | 从 offset 覆盖写入，返回新长度（缺失部分以 NUL 填充） |
+| `INCR` | `(key) -> Int64?` | 自增 1（非数字返回 None） |
+| `DECR` | `(key) -> Int64?` | 自减 1（非数字返回 None） |
+| `INCRBY` | `(key, increment) -> Int64?` | 增加指定整数（非数字返回 None） |
+| `DECRBY` | `(key, decrement) -> Int64?` | 减少指定整数（非数字返回 None） |
 | `SETNX` | `(key, value) -> Bool` | 仅当 key 不存在时设置 |
 | `SETEX` | `(key, seconds, value) -> Bool` | 设置值并指定过期时间（秒） |
 | `GETDEL` | `(key) -> String?` | 获取值并删除 key |
@@ -180,23 +184,28 @@ moonbitDB/
 |------|------|------|
 | `KEYS` | `() -> Array[String]` | 列出所有 key |
 | `KEYS_PATTERN` | `(pattern) -> Array[String]` | 模式匹配 key（支持 `*` `?`） |
+| `SCAN` | `(cursor, count) -> (Int, Array[String])` | 游标遍历 key，返回下一游标（0 表示结束） |
 | `TYPE` | `(key) -> String` | 返回值类型（string/hash/list/set/zset/none） |
 | `EXPIRE` | `(key, seconds) -> Bool` | 设置过期时间（秒） |
 | `PEXPIRE` | `(key, ms) -> Bool` | 设置过期时间（毫秒） |
 | `EXPIREAT` | `(key, unix_seconds) -> Bool` | 设置过期时间戳（秒） |
 | `PEXPIREAT` | `(key, unix_ms) -> Bool` | 设置过期时间戳（毫秒） |
-| `TTL` | `(key) -> Int` | 剩余生存时间（秒），-1 永久，-2 不存在 |
-| `PTTL` | `(key) -> Int` | 剩余生存时间（毫秒） |
+| `TTL` | `(key) -> Int64` | 剩余生存时间（秒），-1 永久，-2 不存在 |
+| `PTTL` | `(key) -> Int64` | 剩余生存时间（毫秒） |
 | `PERSIST` | `(key) -> Bool` | 移除过期时间 |
 | `RENAME` | `(old_key, new_key) -> Bool` | 重命名 key（含 TTL 转移） |
 | `RENAMENX` | `(old_key, new_key) -> Bool` | 仅在新 key 不存在时重命名 |
 | `RANDOMKEY` | `() -> String?` | 随机返回一个 key |
+| `COPY` | `(source, destination) -> Bool` | 复制 key（深拷贝，不复制 TTL，目标已存在则失败） |
+| `TOUCH` | `(keys) -> Int` | 返回存在的 key 数量 |
+| `UNLINK` | `(key) -> Bool` | 删除 key（与 DEL 语义一致） |
 
 ### Hash 命令
 
 | 命令 | 签名 | 说明 |
 |------|------|------|
 | `HSET` | `(key, field, value) -> Int` | 设置 hash 字段，返回新建字段数（0/1） |
+| `HSETNX` | `(key, field, value) -> Bool` | 仅当字段不存在时设置 |
 | `HGET` | `(key, field) -> String?` | 获取 hash 字段 |
 | `HDEL` | `(key, field) -> Bool` | 删除 hash 字段 |
 | `HGETALL` | `(key) -> Map[String, String]` | 获取所有字段和值 |
@@ -204,7 +213,7 @@ moonbitDB/
 | `HEXISTS` | `(key, field) -> Bool` | 检查 hash 字段是否存在 |
 | `HKEYS` | `(key) -> Array[String]` | 获取 hash 所有字段名 |
 | `HVALS` | `(key) -> Array[String]` | 获取 hash 所有字段值 |
-| `HINCRBY` | `(key, field, increment) -> Int?` | hash 字段整数值自增（非数字返回 None） |
+| `HINCRBY` | `(key, field, increment) -> Int64?` | hash 字段整数值自增（非数字返回 None） |
 | `HSTRLEN` | `(key, field) -> Int` | hash 字段值长度 |
 
 ### List 命令
@@ -255,6 +264,7 @@ moonbitDB/
 | `ZSCORE` | `(key, member) -> Float?` | 获取成员分数 |
 | `ZREM` | `(key, member) -> Bool` | 删除成员 |
 | `ZRANGEBYSCORE` | `(key, min, max) -> Array[String]` | 按分数范围获取 |
+| `ZRANGEBYLEX` | `(key, min, max) -> Array[String]` | 按成员字典序范围获取（`-`/`+`/`[a`/`(a`） |
 | `ZCOUNT` | `(key, min, max) -> Int` | 统计分数范围内成员数 |
 | `ZREVRANGE` | `(key, start, end) -> Array[String]` | 按排名降序获取范围 |
 | `ZREVRANGEBYSCORE` | `(key, max, min) -> Array[String]` | 按分数降序范围获取 |
@@ -268,6 +278,7 @@ moonbitDB/
 | `ZMSCORE` | `(key, members) -> Array[Float?]` | 批量获取成员分数 |
 
 > 分数相同时按 member 字典序排列（与 Redis 语义一致）。`ZRANGEBYSCORE`/`ZCOUNT` 使用二分查找定位分数区间。
+> `ZRANGE ... WITHSCORES` 对应 `zrange_with_scores`/`zrevrange_with_scores` 方法，返回 `(member, score)` 数组。`ZRANGEBYLEX` 要求集合内分数一致，否则结果不具备 Redis 语义。
 
 ### 批量命令
 
@@ -289,7 +300,7 @@ moonbitDB/
 | `PING` | `() -> String` | 返回 "PONG" |
 | `ECHO` | `(message) -> String` | 回显消息 |
 | `INFO` | `() -> String` | 服务器信息（版本、key 数、过期数等） |
-| `TIME` | `() -> (Int, Int)` | 当前时间（秒, 微秒） |
+| `TIME` | `() -> (Int64, Int64)` | 当前时间（秒, 微秒） |
 | `COMMAND` | `() -> Array[String]` | 支持的命令列表 |
 | `OBJECT_ENCODING` | `(key) -> String?` | 对象内部编码（embstr/listpack/hashtable/skiplist/quicklist） |
 
@@ -318,8 +329,12 @@ moonbitDB/
 | `exists` | `(self : Database, key : String) -> Bool` | 检查 key 是否存在 |
 | `append` | `(self : Database, key : String, value : String) -> Int` | 追加字符串，返回新长度 |
 | `strlen` | `(self : Database, key : String) -> Int` | 字符串长度 |
+| `getrange` | `(self : Database, key : String, start : Int, end : Int) -> String` | 获取子串（支持负数索引） |
+| `setrange` | `(self : Database, key : String, offset : Int, value : String) -> Int` | 从 offset 覆盖写入，返回新长度 |
 | `incr` | `(self : Database, key : String) -> Int64?` | 自增 1 |
 | `decr` | `(self : Database, key : String) -> Int64?` | 自减 1 |
+| `incrby` | `(self : Database, key : String, increment : Int64) -> Int64?` | 增加指定整数 |
+| `decrby` | `(self : Database, key : String, decrement : Int64) -> Int64?` | 减少指定整数 |
 | `setnx` | `(self : Database, key : String, value : String) -> Bool` | 仅当 key 不存在时设置 |
 | `setex` | `(self : Database, key : String, seconds : Int, value : String) -> Bool` | 设置值并指定过期时间 |
 | `getdel` | `(self : Database, key : String) -> String?` | 获取值并删除 key |
@@ -331,6 +346,7 @@ moonbitDB/
 |------|------|------|
 | `keys` | `(self : Database) -> Array[String]` | 列出所有 key |
 | `keys_pattern` | `(self : Database, pattern : String) -> Array[String]` | 模式匹配 key |
+| `scan` | `(self : Database, cursor : Int, count : Int) -> (Int, Array[String])` | 游标遍历 key |
 | `type_of` | `(self : Database, key : String) -> String` | 返回值类型 |
 | `expire` | `(self : Database, key : String, seconds : Int) -> Bool` | 设置过期时间（秒） |
 | `pexpire` | `(self : Database, key : String, milliseconds : Int64) -> Bool` | 设置过期时间（毫秒） |
@@ -342,12 +358,16 @@ moonbitDB/
 | `rename` | `(self : Database, old_key : String, new_key : String) -> Bool` | 重命名 key |
 | `renamenx` | `(self : Database, old_key : String, new_key : String) -> Bool` | 仅在新 key 不存在时重命名 |
 | `randomkey` | `(self : Database) -> String?` | 随机返回一个 key |
+| `copy` | `(self : Database, source : String, destination : String) -> Bool` | 复制 key（深拷贝，不复制 TTL） |
+| `touch` | `(self : Database, keys : Array[String]) -> Int` | 返回存在的 key 数量 |
+| `unlink` | `(self : Database, key : String) -> Bool` | 删除 key（同 del） |
 
 #### Hash 操作
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
 | `hset` | `(self : Database, key : String, field : String, value : String) -> Int` | 设置 hash 字段，返回新建字段数 |
+| `hsetnx` | `(self : Database, key : String, field : String, value : String) -> Bool` | 仅当字段不存在时设置 |
 | `hget` | `(self : Database, key : String, field : String) -> String?` | 获取 hash 字段 |
 | `hdel` | `(self : Database, key : String, field : String) -> Bool` | 删除 hash 字段 |
 | `hgetall` | `(self : Database, key : String) -> Map[String, String]` | 获取所有字段和值 |
@@ -406,6 +426,9 @@ moonbitDB/
 | `zscore` | `(self : Database, key : String, member_val : String) -> Float?` | 获取成员分数 |
 | `zrem` | `(self : Database, key : String, member_val : String) -> Bool` | 删除成员 |
 | `zrangebyscore` | `(self : Database, key : String, min_score : Float, max_score : Float) -> Array[String]` | 按分数范围获取 |
+| `zrangebylex` | `(self : Database, key : String, min_bound : String, max_bound : String) -> Array[String]` | 按成员字典序范围获取 |
+| `zrange_with_scores` | `(self : Database, key : String, start : Int, end : Int) -> Array[(String, Float)]` | 按排名升序返回成员与分数 |
+| `zrevrange_with_scores` | `(self : Database, key : String, start : Int, end : Int) -> Array[(String, Float)]` | 按排名降序返回成员与分数 |
 | `zcount` | `(self : Database, key : String, min_score : Float, max_score : Float) -> Int` | 统计分数范围内成员数 |
 | `zrevrange` | `(self : Database, key : String, start : Int, end : Int) -> Array[String]` | 按排名降序获取范围 |
 | `zrevrangebyscore` | `(self : Database, key : String, max_score : Float, min_score : Float) -> Array[String]` | 按分数降序范围获取 |
@@ -605,16 +628,16 @@ moon run examples/cli_repl --target native
 - Set — 集合（无序唯一元素）
 - Sorted Set — 有序集合（分数排序）
 
-**命令语义**（8 大命令组，94 个命令）：
+**命令语义**（8 大命令组，104 个命令）：
 
 | 命令组 | 命令数量 | 代表命令 |
 |--------|----------|----------|
-| String | 12 | SET, GET, DEL, EXISTS, APPEND, STRLEN, INCR, DECR, SETNX, SETEX, GETDEL, GETSET |
-| Key | 13 | KEYS, KEYS_PATTERN, TYPE, EXPIRE, PEXPIRE, EXPIREAT, PEXPIREAT, TTL, PTTL, PERSIST, RENAME, RENAMENX, RANDOMKEY |
-| Hash | 10 | HSET, HGET, HDEL, HGETALL, HLEN, HEXISTS, HKEYS, HVALS, HINCRBY, HSTRLEN |
+| String | 16 | SET, GET, DEL, EXISTS, APPEND, STRLEN, GETRANGE, SETRANGE, INCR, DECR, INCRBY, DECRBY, SETNX, SETEX, GETDEL, GETSET |
+| Key | 17 | KEYS, KEYS_PATTERN, SCAN, TYPE, EXPIRE, PEXPIRE, EXPIREAT, PEXPIREAT, TTL, PTTL, PERSIST, RENAME, RENAMENX, RANDOMKEY, COPY, TOUCH, UNLINK |
+| Hash | 11 | HSET, HSETNX, HGET, HDEL, HGETALL, HLEN, HEXISTS, HKEYS, HVALS, HINCRBY, HSTRLEN |
 | List | 14 | LPUSH, RPUSH, LPOP, RPOP, LLEN, LRANGE, LINDEX, LSET, LREM, LINSERT, LPUSHX, RPUSHX, RPOPLPUSH, LTRIM |
 | Set | 14 | SADD, SMEMBERS, SREM, SCARD, SISMEMBER, SINTER, SINTERSTORE, SUNION, SUNIONSTORE, SDIFF, SDIFFSTORE, SMOVE, SPOP, SRANDMEMBER |
-| Sorted Set | 17 | ZADD, ZRANGE, ZCARD, ZSCORE, ZREM, ZRANGEBYSCORE, ZCOUNT, ZREVRANGE, ZREVRANGEBYSCORE, ZRANK, ZREVRANK, ZINCRBY, ZREMRANGEBYRANK, ZREMRANGEBYSCORE, ZPOPMIN, ZPOPMAX, ZMSCORE |
+| Sorted Set | 18 | ZADD, ZRANGE, ZCARD, ZSCORE, ZREM, ZRANGEBYSCORE, ZRANGEBYLEX, ZCOUNT, ZREVRANGE, ZREVRANGEBYSCORE, ZRANK, ZREVRANK, ZINCRBY, ZREMRANGEBYRANK, ZREMRANGEBYSCORE, ZPOPMIN, ZPOPMAX, ZMSCORE |
 | 批量操作 | 5 | MSET, MGET, MDEL, HMSET, HMGET |
 | 服务器 | 9 | DBSIZE, FLUSHDB, FLUSHALL, PING, ECHO, INFO, TIME, COMMAND, OBJECT_ENCODING |
 

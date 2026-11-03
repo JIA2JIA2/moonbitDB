@@ -184,3 +184,19 @@ pub fn Database::hincrby(self : Database, key : String, field : String, incremen
   Some(current + increment)
 }
 
+pub fn Database::hsetnx(self : Database, key : String, field : String, value : String) -> Bool {
+  self.check_expired(key) |> ignore
+  let hash = match self.data.get(key) {
+    Some(RedisValue::Hash(h)) => h
+    None => Map([], capacity=10)
+    Some(_) => return false
+  }
+  if hash.contains(field) {
+    false
+  } else {
+    hash.set(field, value)
+    self.put(key, RedisValue::Hash(hash))
+    true
+  }
+}
+

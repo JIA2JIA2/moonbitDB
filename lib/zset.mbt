@@ -411,3 +411,118 @@ pub fn Database::zmscore(self : Database, key : String, members : Array[String])
   }
 }
 
+pub fn Database::zrange_with_scores(self : Database, key : String, start : Int, end : Int) -> Array[(String, Float)] {
+  if self.check_expired(key) {
+    []
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::ZSet(_)) => {
+        let sorted = self.get_sorted_zset(key)
+        let len = sorted.length()
+        let result : Array[(String, Float)] = []
+        let start_idx = if start < 0 { len + start } else { start }
+        let end_idx = if end < 0 { len + end } else { end }
+        let s = if start_idx < 0 { 0 } else { start_idx }
+        for i = s; i <= end_idx && i < len; i = i + 1 {
+          result.push(sorted[i])
+        }
+        result
+      }
+      _ => []
+    }
+  }
+}
+
+pub fn Database::zrevrange_with_scores(self : Database, key : String, start : Int, end : Int) -> Array[(String, Float)] {
+  if self.check_expired(key) {
+    []
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::ZSet(_)) => {
+        let sorted = self.get_sorted_zset(key)
+        let len = sorted.length()
+        let result : Array[(String, Float)] = []
+        let start_idx = if start < 0 { len + start } else { start }
+        let end_idx = if end < 0 { len + end } else { end }
+        let s = if start_idx < 0 { 0 } else { start_idx }
+        for i = s; i <= end_idx && i < len; i = i + 1 {
+          let rev_idx = len - 1 - i
+          if rev_idx >= 0 {
+            result.push(sorted[rev_idx])
+          }
+        }
+        result
+      }
+      _ => []
+    }
+  }
+}
+
+fn lex_bound_valid(bound : String) -> Bool {
+  if bound == "-" || bound == "+" {
+    true
+  } else {
+    bound.length() > 0 && (bound[0] == '[' || bound[0] == '(')
+  }
+}
+
+fn lex_lower_ok(member_val : String, bound : String) -> Bool {
+  if bound == "-" {
+    true
+  } else if bound == "+" {
+    false
+  } else {
+    let inclusive = bound[0] == '['
+    let target = bound[1:bound.length()].to_owned()
+    let cmp = member_val.compare(target)
+    if inclusive {
+      cmp >= 0
+    } else {
+      cmp > 0
+    }
+  }
+}
+
+fn lex_upper_ok(member_val : String, bound : String) -> Bool {
+  if bound == "+" {
+    true
+  } else if bound == "-" {
+    false
+  } else {
+    let inclusive = bound[0] == '['
+    let target = bound[1:bound.length()].to_owned()
+    let cmp = member_val.compare(target)
+    if inclusive {
+      cmp <= 0
+    } else {
+      cmp < 0
+    }
+  }
+}
+
+pub fn Database::zrangebylex(self : Database, key : String, min_bound : String, max_bound : String) -> Array[String] {
+  if !lex_bound_valid(min_bound) || !lex_bound_valid(max_bound) {
+    return []
+  }
+  if self.check_expired(key) {
+    return []
+  }
+  match self.data.get(key) {
+    Some(RedisValue::ZSet(zset)) => {
+      let members : Array[String] = []
+      for member_val, _ in zset {
+        members.push(member_val)
+      }
+      members.sort()
+      let result = []
+      for member_val in members {
+        if lex_lower_ok(member_val, min_bound) && lex_upper_ok(member_val, max_bound) {
+          result.push(member_val)
+        }
+      }
+      result
+    }
+    _ => []
+  }
+}
+

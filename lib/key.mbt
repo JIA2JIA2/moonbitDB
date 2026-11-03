@@ -195,3 +195,93 @@ pub fn Database::renamenx(self : Database, old_key : String, new_key : String) -
   self.rename(old_key, new_key)
 }
 
+pub fn Database::scan(self : Database, cursor : Int, count : Int) -> (Int, Array[String]) {
+  self.collect_expired()
+  let all_keys : Array[String] = []
+  for key, _ in self.data {
+    all_keys.push(key)
+  }
+  all_keys.sort()
+  let len = all_keys.length()
+  let limit = if count <= 0 { 10 } else { count }
+  let start = if cursor < 0 { 0 } else { cursor }
+  if start >= len {
+    return (0, [])
+  }
+  let end = if start + limit > len { len } else { start + limit }
+  let result : Array[String] = []
+  for i = start; i < end; i = i + 1 {
+    result.push(all_keys[i])
+  }
+  let next = if end >= len { 0 } else { end }
+  (next, result)
+}
+
+fn clone_redis_value(value : RedisValue) -> RedisValue {
+  match value {
+    RedisValue::String(s) => RedisValue::String(s)
+    RedisValue::Hash(h) => {
+      let copy = Map([], capacity=h.length())
+      for field, item in h {
+        copy.set(field, item)
+      }
+      RedisValue::Hash(copy)
+    }
+    RedisValue::List(d) => {
+      let copy = Deque::new()
+      for item in d.to_array() {
+        copy.push_back(item)
+      }
+      RedisValue::List(copy)
+    }
+    RedisValue::Set(s) => {
+      let copy = Map([], capacity=s.length())
+      for member_val, flag in s {
+        copy.set(member_val, flag)
+      }
+      RedisValue::Set(copy)
+    }
+    RedisValue::ZSet(z) => {
+      let copy = Map([], capacity=z.length())
+      for member_val, score in z {
+        copy.set(member_val, score)
+      }
+      RedisValue::ZSet(copy)
+    }
+  }
+}
+
+pub fn Database::copy(self : Database, source : String, destination : String) -> Bool {
+  if source == destination {
+    return false
+  }
+  if self.check_expired(source) {
+    return false
+  }
+  self.check_expired(destination) |> ignore
+  if self.data.contains(destination) {
+    return false
+  }
+  match self.data.get(source) {
+    Some(value) => {
+      self.put(destination, clone_redis_value(value))
+      true
+    }
+    None => false
+  }
+}
+
+pub fn Database::touch(self : Database, keys : Array[String]) -> Int {
+  let mut count = 0
+  for key in keys {
+    if !self.check_expired(key) && self.data.contains(key) {
+      count = count + 1
+    }
+  }
+  count
+}
+
+pub fn Database::unlink(self : Database, key : String) -> Bool {
+  self.del(key)
+}
+

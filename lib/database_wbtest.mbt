@@ -2192,3 +2192,175 @@ test "set_store_clears_destination_ttl" {
   debug_inspect(db.ttl("dest"), content="-1")
   debug_inspect(db.sismember("dest", "a"), content="true")
 }
+
+test "incrby_decrby_operations" {
+  let db = Database::new()
+  db.set("n", "10") |> ignore
+  debug_inspect(db.incrby("n", 5), content="Some(15)")
+  debug_inspect(db.decrby("n", 3), content="Some(12)")
+  debug_inspect(db.decrby("n", -2), content="Some(14)")
+  debug_inspect(db.get("n"), content="Some(\"14\")")
+
+  db.set("bad", "x") |> ignore
+  debug_inspect(db.incrby("bad", 1), content="None")
+  db.hset("h", "f", "v") |> ignore
+  debug_inspect(db.incrby("h", 1), content="None")
+  debug_inspect(db.type_of("h"), content="\"hash\"")
+}
+
+test "getrange_setrange_operations" {
+  let db = Database::new()
+  db.set("s", "Hello World") |> ignore
+  debug_inspect(db.getrange("s", 0, 4), content="\"Hello\"")
+  debug_inspect(db.getrange("s", -5, -1), content="\"World\"")
+  debug_inspect(db.getrange("s", 6, 100), content="\"World\"")
+  debug_inspect(db.getrange("nonexistent", 0, -1), content="\"\"")
+  debug_inspect(db.setrange("s", 6, "Moon!"), content="11")
+  debug_inspect(db.get("s"), content="Some(\"Hello Moon!\")")
+
+  db.set("grow", "Hi") |> ignore
+  debug_inspect(db.setrange("grow", 5, "!"), content="6")
+  debug_inspect(db.getrange("grow", 0, 1), content="\"Hi\"")
+  debug_inspect(db.getrange("grow", 5, 5), content="\"!\"")
+
+  db.set("empty_val", "abc") |> ignore
+  debug_inspect(db.setrange("empty_val", 1, ""), content="3")
+  debug_inspect(db.setrange("missing", 2, "ab"), content="4")
+  debug_inspect(db.getrange("missing", 2, 3), content="\"ab\"")
+  debug_inspect(db.setrange("s", -1, "x"), content="-1")
+
+  db.hset("hash_key", "f", "v") |> ignore
+  debug_inspect(db.setrange("hash_key", 0, "x"), content="-1")
+}
+
+test "hsetnx_operations" {
+  let db = Database::new()
+  debug_inspect(db.hsetnx("h", "f", "v"), content="true")
+  debug_inspect(db.hsetnx("h", "f", "x"), content="false")
+  debug_inspect(db.hget("h", "f"), content="Some(\"v\")")
+
+  db.set("s", "v") |> ignore
+  debug_inspect(db.hsetnx("s", "f", "v"), content="false")
+  debug_inspect(db.type_of("s"), content="\"string\"")
+}
+
+test "scan_operations" {
+  let db = Database::new()
+  for i = 0; i < 25; i = i + 1 {
+    db.set("scan:\{i}", "v") |> ignore
+  }
+
+  let (c1, b1) = db.scan(0, 10)
+  debug_inspect(b1.length(), content="10")
+  debug_inspect(c1, content="10")
+  let (c2, b2) = db.scan(c1, 10)
+  debug_inspect(b2.length(), content="10")
+  debug_inspect(c2, content="20")
+  let (c3, b3) = db.scan(c2, 10)
+  debug_inspect(b3.length(), content="5")
+  debug_inspect(c3, content="0")
+
+  let seen = Map([], capacity=25)
+  for batch in [b1, b2, b3] {
+    for key in batch {
+      seen.set(key, true)
+    }
+  }
+  debug_inspect(seen.length(), content="25")
+
+  let (c4, b4) = db.scan(0, 100)
+  debug_inspect(b4.length(), content="25")
+  debug_inspect(c4, content="0")
+
+  let (c5, b5) = db.scan(999, 10)
+  debug_inspect(b5.length(), content="0")
+  debug_inspect(c5, content="0")
+
+  let (_, b6) = db.scan(0, 0)
+  debug_inspect(b6.length(), content="10")
+}
+
+test "zset_with_scores_operations" {
+  let db = Database::new()
+  db.zadd("z", 1.0, "a") |> ignore
+  db.zadd("z", 2.0, "b") |> ignore
+  db.zadd("z", 3.0, "c") |> ignore
+
+  let asc = db.zrange_with_scores("z", 0, -1)
+  debug_inspect(asc.length(), content="3")
+  debug_inspect(asc[0].0, content="\"a\"")
+  debug_inspect(asc[0].1, content="1")
+  debug_inspect(asc[2].0, content="\"c\"")
+  debug_inspect(asc[2].1, content="3")
+
+  let desc = db.zrevrange_with_scores("z", 0, 1)
+  debug_inspect(desc.length(), content="2")
+  debug_inspect(desc[0].0, content="\"c\"")
+  debug_inspect(desc[0].1, content="3")
+  debug_inspect(desc[1].0, content="\"b\"")
+}
+
+test "zrangebylex_operations" {
+  let db = Database::new()
+  for item in ["a", "b", "c", "d"] {
+    db.zadd("z", 0.0, item) |> ignore
+  }
+
+  let all = db.zrangebylex("z", "-", "+")
+  debug_inspect(all.length(), content="4")
+  debug_inspect(all[0], content="\"a\"")
+  debug_inspect(all[3], content="\"d\"")
+
+  let incl = db.zrangebylex("z", "[b", "[c")
+  debug_inspect(incl.length(), content="2")
+  debug_inspect(incl[0], content="\"b\"")
+  debug_inspect(incl[1], content="\"c\"")
+
+  let excl = db.zrangebylex("z", "(b", "(d")
+  debug_inspect(excl.length(), content="1")
+  debug_inspect(excl[0], content="\"c\"")
+
+  let upper = db.zrangebylex("z", "-", "(c")
+  debug_inspect(upper.length(), content="2")
+  debug_inspect(db.zrangebylex("z", "+", "+").length(), content="0")
+  debug_inspect(db.zrangebylex("z", "b", "+").length(), content="0")
+}
+
+test "copy_operations" {
+  let db = Database::new()
+  db.hset("src", "f", "v") |> ignore
+  debug_inspect(db.copy("src", "dst"), content="true")
+  debug_inspect(db.hget("dst", "f"), content="Some(\"v\")")
+
+  db.hset("src", "f", "changed") |> ignore
+  debug_inspect(db.hget("dst", "f"), content="Some(\"v\")")
+  debug_inspect(db.copy("src", "dst"), content="false")
+  debug_inspect(db.copy("missing", "fresh"), content="false")
+  debug_inspect(db.copy("src", "src"), content="false")
+
+  db.rpush("list_src", "a") |> ignore
+  debug_inspect(db.copy("list_src", "list_dst"), content="true")
+  db.rpush("list_src", "b") |> ignore
+  debug_inspect(db.llen("list_dst"), content="1")
+
+  db.set("ttl_src", "v") |> ignore
+  db.expire("ttl_src", 100) |> ignore
+  debug_inspect(db.copy("ttl_src", "ttl_dst"), content="true")
+  debug_inspect(db.ttl("ttl_dst"), content="-1")
+}
+
+test "touch_unlink_operations" {
+  let db = Database::new()
+  db.set("a", "1") |> ignore
+  db.set("b", "2") |> ignore
+  debug_inspect(db.touch(["a", "b", "missing"]), content="2")
+
+  db.set("expired", "v") |> ignore
+  db.pexpire("expired", 10) |> ignore
+  db.advance_time(20)
+  debug_inspect(db.touch(["expired"]), content="0")
+
+  debug_inspect(db.unlink("a"), content="true")
+  debug_inspect(db.exists("a"), content="false")
+  debug_inspect(db.unlink("a"), content="false")
+}
