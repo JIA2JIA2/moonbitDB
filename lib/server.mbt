@@ -80,6 +80,7 @@ pub fn Database::command() -> Array[String] {
     "ZRANK", "ZREVRANK", "ZINCRBY", "ZREMRANGEBYRANK", "ZREMRANGEBYSCORE", "ZREMRANGEBYLEX",
     "ZPOPMIN", "ZPOPMAX", "ZMSCORE", "ZRANDMEMBER", "ZDIFF", "ZDIFFSTORE", "ZUNION", "ZUNIONSTORE", "ZINTER", "ZINTERSTORE", "ZINTERCARD", "ZRANGESTORE", "ZSCAN",
     "DBSIZE", "FLUSHDB", "FLUSHALL", "RANDOMKEY", "RENAME", "RENAMENX", "COPY", "TOUCH", "UNLINK",
+    "MULTI", "EXEC", "DISCARD",
     "PING", "ECHO", "INFO", "TIME", "COMMAND", "OBJECT_ENCODING"
   ]
 }
@@ -95,6 +96,39 @@ pub fn Database::object_encoding(self : Database, key : String) -> String? {
       Some(RedisValue::Set(s)) => if s.length() > 128 { Some("hashtable") } else { Some("listpack") }
       Some(RedisValue::ZSet(z)) => if z.length() > 128 { Some("skiplist") } else { Some("listpack") }
       None => None
+    }
+  }
+}
+
+pub fn Database::multi(self : Database) -> String {
+  if self.in_transaction {
+    "ERR MULTI calls can not be nested"
+  } else {
+    self.begin_transaction()
+    "OK"
+  }
+}
+
+pub fn Database::exec(self : Database) -> String {
+  if !self.in_transaction {
+    "ERR EXEC without MULTI"
+  } else {
+    if self.run_transaction() {
+      "OK"
+    } else {
+      "ERR EXEC failed"
+    }
+  }
+}
+
+pub fn Database::discard(self : Database) -> String {
+  if !self.in_transaction {
+    "ERR DISCARD without MULTI"
+  } else {
+    if self.clear_transaction() {
+      "OK"
+    } else {
+      "ERR DISCARD failed"
     }
   }
 }

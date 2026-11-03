@@ -15,9 +15,14 @@ pub fn Database::try_sadd(self : Database, key : String, value : String) -> Resu
 }
 
 pub fn Database::sadd(self : Database, key : String, value : String) -> Bool {
-  match self.try_sadd(key, value) {
-    Ok(added) => added
-    Err(_) => false
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::SAdd(key, value))
+    false
+  } else {
+    match self.try_sadd(key, value) {
+      Ok(added) => added
+      Err(_) => false
+    }
   }
 }
 
@@ -141,20 +146,25 @@ pub fn Database::smismember(
 }
 
 pub fn Database::srem(self : Database, key : String, value : String) -> Bool {
-  if self.check_expired(key) {
-    false
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::SRem(key, value))
+    true
   } else {
-    match self.data.get(key) {
-      Some(RedisValue::Set(set)) => {
-        let existed = set.contains(value)
-        if existed {
-          set.remove(value)
-          self.sscan_snapshots.remove(key)
-          self.remove_if_empty(key, set.length())
+    if self.check_expired(key) {
+      false
+    } else {
+      match self.data.get(key) {
+        Some(RedisValue::Set(set)) => {
+          let existed = set.contains(value)
+          if existed {
+            set.remove(value)
+            self.sscan_snapshots.remove(key)
+            self.remove_if_empty(key, set.length())
+          }
+          existed
         }
-        existed
+        _ => false
       }
-      _ => false
     }
   }
 }

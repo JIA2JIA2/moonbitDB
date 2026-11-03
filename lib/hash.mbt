@@ -69,9 +69,14 @@ pub fn Database::try_hset(self : Database, key : String, field : String, value :
 }
 
 pub fn Database::hset(self : Database, key : String, field : String, value : String) -> Int {
-  match self.try_hset(key, field, value) {
-    Ok(created) => created
-    Err(_) => -1
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::HSet(key, field, value))
+    -1
+  } else {
+    match self.try_hset(key, field, value) {
+      Ok(created) => created
+      Err(_) => -1
+    }
   }
 }
 
@@ -99,20 +104,25 @@ pub fn Database::hget(self : Database, key : String, field : String) -> String? 
 }
 
 pub fn Database::hdel(self : Database, key : String, field : String) -> Bool {
-  if self.check_expired(key) {
-    false
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::HDel(key, field))
+    true
   } else {
-    match self.data.get(key) {
-      Some(RedisValue::Hash(h)) => {
-        let existed = h.contains(field)
-        if existed {
-          h.remove(field)
-          self.hscan_snapshots.remove(key)
-          self.remove_if_empty(key, h.length())
+    if self.check_expired(key) {
+      false
+    } else {
+      match self.data.get(key) {
+        Some(RedisValue::Hash(h)) => {
+          let existed = h.contains(field)
+          if existed {
+            h.remove(field)
+            self.hscan_snapshots.remove(key)
+            self.remove_if_empty(key, h.length())
+          }
+          existed
         }
-        existed
+        _ => false
       }
-      _ => false
     }
   }
 }

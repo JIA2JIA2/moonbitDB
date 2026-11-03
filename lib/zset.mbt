@@ -23,9 +23,14 @@ pub fn Database::try_zadd(self : Database, key : String, score : Float, member_v
 }
 
 pub fn Database::zadd(self : Database, key : String, score : Float, member_val : String) -> Bool {
-  match self.try_zadd(key, score, member_val) {
-    Ok(added) => added
-    Err(_) => false
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::ZAdd(key, score, member_val))
+    false
+  } else {
+    match self.try_zadd(key, score, member_val) {
+      Ok(added) => added
+      Err(_) => false
+    }
   }
 }
 
@@ -132,23 +137,28 @@ pub fn Database::zscore(self : Database, key : String, member_val : String) -> F
 }
 
 pub fn Database::zrem(self : Database, key : String, member_val : String) -> Bool {
-  if self.check_expired(key) {
-    false
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::ZRem(key, member_val))
+    true
   } else {
-    match self.data.get(key) {
-      Some(RedisValue::ZSet(zset)) => {
-        let existed = zset.contains(member_val)
-        if existed {
-          zset.remove(member_val)
-          if zset.length() == 0 {
-            self.remove_if_empty(key, 0)
-          } else {
-            self.write_through_remove_zset_members(key, [member_val])
+    if self.check_expired(key) {
+      false
+    } else {
+      match self.data.get(key) {
+        Some(RedisValue::ZSet(zset)) => {
+          let existed = zset.contains(member_val)
+          if existed {
+            zset.remove(member_val)
+            if zset.length() == 0 {
+              self.remove_if_empty(key, 0)
+            } else {
+              self.write_through_remove_zset_members(key, [member_val])
+            }
           }
+          existed
         }
-        existed
+        _ => false
       }
-      _ => false
     }
   }
 }

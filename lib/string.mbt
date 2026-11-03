@@ -1,6 +1,10 @@
 pub fn Database::set(self : Database, key : String, value : String) -> Unit {
-  self.put(key, RedisValue::String(value))
-  self.expires.remove(key)
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::Set(key, value))
+  } else {
+    self.put(key, RedisValue::String(value))
+    self.expires.remove(key)
+  }
 }
 
 pub fn Database::setnx(self : Database, key : String, value : String) -> Bool {
@@ -374,11 +378,21 @@ pub fn Database::decrby(self : Database, key : String, decrement : Int64) -> Int
 }
 
 pub fn Database::incr(self : Database, key : String) -> Int64? {
-  self.incrby(key, 1)
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::Incr(key))
+    None
+  } else {
+    self.incrby(key, 1)
+  }
 }
 
 pub fn Database::decr(self : Database, key : String) -> Int64? {
-  self.incrby(key, -1)
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::Decr(key))
+    None
+  } else {
+    self.incrby(key, -1)
+  }
 }
 
 pub fn Database::getrange(self : Database, key : String, start : Int, end : Int) -> String {

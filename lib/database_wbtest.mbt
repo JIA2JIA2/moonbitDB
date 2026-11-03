@@ -3804,3 +3804,114 @@ test "coverage_edge_cases" {
     true,
   )
 }
+
+test "transaction_multi_exec" {
+  let db = Database::new()
+  
+  ignore(db.multi())
+  db.set("key1", "value1")
+  db.set("key2", "value2")
+  ignore(db.incr("counter"))
+  @test.assert_eq(db.exec(), "OK")
+  
+  @test.assert_eq(db.get("key1"), Some("value1"))
+  @test.assert_eq(db.get("key2"), Some("value2"))
+  @test.assert_eq(db.get("counter"), Some("1"))
+}
+
+test "transaction_discard" {
+  let db = Database::new()
+  
+  ignore(db.multi())
+  db.set("key1", "value1")
+  db.set("key2", "value2")
+  @test.assert_eq(db.discard(), "OK")
+  
+  @test.assert_eq(db.get("key1"), None)
+  @test.assert_eq(db.get("key2"), None)
+}
+
+test "transaction_nested_multi" {
+  let db = Database::new()
+  
+  ignore(db.multi())
+  db.set("key1", "value1")
+  @test.assert_eq(db.multi(), "ERR MULTI calls can not be nested")
+  @test.assert_eq(db.exec(), "OK")
+  
+  @test.assert_eq(db.get("key1"), Some("value1"))
+}
+
+test "transaction_exec_without_multi" {
+  let db = Database::new()
+  
+  @test.assert_eq(db.exec(), "ERR EXEC without MULTI")
+}
+
+test "transaction_discard_without_multi" {
+  let db = Database::new()
+  
+  @test.assert_eq(db.discard(), "ERR DISCARD without MULTI")
+}
+
+test "transaction_hash_operations" {
+  let db = Database::new()
+  
+  ignore(db.multi())
+  ignore(db.hset("hash_key", "field1", "value1"))
+  ignore(db.hset("hash_key", "field2", "value2"))
+  ignore(db.hdel("hash_key", "field1"))
+  @test.assert_eq(db.exec(), "OK")
+  
+  @test.assert_eq(db.hget("hash_key", "field1"), None)
+  @test.assert_eq(db.hget("hash_key", "field2"), Some("value2"))
+}
+
+test "transaction_list_operations" {
+  let db = Database::new()
+  
+  ignore(db.multi())
+  ignore(db.lpush("list_key", "value1"))
+  ignore(db.rpush("list_key", "value2"))
+  @test.assert_eq(db.exec(), "OK")
+  
+  @test.assert_eq(db.lrange("list_key", 0, -1), ["value1", "value2"])
+}
+
+test "transaction_set_operations" {
+  let db = Database::new()
+  
+  ignore(db.multi())
+  ignore(db.sadd("set_key", "member1"))
+  ignore(db.sadd("set_key", "member2"))
+  ignore(db.srem("set_key", "member1"))
+  @test.assert_eq(db.exec(), "OK")
+  
+  @test.assert_eq(db.smembers("set_key"), ["member2"])
+}
+
+test "transaction_zset_operations" {
+  let db = Database::new()
+  
+  ignore(db.multi())
+  ignore(db.zadd("zset_key", 10.0, "member1"))
+  ignore(db.zadd("zset_key", 20.0, "member2"))
+  ignore(db.zrem("zset_key", "member1"))
+  @test.assert_eq(db.exec(), "OK")
+  
+  @test.assert_eq(db.zrange("zset_key", 0, -1), ["member2"])
+}
+
+test "transaction_del" {
+  let db = Database::new()
+  
+  db.set("key1", "value1")
+  db.set("key2", "value2")
+  
+  ignore(db.multi())
+  ignore(db.del("key1"))
+  @test.assert_eq(db.exec(), "OK")
+  
+  @test.assert_eq(db.get("key1"), None)
+  @test.assert_eq(db.get("key2"), Some("value2"))
+}

@@ -11,9 +11,14 @@ pub fn Database::try_lpush(self : Database, key : String, value : String) -> Res
 }
 
 pub fn Database::lpush(self : Database, key : String, value : String) -> Int {
-  match self.try_lpush(key, value) {
-    Ok(length) => length
-    Err(_) => -1
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::LPush(key, value))
+    -1
+  } else {
+    match self.try_lpush(key, value) {
+      Ok(length) => length
+      Err(_) => -1
+    }
   }
 }
 
@@ -30,9 +35,14 @@ pub fn Database::try_rpush(self : Database, key : String, value : String) -> Res
 }
 
 pub fn Database::rpush(self : Database, key : String, value : String) -> Int {
-  match self.try_rpush(key, value) {
-    Ok(length) => length
-    Err(_) => -1
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::RPush(key, value))
+    -1
+  } else {
+    match self.try_rpush(key, value) {
+      Ok(length) => length
+      Err(_) => -1
+    }
   }
 }
 
