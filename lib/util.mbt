@@ -188,3 +188,97 @@ pub fn int_to_string(n : Int) -> String {
   }
 }
 
+pub fn parse_float(s : String) -> Float? {
+  if s.length() == 0 {
+    None
+  } else {
+    let mut result : Float = 0.0
+    let mut negative = false
+    let mut start = 0
+    if s[0] == 45 {
+      negative = true
+      start = 1
+    } else if s[0] == 43 {
+      start = 1
+    }
+    if start >= s.length() {
+      return None
+    }
+    let mut has_dot = false
+    let mut divisor : Float = 1.0
+    for i = start; i < s.length(); i = i + 1 {
+      match uint16_to_digit(s[i]) {
+        Some(digit) => {
+          let digit_f = Float::from_int(digit)
+          if has_dot {
+            divisor = divisor * 10.0
+            result = result + digit_f / divisor
+          } else {
+            result = result * 10.0 + digit_f
+          }
+        }
+        None => {
+          if s[i] == 46 && !has_dot {
+            has_dot = true
+          } else {
+            return None
+          }
+        }
+      }
+    }
+    if negative {
+      Some(-result)
+    } else {
+      Some(result)
+    }
+  }
+}
+
+pub fn format_float(n : Float) -> String {
+  if n == 0.0 {
+    "0"
+  } else {
+    let mut num = n
+    if num < 0.0 {
+      num = -num
+    }
+    let int_part = num.to_int()
+    let int_part_f = Float::from_int(int_part)
+    let mut frac_part = num - int_part_f
+    let mut result = int_to_string(int_part)
+    if frac_part > 0.0 {
+      result = result + "."
+      let mut precision = 0
+      while frac_part > 0.0 && precision < 10 {
+        frac_part = frac_part * 10.0
+        let digit = frac_part.to_int()
+        let digit_f = Float::from_int(digit)
+        result = result + digit_to_string(digit)
+        frac_part = frac_part - digit_f
+        precision = precision + 1
+      }
+    }
+    if n < 0.0 {
+      "-" + result
+    } else {
+      result
+    }
+  }
+}
+
+fn digit_to_string(n : Int) -> String {
+  match n {
+    0 => "0"
+    1 => "1"
+    2 => "2"
+    3 => "3"
+    4 => "4"
+    5 => "5"
+    6 => "6"
+    7 => "7"
+    8 => "8"
+    9 => "9"
+    _ => "0"
+  }
+}
+

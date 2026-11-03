@@ -244,6 +244,41 @@ pub fn Database::hincrby(self : Database, key : String, field : String, incremen
   }
 }
 
+pub fn Database::try_hincrbyfloat(
+  self : Database,
+  key : String,
+  field : String,
+  increment : Float,
+) -> Result[Float, RedisError] {
+  self.check_expired(key) |> ignore
+  let hash = match self.data.get(key) {
+    Some(RedisValue::Hash(h)) => h
+    None => Map([], capacity=10)
+    Some(_) => return Err(RedisError::WrongType)
+  }
+  let current = match hash.get(field) {
+    Some(value) => match parse_float(value) {
+      Some(n) => n
+      None => return Err(RedisError::NotInteger)
+    }
+    None => 0.0
+  }
+  let new_value = current + increment
+  if new_value != new_value {
+    return Err(RedisError::Overflow)
+  }
+  hash.set(field, format_float(new_value))
+  self.put(key, RedisValue::Hash(hash))
+  Ok(new_value)
+}
+
+pub fn Database::hincrbyfloat(self : Database, key : String, field : String, increment : Float) -> Float? {
+  match self.try_hincrbyfloat(key, field, increment) {
+    Ok(value) => Some(value)
+    Err(_) => None
+  }
+}
+
 pub fn Database::hsetnx(self : Database, key : String, field : String, value : String) -> Bool {
   self.check_expired(key) |> ignore
   let hash = match self.data.get(key) {
