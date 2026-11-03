@@ -56,11 +56,23 @@ pub fn Database::getset(self : Database, key : String, value : String) -> String
   }
 }
 
-pub fn Database::mset(self : Database, keys : Array[String], values : Array[String]) -> Unit {
-  for i = 0; i < keys.length() && i < values.length(); i = i + 1 {
+pub fn Database::try_mset(
+  self : Database,
+  keys : Array[String],
+  values : Array[String],
+) -> Result[Unit, RedisError] {
+  if keys.length() == 0 || keys.length() != values.length() {
+    return Err(RedisError::InvalidArgument)
+  }
+  for i = 0; i < keys.length(); i = i + 1 {
     self.put(keys[i], RedisValue::String(values[i]))
     self.expires.remove(keys[i])
   }
+  Ok(())
+}
+
+pub fn Database::mset(self : Database, keys : Array[String], values : Array[String]) -> Unit {
+  self.try_mset(keys, values) |> ignore
 }
 
 pub fn Database::mget(self : Database, keys : Array[String]) -> Array[String?] {
@@ -152,11 +164,14 @@ pub fn Database::try_incrby(self : Database, key : String, increment : Int64) ->
     Some(_) => return Err(RedisError::WrongType)
   }
   match parse_int64(current) {
-    Some(n) => {
-      let new_value = n + increment
-      self.put(key, RedisValue::String("\{new_value}"))
-      Ok(new_value)
-    }
+    Some(n) =>
+      match checked_add_i64(n, increment) {
+        Some(new_value) => {
+          self.put(key, RedisValue::String("\{new_value}"))
+          Ok(new_value)
+        }
+        None => Err(RedisError::Overflow)
+      }
     None => Err(RedisError::NotInteger)
   }
 }
@@ -169,7 +184,12 @@ pub fn Database::incrby(self : Database, key : String, increment : Int64) -> Int
 }
 
 pub fn Database::try_decrby(self : Database, key : String, decrement : Int64) -> Result[Int64, RedisError] {
-  self.try_incrby(key, -decrement)
+  let min_value : Int64 = -9223372036854775807L - 1L
+  if decrement == min_value {
+    Err(RedisError::Overflow)
+  } else {
+    self.try_incrby(key, -decrement)
+  }
 }
 
 pub fn Database::decrby(self : Database, key : String, decrement : Int64) -> Int64? {
@@ -213,8 +233,13 @@ fn null_padding(count : Int) -> String {
   String::from_array(chars)
 }
 
+const MAX_STRING_SIZE : Int64 = 536870912L
+
 pub fn Database::try_setrange(self : Database, key : String, offset : Int, value : String) -> Result[Int, RedisError] {
   if offset < 0 {
+    return Err(RedisError::InvalidArgument)
+  }
+  if value.length() > 0 && offset.to_int64() + value.length().to_int64() > MAX_STRING_SIZE {
     return Err(RedisError::InvalidArgument)
   }
   if self.check_expired(key) {

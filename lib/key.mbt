@@ -55,7 +55,7 @@ pub fn Database::ttl(self : Database, key : String) -> Int64 {
       self.delete_key(key)
       -2
     } else {
-      (remaining + 999) / 1000
+      (remaining + 500) / 1000
     }
   } else {
     -1

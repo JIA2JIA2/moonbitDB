@@ -3,6 +3,7 @@ pub enum RedisError {
   NotInteger
   NotFound
   InvalidArgument
+  Overflow
 }
 
 pub fn RedisError::message(self : RedisError) -> String {
@@ -11,5 +12,6 @@ pub fn RedisError::message(self : RedisError) -> String {
     RedisError::NotInteger => "ERR value is not an integer or out of range"
     RedisError::NotFound => "ERR no such key"
     RedisError::InvalidArgument => "ERR invalid argument"
+    RedisError::Overflow => "ERR increment or decrement would overflow"
   }
 }

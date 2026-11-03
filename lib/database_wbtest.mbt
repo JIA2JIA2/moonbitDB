@@ -1639,7 +1639,7 @@ test "batch_extended_edge_cases" {
   @test.assert_eq(result[3], None)
   
   db.mset(["k4", "k5", "k6"], ["v4"]) |> ignore
-  @test.assert_eq(db.exists("k4"), true)
+  @test.assert_eq(db.exists("k4"), false)
   @test.assert_eq(db.exists("k5"), false)
   @test.assert_eq(db.exists("k6"), false)
   
@@ -1847,7 +1847,7 @@ test "append_cross_type_safety" {
   @test.assert_eq(db.get("mystr"), Some("hello world"))
 }
 
-test "ttl_ceil_rounding" {
+test "ttl_rounding" {
   let db = Database::new()
   db.set("key1", "value1")
   db.pexpire("key1", 1500) |> ignore
@@ -1862,7 +1862,15 @@ test "ttl_ceil_rounding" {
 
   db.set("key3", "value3")
   db.pexpire("key3", 1) |> ignore
-  @test.assert_eq(db.ttl("key3"), 1)
+  @test.assert_eq(db.ttl("key3"), 0)
+
+  db.set("key4", "value4")
+  db.pexpire("key4", 499) |> ignore
+  @test.assert_eq(db.ttl("key4"), 0)
+
+  db.set("key5", "value5")
+  db.pexpire("key5", 500) |> ignore
+  @test.assert_eq(db.ttl("key5"), 1)
 }
 
 test "pttl_precision" {
@@ -2604,4 +2612,166 @@ test "scan_match_and_copy_replace" {
   @test.assert_eq(db.type_of("dst"), "zset")
   @test.assert_eq(db.ttl("dst"), -1)
   @test.assert_eq(db.copy_with_replace("src", "fresh", false), true)
+}
+
+test "mset_hmset_length_validation" {
+  let db = Database::new()
+  @test.assert_eq(
+    match db.try_mset(["a", "b"], ["1"]) {
+      Err(RedisError::InvalidArgument) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(db.exists("a"), false)
+  @test.assert_eq(db.exists("b"), false)
+  @test.assert_eq(
+    match db.try_mset([], []) {
+      Err(RedisError::InvalidArgument) => true
+      _ => false
+    },
+    true,
+  )
+
+  db.mset(["c"], ["3"]) |> ignore
+  @test.assert_eq(db.get("c"), Some("3"))
+
+  @test.assert_eq(
+    match db.try_hmset("h", ["f1", "f2"], ["v1"]) {
+      Err(RedisError::InvalidArgument) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(db.exists("h"), false)
+
+  db.hmset("h", ["f1"], ["v1"]) |> ignore
+  @test.assert_eq(db.hget("h", "f1"), Some("v1"))
+
+  db.set("str", "v") |> ignore
+  @test.assert_eq(
+    match db.try_hmset("str", ["f"], ["v"]) {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(db.type_of("str"), "string")
+}
+
+test "integer_overflow_protection" {
+  let db = Database::new()
+  let max_value : Int64 = 9223372036854775807L
+  let min_value : Int64 = -9223372036854775807L - 1L
+
+  db.set("max", "9223372036854775807") |> ignore
+  @test.assert_eq(
+    match db.try_incrby("max", 1) {
+      Err(RedisError::Overflow) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(db.get("max"), Some("9223372036854775807"))
+
+  db.set("min", "-9223372036854775808") |> ignore
+  @test.assert_eq(
+    match db.try_incrby("min", -1) {
+      Err(RedisError::Overflow) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(
+    match db.try_decrby("min", min_value) {
+      Err(RedisError::Overflow) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(db.get("min"), Some("-9223372036854775808"))
+  @test.assert_eq(
+    match db.try_incrby("min", 1) {
+      Ok(value) => "\{value}"
+      Err(_) => "err"
+    },
+    "-9223372036854775807",
+  )
+
+  db.hset("h", "f", "9223372036854775807") |> ignore
+  @test.assert_eq(
+    match db.try_hincrby("h", "f", 1) {
+      Err(RedisError::Overflow) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(db.hget("h", "f"), Some("9223372036854775807"))
+
+  @test.assert_eq(parse_int64("9223372036854775808"), None)
+  @test.assert_eq(parse_int64("-9223372036854775809"), None)
+  @test.assert_eq(parse_int64("-9223372036854775808"), Some(min_value))
+  @test.assert_eq(parse_int64("9223372036854775807"), Some(max_value))
+  @test.assert_eq(parse_int("2147483648"), None)
+  @test.assert_eq(parse_int("2147483647"), Some(2147483647))
+  @test.assert_eq(parse_int("-2147483648"), Some(-2147483648))
+}
+
+test "setrange_size_limit" {
+  let db = Database::new()
+  db.set("k", "v") |> ignore
+  let too_large = 536870913
+  @test.assert_eq(
+    match db.try_setrange("k", too_large, "x") {
+      Err(RedisError::InvalidArgument) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(db.get("k"), Some("v"))
+  @test.assert_eq(db.setrange("missing", too_large, "x"), -1)
+  @test.assert_eq(db.exists("missing"), false)
+  @test.assert_eq(
+    match db.try_setrange("k", too_large, "") {
+      Ok(length) => length
+      Err(_) => -1
+    },
+    1,
+  )
+}
+
+test "read_set_type_errors" {
+  let db = Database::new()
+  db.sadd("s1", "a") |> ignore
+  db.set("str", "v") |> ignore
+
+  @test.assert_eq(
+    match db.try_sinter(["s1", "str"]) {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(db.sinter(["s1", "str"]).length(), 0)
+  @test.assert_eq(
+    match db.try_sunion(["s1", "str"]) {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(
+    match db.try_sdiff(["s1", "str"]) {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(
+    match db.try_sinter(["s1"]) {
+      Ok(values) => values.length()
+      Err(_) => -1
+    },
+    1,
+  )
 }

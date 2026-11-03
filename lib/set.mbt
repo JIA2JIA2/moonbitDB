@@ -156,6 +156,14 @@ fn Database::get_set_members(self : Database, key : String) -> Map[String, Bool]
   }
 }
 
+pub fn Database::try_sinter(self : Database, keys : Array[String]) -> Result[Array[String], RedisError] {
+  if !self.sets_valid(keys) {
+    Err(RedisError::WrongType)
+  } else {
+    Ok(self.sinter(keys))
+  }
+}
+
 pub fn Database::sinter(self : Database, keys : Array[String]) -> Array[String] {
   if keys.length() == 0 {
     return []
@@ -208,6 +216,14 @@ pub fn Database::sinterstore(self : Database, destination : String, keys : Array
   }
 }
 
+pub fn Database::try_sunion(self : Database, keys : Array[String]) -> Result[Array[String], RedisError] {
+  if !self.sets_valid(keys) {
+    Err(RedisError::WrongType)
+  } else {
+    Ok(self.sunion(keys))
+  }
+}
+
 pub fn Database::sunion(self : Database, keys : Array[String]) -> Array[String] {
   let result = Map([], capacity=10)
   for key in keys {
@@ -241,6 +257,14 @@ pub fn Database::sunionstore(self : Database, destination : String, keys : Array
   match self.try_sunionstore(destination, keys) {
     Ok(count) => count
     Err(_) => -1
+  }
+}
+
+pub fn Database::try_sdiff(self : Database, keys : Array[String]) -> Result[Array[String], RedisError] {
+  if !self.sets_valid(keys) {
+    Err(RedisError::WrongType)
+  } else {
+    Ok(self.sdiff(keys))
   }
 }
 

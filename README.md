@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**119 个测试用例，全部通过**。
+当前测试覆盖：**123 个测试用例，全部通过**。
 
 ### 运行基准与覆盖率
 
@@ -132,7 +132,7 @@ moonbitDB/
 │   ├── util.mbt                # 整数解析与通配符匹配
 │   ├── error.mbt               # RedisError 错误模型
 │   ├── server.mbt              # 服务器命令
-│   ├── database_wbtest.mbt     # 白盒测试（119 个用例）
+│   ├── database_wbtest.mbt     # 白盒测试（123 个用例）
 │   ├── database_property_wbtest.mbt # 属性测试
 │   ├── database_bench_test.mbt # 基准测试
 │   └── moon.pkg
@@ -174,7 +174,7 @@ moonbitDB/
 | `APPEND` | `(key, value) -> Int` | 追加字符串，返回新长度 |
 | `STRLEN` | `(key) -> Int` | 字符串长度 |
 | `GETRANGE` | `(key, start, end) -> String` | 获取子串（支持负数索引） |
-| `SETRANGE` | `(key, offset, value) -> Int` | 从 offset 覆盖写入，返回新长度（缺失部分以 NUL 填充） |
+| `SETRANGE` | `(key, offset, value) -> Int` | 从 offset 覆盖写入，返回新长度（缺失部分以 NUL 填充，单值上限 512MB） |
 | `INCR` | `(key) -> Int64?` | 自增 1（非数字返回 None） |
 | `DECR` | `(key) -> Int64?` | 自减 1（非数字返回 None） |
 | `INCRBY` | `(key, increment) -> Int64?` | 增加指定整数（非数字返回 None） |
@@ -196,7 +196,7 @@ moonbitDB/
 | `PEXPIRE` | `(key, ms) -> Bool` | 设置过期时间（毫秒） |
 | `EXPIREAT` | `(key, unix_seconds) -> Bool` | 设置过期时间戳（秒） |
 | `PEXPIREAT` | `(key, unix_ms) -> Bool` | 设置过期时间戳（毫秒） |
-| `TTL` | `(key) -> Int64` | 剩余生存时间（秒），-1 永久，-2 不存在 |
+| `TTL` | `(key) -> Int64` | 剩余生存时间（秒，四舍五入），-1 永久，-2 不存在 |
 | `PTTL` | `(key) -> Int64` | 剩余生存时间（毫秒） |
 | `PERSIST` | `(key) -> Bool` | 移除过期时间 |
 | `RENAME` | `(old_key, new_key) -> Bool` | 重命名 key（含 TTL 转移） |
@@ -323,7 +323,8 @@ moonbitDB/
 | `RedisError` | `WrongType` | 对错误类型的 key 执行操作 |
 | `RedisError` | `NotInteger` | 值不是合法整数 |
 | `RedisError` | `NotFound` | key 不存在或已过期 |
-| `RedisError` | `InvalidArgument` | 参数非法（如负 offset、空批量参数） |
+| `RedisError` | `InvalidArgument` | 参数非法（如负 offset、批量参数长度不一致） |
+| `RedisError` | `Overflow` | 整数自增/自减溢出 |
 
 > 旧方法保持兼容：`get/incrby/...` 仍返回 `Option`，`hset/lpush/...` 仍返回 `-1`/`false` 哨兵值；需要精确错误时调用对应的 `try_*` 方法。`RedisError::message()` 可获取 Redis 风格错误文本。
 
@@ -440,13 +441,16 @@ moonbitDB/
 | `srem` | `(self : Database, key : String, value : String) -> Bool` | 删除成员 |
 | `scard` | `(self : Database, key : String) -> Int` | 成员数量 |
 | `sismember` | `(self : Database, key : String, value : String) -> Bool` | 检查成员是否存在 |
-| `sinter` | `(self : Database, keys : Array[String]) -> Array[String]` | 多集合交集 |
+| `sinter` | `(self : Database, keys : Array[String]) -> Array[String]` | 多集合交集（类型错误返回空数组） |
+| `try_sinter` | `(self : Database, keys : Array[String]) -> Result[Array[String], RedisError]` | 精确错误版多集合交集 |
 | `sinterstore` | `(self : Database, destination : String, keys : Array[String]) -> Int` | 交集存储到 dest |
 | `try_sinterstore` | `(self : Database, destination : String, keys : Array[String]) -> Result[Int, RedisError]` | 精确错误版交集存储 |
-| `sunion` | `(self : Database, keys : Array[String]) -> Array[String]` | 多集合并集 |
+| `sunion` | `(self : Database, keys : Array[String]) -> Array[String]` | 多集合并集（类型错误返回空数组） |
+| `try_sunion` | `(self : Database, keys : Array[String]) -> Result[Array[String], RedisError]` | 精确错误版多集合并集 |
 | `sunionstore` | `(self : Database, destination : String, keys : Array[String]) -> Int` | 并集存储到 dest |
 | `try_sunionstore` | `(self : Database, destination : String, keys : Array[String]) -> Result[Int, RedisError]` | 精确错误版并集存储 |
-| `sdiff` | `(self : Database, keys : Array[String]) -> Array[String]` | 多集合差集 |
+| `sdiff` | `(self : Database, keys : Array[String]) -> Array[String]` | 多集合差集（类型错误返回空数组） |
+| `try_sdiff` | `(self : Database, keys : Array[String]) -> Result[Array[String], RedisError]` | 精确错误版多集合差集 |
 | `sdiffstore` | `(self : Database, destination : String, keys : Array[String]) -> Int` | 差集存储到 dest |
 | `try_sdiffstore` | `(self : Database, destination : String, keys : Array[String]) -> Result[Int, RedisError]` | 精确错误版差集存储 |
 | `smove` | `(self : Database, source : String, destination : String, value : String) -> Bool` | 跨集合移动元素 |
@@ -484,10 +488,12 @@ moonbitDB/
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `mset` | `(self : Database, keys : Array[String], values : Array[String]) -> Unit` | 批量设置 |
+| `mset` | `(self : Database, keys : Array[String], values : Array[String]) -> Unit` | 批量设置（长度不一致时整体不写入） |
+| `try_mset` | `(self : Database, keys : Array[String], values : Array[String]) -> Result[Unit, RedisError]` | 精确错误版批量设置 |
 | `mget` | `(self : Database, keys : Array[String]) -> Array[String?]` | 批量获取 |
 | `mdel` | `(self : Database, keys : Array[String]) -> Int` | 批量删除 |
-| `hmset` | `(self : Database, key : String, fields : Array[String], values : Array[String]) -> Unit` | 批量设置 hash 字段 |
+| `hmset` | `(self : Database, key : String, fields : Array[String], values : Array[String]) -> Unit` | 批量设置 hash 字段（长度不一致时整体不写入） |
+| `try_hmset` | `(self : Database, key : String, fields : Array[String], values : Array[String]) -> Result[Unit, RedisError]` | 精确错误版批量设置 hash 字段 |
 | `hmget` | `(self : Database, key : String, fields : Array[String]) -> Array[String?]` | 批量获取 hash 字段 |
 
 #### 服务器命令

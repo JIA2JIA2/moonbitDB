@@ -63,29 +63,24 @@ pub fn digit_to_uint16(n : Int) -> UInt16 {
   }
 }
 
-pub fn parse_int(s : String) -> Int? {
-  if s.length() == 0 {
+fn checked_add_i64(a : Int64, b : Int64) -> Int64? {
+  let sum = a + b
+  if (b > 0 && sum < a) || (b < 0 && sum > a) {
     None
   } else {
-    let mut result = 0
-    let mut sign = 1
-    let mut start = 0
-    if s[0] == 45 {
-      sign = -1
-      start = 1
-    } else if s[0] == 43 {
-      start = 1
-    }
-    if start >= s.length() {
-      return None
-    }
-    for i = start; i < s.length(); i = i + 1 {
-      match uint16_to_digit(s[i]) {
-        Some(digit) => result = result * 10 + digit
-        None => return None
+    Some(sum)
+  }
+}
+
+pub fn parse_int(s : String) -> Int? {
+  match parse_int64(s) {
+    Some(n) =>
+      if n >= -2147483648L && n <= 2147483647L {
+        Some(n.to_int())
+      } else {
+        None
       }
-    }
-    Some(result * sign)
+    None => None
   }
 }
 
@@ -94,10 +89,10 @@ pub fn parse_int64(s : String) -> Int64? {
     None
   } else {
     let mut result : Int64 = 0
-    let mut sign : Int64 = 1
+    let mut negative = false
     let mut start = 0
     if s[0] == 45 {
-      sign = -1
+      negative = true
       start = 1
     } else if s[0] == 43 {
       start = 1
@@ -105,13 +100,34 @@ pub fn parse_int64(s : String) -> Int64? {
     if start >= s.length() {
       return None
     }
+    let max_div10 : Int64 = 922337203685477580
     for i = start; i < s.length(); i = i + 1 {
       match uint16_to_digit(s[i]) {
-        Some(digit) => result = result * 10 + digit.to_int64()
+        Some(digit) => {
+          let d = digit.to_int64()
+          if result > max_div10 {
+            return None
+          }
+          if result == max_div10 {
+            let limit : Int64 = if negative { 8 } else { 7 }
+            if d > limit {
+              return None
+            }
+          }
+          result = result * 10 + d
+        }
         None => return None
       }
     }
-    Some(result * sign)
+    if negative {
+      if result < 0 {
+        Some(result)
+      } else {
+        Some(-result)
+      }
+    } else {
+      Some(result)
+    }
   }
 }
 

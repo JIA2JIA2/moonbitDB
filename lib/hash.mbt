@@ -1,14 +1,27 @@
-pub fn Database::hmset(self : Database, key : String, fields : Array[String], values : Array[String]) -> Unit {
+pub fn Database::try_hmset(
+  self : Database,
+  key : String,
+  fields : Array[String],
+  values : Array[String],
+) -> Result[Unit, RedisError] {
+  if fields.length() == 0 || fields.length() != values.length() {
+    return Err(RedisError::InvalidArgument)
+  }
   self.check_expired(key) |> ignore
   let hash = match self.data.get(key) {
     Some(RedisValue::Hash(h)) => h
     None => Map([], capacity=10)
-    Some(_) => return
+    Some(_) => return Err(RedisError::WrongType)
   }
-  for i = 0; i < fields.length() && i < values.length(); i = i + 1 {
+  for i = 0; i < fields.length(); i = i + 1 {
     hash.set(fields[i], values[i])
   }
   self.put(key, RedisValue::Hash(hash))
+  Ok(())
+}
+
+pub fn Database::hmset(self : Database, key : String, fields : Array[String], values : Array[String]) -> Unit {
+  self.try_hmset(key, fields, values) |> ignore
 }
 
 pub fn Database::hmget(self : Database, key : String, fields : Array[String]) -> Array[String?] {
@@ -191,10 +204,14 @@ pub fn Database::try_hincrby(
       }
     None => 0
   }
-  let new_value = current + increment
-  hash.set(field, "\{new_value}")
-  self.put(key, RedisValue::Hash(hash))
-  Ok(new_value)
+  match checked_add_i64(current, increment) {
+    Some(new_value) => {
+      hash.set(field, "\{new_value}")
+      self.put(key, RedisValue::Hash(hash))
+      Ok(new_value)
+    }
+    None => Err(RedisError::Overflow)
+  }
 }
 
 pub fn Database::hincrby(self : Database, key : String, field : String, increment : Int64) -> Int64? {
