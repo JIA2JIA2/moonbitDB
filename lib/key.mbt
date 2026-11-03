@@ -135,15 +135,68 @@ pub fn Database::keys(self : Database) -> Array[String] {
   result
 }
 
-pub fn Database::keys_pattern(self : Database, pattern : String) -> Array[String] {
-  self.collect_expired()
-  let result = []
-  for key, _ in self.data {
-    if match_pattern(pattern, key) {
-      result.push(key)
+fn Database::sorted_keys_snapshot(self : Database) -> Array[String] {
+  match self.scan_snapshot {
+    Some(keys) => keys
+    None => {
+      self.collect_expired()
+      let keys : Array[String] = []
+      for key, _ in self.data {
+        keys.push(key)
+      }
+      keys.sort_by((a, b) => a.lexical_compare(b))
+      self.scan_snapshot = Some(keys)
+      keys
     }
   }
-  result
+}
+
+fn literal_prefix(pattern : String) -> String {
+  let mut index = 0
+  while index < pattern.length() && pattern[index] != '*' && pattern[index] != '?' {
+    index = index + 1
+  }
+  pattern[0:index].to_owned()
+}
+
+fn lower_bound_keys(keys : Array[String], target : String) -> Int {
+  let mut lo = 0
+  let mut hi = keys.length()
+  while lo < hi {
+    let mid = (lo + hi) / 2
+    if keys[mid].lexical_compare(target) < 0 {
+      lo = mid + 1
+    } else {
+      hi = mid
+    }
+  }
+  lo
+}
+
+pub fn Database::keys_pattern(self : Database, pattern : String) -> Array[String] {
+  let prefix = literal_prefix(pattern)
+  if prefix.length() == 0 {
+    self.collect_expired()
+    let result = []
+    for key, _ in self.data {
+      if match_pattern(pattern, key) {
+        result.push(key)
+      }
+    }
+    result
+  } else {
+    let keys = self.sorted_keys_snapshot()
+    let start = lower_bound_keys(keys, prefix)
+    let result = []
+    let mut index = start
+    while index < keys.length() && keys[index].has_prefix(prefix) {
+      if match_pattern(pattern, keys[index]) {
+        result.push(keys[index])
+      }
+      index = index + 1
+    }
+    result
+  }
 }
 
 pub fn Database::type_of(self : Database, key : String) -> String {
@@ -163,15 +216,15 @@ pub fn Database::type_of(self : Database, key : String) -> String {
 
 pub fn Database::randomkey(self : Database) -> String? {
   self.collect_expired()
-  let all_keys : Array[String] = []
+  let mut chosen : String? = None
+  let mut seen = 0
   for key, _ in self.data {
-    all_keys.push(key)
+    seen = seen + 1
+    if self.next_rand() % seen == 0 {
+      chosen = Some(key)
+    }
   }
-  if all_keys.length() == 0 {
-    None
-  } else {
-    Some(all_keys[self.next_rand() % all_keys.length()])
-  }
+  chosen
 }
 
 pub fn Database::rename(self : Database, old_key : String, new_key : String) -> Bool {
@@ -218,7 +271,7 @@ pub fn Database::scan(self : Database, cursor : Int, count : Int) -> (Int, Array
     for key, _ in self.data {
       keys.push(key)
     }
-    keys.sort()
+    keys.sort_by((a, b) => a.lexical_compare(b))
     self.scan_snapshot = Some(keys)
     keys
   } else {
@@ -230,7 +283,7 @@ pub fn Database::scan(self : Database, cursor : Int, count : Int) -> (Int, Array
         for key, _ in self.data {
           keys.push(key)
         }
-        keys.sort()
+        keys.sort_by((a, b) => a.lexical_compare(b))
         self.scan_snapshot = Some(keys)
         keys
       }

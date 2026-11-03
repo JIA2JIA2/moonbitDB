@@ -2953,3 +2953,65 @@ test "expire_heap_compacts_after_delete_and_persist" {
   }
   @test.assert_eq(db2.expire_heap.length() <= 36, true)
 }
+
+test "zset_write_through_removals" {
+  let db = Database::new()
+  for member_val in ["b", "aa", "c", "a"] {
+    db.zadd("z", 0.0, member_val) |> ignore
+  }
+  @test.assert_eq(db.zrangebylex("z", "-", "+"), ["a", "aa", "b", "c"])
+
+  db.zadd("z", 0.0, "ab") |> ignore
+  @test.assert_eq(db.zrangebylex("z", "-", "+"), ["a", "aa", "ab", "b", "c"])
+  @test.assert_eq(db.zrange("z", 0, -1), ["a", "aa", "ab", "b", "c"])
+
+  db.zrem("z", "aa") |> ignore
+  @test.assert_eq(db.zrange("z", 0, -1), ["a", "ab", "b", "c"])
+  @test.assert_eq(db.zrangebylex("z", "-", "+"), ["a", "ab", "b", "c"])
+
+  db.zrange("z", 0, -1) |> ignore
+  db.zremrangebyrank("z", 0, 0) |> ignore
+  @test.assert_eq(db.zrange("z", 0, -1), ["ab", "b", "c"])
+
+  db.zrange("z", 0, -1) |> ignore
+  db.zremrangebyscore("z", 0.0, 0.0) |> ignore
+  @test.assert_eq(db.zcard("z"), 0)
+  @test.assert_eq(db.exists("z"), false)
+}
+
+test "zset_pop_write_through_cache" {
+  let db = Database::new()
+  for i = 0; i < 6; i = i + 1 {
+    db.zadd("z", Float::from_int(i), "m:\{i}") |> ignore
+  }
+  @test.assert_eq(db.zrange("z", 0, -1).length(), 6)
+  @test.assert_eq(
+    match db.zpopmin("z") {
+      Some((member_val, _)) => member_val
+      None => ""
+    },
+    "m:0",
+  )
+  @test.assert_eq(db.zrange("z", 0, -1).length(), 5)
+  @test.assert_eq(
+    match db.zpopmax("z") {
+      Some((member_val, _)) => member_val
+      None => ""
+    },
+    "m:5",
+  )
+  @test.assert_eq(db.zrange("z", 0, -1), ["m:1", "m:2", "m:3", "m:4"])
+  @test.assert_eq(db.zrangebylex("z", "-", "+").length(), 4)
+}
+
+test "keys_pattern_prefix_pruning" {
+  let db = Database::new()
+  for key in ["user:1", "user:10", "user:2", "user:20", "product:1", "u", "user:"] {
+    db.set(key, "v") |> ignore
+  }
+  @test.assert_eq(db.keys_pattern("user:*").length(), 5)
+  @test.assert_eq(db.keys_pattern("user:1*").length(), 2)
+  @test.assert_eq(db.keys_pattern("user:?").length(), 2)
+  @test.assert_eq(db.keys_pattern("product:*").length(), 1)
+  @test.assert_eq(db.keys_pattern("*").length(), 7)
+}

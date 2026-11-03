@@ -9,7 +9,12 @@ pub fn Database::try_zadd(self : Database, key : String, score : Float, member_v
   zset.set(member_val, score)
   self.data.set(key, RedisValue::ZSet(zset))
   self.zset_rank_cache.remove(key)
-  self.zset_lex_cache.remove(key)
+  if !existed {
+    match self.zset_lex_cache.get(key) {
+      Some(cached) => self.zset_lex_cache.set(key, add_lex_member(cached, member_val))
+      None => ()
+    }
+  }
   match self.zset_sorted_cache.get(key) {
     Some(cached) => self.zset_sorted_cache.set(key, update_sorted_items(cached, member_val, Some(score)))
     None => ()
@@ -73,7 +78,7 @@ pub fn merge(left : Array[(String, Float)], right : Array[(String, Float)]) -> A
   let mut i = 0
   let mut j = 0
   while i < left.length() && j < right.length() {
-    if left[i].1 < right[j].1 || (left[i].1 == right[j].1 && left[i].0.compare(right[j].0) <= 0) {
+    if left[i].1 < right[j].1 || (left[i].1 == right[j].1 && left[i].0.lexical_compare(right[j].0) <= 0) {
       result.push(left[i])
       i = i + 1
     } else {
@@ -135,8 +140,11 @@ pub fn Database::zrem(self : Database, key : String, member_val : String) -> Boo
         let existed = zset.contains(member_val)
         if existed {
           zset.remove(member_val)
-          self.invalidate_zset_cache(key)
-          self.remove_if_empty(key, zset.length())
+          if zset.length() == 0 {
+            self.remove_if_empty(key, 0)
+          } else {
+            self.write_through_remove_zset_members(key, [member_val])
+          }
         }
         existed
       }
@@ -199,7 +207,7 @@ fn Database::get_sorted_lex(self : Database, key : String) -> Array[String] {
           }
         _ => ()
       }
-      members.sort()
+      members.sort_by((a, b) => a.lexical_compare(b))
       self.zset_lex_cache.set(key, members)
       members
     }
@@ -222,7 +230,7 @@ fn update_sorted_items(
       let result : Array[(String, Float)] = []
       let mut inserted = false
       for item in base {
-        if !inserted && (score < item.1 || (score == item.1 && member_val.compare(item.0) <= 0)) {
+        if !inserted && (score < item.1 || (score == item.1 && member_val.lexical_compare(item.0) <= 0)) {
           result.push((member_val, score))
           inserted = true
         }
@@ -235,6 +243,70 @@ fn update_sorted_items(
     }
     None => base
   }
+}
+
+fn remove_sorted_members(
+  items : Array[(String, Float)],
+  removed : Map[String, Bool],
+) -> Array[(String, Float)] {
+  let result : Array[(String, Float)] = []
+  for item in items {
+    if !removed.contains(item.0) {
+      result.push(item)
+    }
+  }
+  result
+}
+
+fn remove_lex_members(items : Array[String], removed : Map[String, Bool]) -> Array[String] {
+  let result : Array[String] = []
+  for item in items {
+    if !removed.contains(item) {
+      result.push(item)
+    }
+  }
+  result
+}
+
+fn add_lex_member(items : Array[String], member_val : String) -> Array[String] {
+  for item in items {
+    if item == member_val {
+      return items
+    }
+  }
+  let result : Array[String] = []
+  let mut inserted = false
+  for item in items {
+    if !inserted && member_val.lexical_compare(item) <= 0 {
+      result.push(member_val)
+      inserted = true
+    }
+    result.push(item)
+  }
+  if !inserted {
+    result.push(member_val)
+  }
+  result
+}
+
+fn Database::write_through_remove_zset_members(
+  self : Database,
+  key : String,
+  members : Array[String],
+) -> Unit {
+  let removed = Map([], capacity=members.length())
+  for member_val in members {
+    removed.set(member_val, true)
+  }
+  match self.zset_sorted_cache.get(key) {
+    Some(items) => self.zset_sorted_cache.set(key, remove_sorted_members(items, removed))
+    None => ()
+  }
+  match self.zset_lex_cache.get(key) {
+    Some(items) => self.zset_lex_cache.set(key, remove_lex_members(items, removed))
+    None => ()
+  }
+  self.zset_rank_cache.remove(key)
 }
 
 fn lower_bound(sorted : Array[(String, Float)], score : Float) -> Int {
@@ -358,6 +430,7 @@ pub fn Database::try_zincrby(self : Database, key : String, increment : Float, m
     None => Map([], capacity=10)
     Some(_) => return Err(RedisError::WrongType)
   }
+  let existed = zset.contains(member_val)
   let current_score = match zset.get(member_val) {
     Some(s) => s
     None => 0.0
@@ -366,7 +439,12 @@ pub fn Database::try_zincrby(self : Database, key : String, increment : Float, m
   zset.set(member_val, new_score)
   self.data.set(key, RedisValue::ZSet(zset))
   self.zset_rank_cache.remove(key)
-  self.zset_lex_cache.remove(key)
+  if !existed {
+    match self.zset_lex_cache.get(key) {
+      Some(cached) => self.zset_lex_cache.set(key, add_lex_member(cached, member_val))
+      None => ()
+    }
+  }
   match self.zset_sorted_cache.get(key) {
     Some(cached) => self.zset_sorted_cache.set(key, update_sorted_items(cached, member_val, Some(new_score)))
     None => ()
@@ -392,16 +470,19 @@ pub fn Database::zremrangebyrank(self : Database, key : String, start : Int, end
         let start_idx = if start < 0 { len + start } else { start }
         let end_idx = if end < 0 { len + end } else { end }
         let s = if start_idx < 0 { 0 } else { start_idx }
-        let mut removed = 0
+        let removed_members : Array[String] = []
         for i = s; i <= end_idx && i < len; i = i + 1 {
+          removed_members.push(sorted[i].0)
           zset.remove(sorted[i].0)
-          removed = removed + 1
         }
-        if removed > 0 {
-          self.invalidate_zset_cache(key)
-          self.remove_if_empty(key, zset.length())
+        if removed_members.length() > 0 {
+          if zset.length() == 0 {
+            self.remove_if_empty(key, 0)
+          } else {
+            self.write_through_remove_zset_members(key, removed_members)
+          }
         }
-        removed
+        removed_members.length()
       }
       _ => 0
     }
@@ -424,8 +505,11 @@ pub fn Database::zremrangebyscore(self : Database, key : String, min_score : Flo
           zset.remove(m)
         }
         if to_remove.length() > 0 {
-          self.invalidate_zset_cache(key)
-          self.remove_if_empty(key, zset.length())
+          if zset.length() == 0 {
+            self.remove_if_empty(key, 0)
+          } else {
+            self.write_through_remove_zset_members(key, to_remove)
+          }
         }
         to_remove.length()
       }
@@ -446,8 +530,11 @@ pub fn Database::zpopmin(self : Database, key : String) -> (String, Float)? {
         } else {
           let min_item = sorted[0]
           zset.remove(min_item.0)
-          self.invalidate_zset_cache(key)
-          self.remove_if_empty(key, zset.length())
+          if zset.length() == 0 {
+            self.remove_if_empty(key, 0)
+          } else {
+            self.write_through_remove_zset_members(key, [min_item.0])
+          }
           Some(min_item)
         }
       }
@@ -469,8 +556,11 @@ pub fn Database::zpopmax(self : Database, key : String) -> (String, Float)? {
         } else {
           let max_item = sorted[len - 1]
           zset.remove(max_item.0)
-          self.invalidate_zset_cache(key)
-          self.remove_if_empty(key, zset.length())
+          if zset.length() == 0 {
+            self.remove_if_empty(key, 0)
+          } else {
+            self.write_through_remove_zset_members(key, [max_item.0])
+          }
           Some(max_item)
         }
       }
@@ -569,7 +659,7 @@ fn lex_lower_ok(member_val : String, bound : String) -> Bool {
   } else {
     let inclusive = bound[0] == '['
     let target = bound[1:bound.length()].to_owned()
-    let cmp = member_val.compare(target)
+    let cmp = member_val.lexical_compare(target)
     if inclusive {
       cmp >= 0
     } else {
@@ -586,7 +676,7 @@ fn lex_upper_ok(member_val : String, bound : String) -> Bool {
   } else {
     let inclusive = bound[0] == '['
     let target = bound[1:bound.length()].to_owned()
-    let cmp = member_val.compare(target)
+    let cmp = member_val.lexical_compare(target)
     if inclusive {
       cmp <= 0
     } else {

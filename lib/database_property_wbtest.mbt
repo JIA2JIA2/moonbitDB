@@ -41,7 +41,7 @@ fn prop_sorted_zset(model : Map[String, Float]) -> Array[(String, Float)] {
     } else if a.1 > b.1 {
       1
     } else {
-      a.0.compare(b.0)
+      a.0.lexical_compare(b.0)
     }
   })
   items

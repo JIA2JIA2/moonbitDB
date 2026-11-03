@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**127 个测试用例，全部通过**。
+当前测试覆盖：**130 个测试用例，全部通过**。
 
 ### 运行基准与覆盖率
 
@@ -132,7 +132,7 @@ moonbitDB/
 │   ├── util.mbt                # 整数解析与通配符匹配
 │   ├── error.mbt               # RedisError 错误模型
 │   ├── server.mbt              # 服务器命令
-│   ├── database_wbtest.mbt     # 白盒测试（127 个用例）
+│   ├── database_wbtest.mbt     # 白盒测试（130 个用例）
 │   ├── database_property_wbtest.mbt # 属性测试
 │   ├── database_bench_test.mbt # 基准测试
 │   └── moon.pkg
@@ -200,6 +200,8 @@ moonbitDB/
 | `PEXPIREAT` | `(key, unix_ms) -> Bool` | 设置过期时间戳（毫秒） |
 
 > `EXPIRE`/`PEXPIRE`/`EXPIREAT` 在时间计算溢出时返回 `false`，不会写入非法 TTL；`advance_time` 溢出时不推进时间。
+
+> `KEYS_PATTERN` 对含字面前缀的模式（如 `user:1*`）复用有序 key 快照并二分定位候选区间；纯通配符模式仍走全量扫描。
 | `TTL` | `(key) -> Int64` | 剩余生存时间（秒，四舍五入），-1 永久，-2 不存在 |
 | `PTTL` | `(key) -> Int64` | 剩余生存时间（毫秒） |
 | `PERSIST` | `(key) -> Bool` | 移除过期时间 |
