@@ -69,6 +69,7 @@ fn main() -> Unit {
   println("  HLEN user:1001 = \{db.hlen("user:1001")}")
   let (hscan_cursor, hscan_batch) = db.hscan("user:1001", 0, 2)
   println("  HSCAN user:1001 0 2 = cursor \{hscan_cursor}, \{hscan_batch.length()} 个字段")
+  println("  HRANDFIELD user:1001 2 = \{db.hrandfield("user:1001", 2).length()} 个字段")
   let user_email = db.hget("user:1001", "email")
   let has_email = match user_email {
     Some(_) => true
@@ -92,6 +93,7 @@ fn main() -> Unit {
   let task_list = db.lrange("tasks", 0, -1)
   println("  LRANGE tasks 0 -1 = [\{task_list.join(", ")}]")
   println("  LMOVE tasks tasks LEFT RIGHT = \{show_opt(db.lmove("tasks", "tasks", true, false))}")
+  println("  LPOS tasks 代码审查 = \{show_opt_int(db.lpos("tasks", "代码审查"))}")
   println("  LPOP tasks = \{show_opt(db.lpop("tasks"))}")
   println("  RPOP tasks = \{show_opt(db.rpop("tasks"))}")
   println("  剩余 LLEN = \{db.llen("tasks")}")
@@ -108,6 +110,7 @@ fn main() -> Unit {
   println("  SINTERCARD 两标签集 = \{db.sintercard(["tags:post:1", "tags:other"], 0)}")
   let flags = db.smismember("tags:post:1", ["技术", "数据库"])
   println("  SMISMEMBER 技术/数据库 = [\{flags[0]}, \{flags[1]}]")
+  println("  SRANDMEMBER tags:post:1 2 = \{db.srandmember_count("tags:post:1", 2).length()} 个成员")
   db.set("not_a_set", "plain string") |> ignore
   let inter = db.try_sinter(["tags:post:1", "not_a_set"])
   let inter_msg = match inter {
@@ -138,6 +141,8 @@ fn main() -> Unit {
   println("  ZRANGEBYLEX [b (d = [\{lex.join(", ")}]")
   println("  ZUNION leaderboard/lex:names = \{db.zunion(["leaderboard", "lex:names"]).length()} 个成员")
   println("  ZINTER leaderboard/lex:names = \{db.zinter(["leaderboard", "lex:names"]).length()} 个成员")
+  println("  ZUNIONSTORE leaderboard:union = \{db.zunionstore("leaderboard:union", ["leaderboard", "lex:names"])} 个成员")
+  println("  ZINTERCARD leaderboard/lex:names = \{db.zintercard(["leaderboard", "lex:names"], 0)}")
   
   println("\n📌 6. Key 过期与管理")
   println("----------------------------------------")
@@ -157,6 +162,7 @@ fn main() -> Unit {
   }
   println("  SET session:opt EX 30 = \{set_opt_msg}, TTL = \{db.ttl("session:opt")}")
   println("  GETEX session:opt PERSIST = \{show_opt(db.getex("session:opt", None))}, TTL = \{db.ttl("session:opt")}")
+  println("  EXPIRE session:opt NX 30 = \{db.expire_with_options("session:opt", 30, true, false, false, false)}, TTL = \{db.ttl("session:opt")}")
   db.set("session:backup", "user:1001") |> ignore
   println("  COPY session:backup -> session:copy = \{db.copy("session:backup", "session:copy")}")
   println("  TOUCH 3 keys = \{db.touch(["session:backup", "session:copy", "missing"])}")

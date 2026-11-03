@@ -191,3 +191,31 @@ fn Database::next_rand(self : Database) -> Int {
   self.rand_state = x
   x
 }
+
+fn Database::random_sample(self : Database, items : Array[String], count : Int) -> Array[String] {
+  let len = items.length()
+  let result : Array[String] = []
+  if len == 0 || count == 0 {
+    result
+  } else if count > 0 {
+    let take = if count >= len { len } else { count }
+    let pool : Array[String] = []
+    for item in items {
+      pool.push(item)
+    }
+    for i = 0; i < take; i = i + 1 {
+      let j = i + self.next_rand() % (len - i)
+      let tmp = pool[i]
+      pool[i] = pool[j]
+      pool[j] = tmp
+      result.push(pool[i])
+    }
+    result
+  } else {
+    let take = -count
+    for _i = 0; _i < take; _i = _i + 1 {
+      result.push(items[self.next_rand() % len])
+    }
+    result
+  }
+}

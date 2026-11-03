@@ -372,6 +372,35 @@ pub fn Database::rpoplpush(self : Database, source : String, destination : Strin
   }
 }
 
+pub fn Database::try_lmove(
+  self : Database,
+  source : String,
+  destination : String,
+  from_left : Bool,
+  to_left : Bool,
+) -> Result[String, RedisError] {
+  if self.check_expired(source) {
+    return Err(RedisError::NotFound)
+  }
+  match self.data.get(source) {
+    Some(RedisValue::List(_)) => ()
+    Some(_) => return Err(RedisError::WrongType)
+    None => return Err(RedisError::NotFound)
+  }
+  if source != destination {
+    self.check_expired(destination) |> ignore
+    match self.data.get(destination) {
+      Some(RedisValue::List(_)) => ()
+      Some(_) => return Err(RedisError::WrongType)
+      None => ()
+    }
+  }
+  match self.lmove(source, destination, from_left, to_left) {
+    Some(value) => Ok(value)
+    None => Err(RedisError::NotFound)
+  }
+}
+
 pub fn Database::lmove(
   self : Database,
   source : String,
@@ -468,6 +497,85 @@ pub fn Database::ltrim(self : Database, key : String, start : Int, end : Int) ->
       true
     }
     _ => false
+  }
+}
+
+pub fn Database::try_lpos(self : Database, key : String, value : String) -> Result[Int, RedisError] {
+  if self.check_expired(key) {
+    Err(RedisError::NotFound)
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::List(deque)) => {
+        let arr = deque.to_array()
+        let mut result = Err(RedisError::NotFound)
+        for i = 0; i < arr.length(); i = i + 1 {
+          if arr[i] == value {
+            result = Ok(i)
+            break
+          }
+        }
+        result
+      }
+      Some(_) => Err(RedisError::WrongType)
+      None => Err(RedisError::NotFound)
+    }
+  }
+}
+
+pub fn Database::lpos(self : Database, key : String, value : String) -> Int? {
+  match self.try_lpos(key, value) {
+    Ok(index) => Some(index)
+    Err(_) => None
+  }
+}
+
+pub fn Database::lpop_count(self : Database, key : String, count : Int) -> Array[String] {
+  if self.check_expired(key) || count <= 0 {
+    return []
+  }
+  match self.data.get(key) {
+    Some(RedisValue::List(deque)) => {
+      let take = if count > deque.length() { deque.length() } else { count }
+      let result : Array[String] = []
+      for _i = 0; _i < take; _i = _i + 1 {
+        match deque.pop_front() {
+          Some(value) => result.push(value)
+          None => break
+        }
+      }
+      if deque.length() == 0 {
+        self.remove_if_empty(key, 0)
+      } else {
+        self.put(key, RedisValue::List(deque))
+      }
+      result
+    }
+    _ => []
+  }
+}
+
+pub fn Database::rpop_count(self : Database, key : String, count : Int) -> Array[String] {
+  if self.check_expired(key) || count <= 0 {
+    return []
+  }
+  match self.data.get(key) {
+    Some(RedisValue::List(deque)) => {
+      let take = if count > deque.length() { deque.length() } else { count }
+      let result : Array[String] = []
+      for _i = 0; _i < take; _i = _i + 1 {
+        match deque.pop_back() {
+          Some(value) => result.push(value)
+          None => break
+        }
+      }
+      if deque.length() == 0 {
+        self.remove_if_empty(key, 0)
+      } else {
+        self.put(key, RedisValue::List(deque))
+      }
+      result
+    }
+    _ => []
   }
 }
 

@@ -61,6 +61,38 @@ pub fn Database::getset(self : Database, key : String, value : String) -> String
   }
 }
 
+pub fn Database::try_set_get(
+  self : Database,
+  key : String,
+  value : String,
+) -> Result[String?, RedisError] {
+  if self.check_expired(key) {
+    self.put(key, RedisValue::String(value))
+    Ok(None)
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::String(s)) => {
+        self.put(key, RedisValue::String(value))
+        self.expires.remove(key)
+        Ok(Some(s))
+      }
+      Some(_) => Err(RedisError::WrongType)
+      None => {
+        self.put(key, RedisValue::String(value))
+        self.expires.remove(key)
+        Ok(None)
+      }
+    }
+  }
+}
+
+pub fn Database::set_get(self : Database, key : String, value : String) -> String? {
+  match self.try_set_get(key, value) {
+    Ok(old_value) => old_value
+    Err(_) => None
+  }
+}
+
 pub fn Database::try_mset(
   self : Database,
   keys : Array[String],
@@ -238,20 +270,31 @@ pub fn Database::getex(self : Database, key : String, expire_ms : Int64?) -> Str
   }
 }
 
-pub fn Database::msetnx(self : Database, keys : Array[String], values : Array[String]) -> Bool {
+pub fn Database::try_msetnx(
+  self : Database,
+  keys : Array[String],
+  values : Array[String],
+) -> Result[Bool, RedisError] {
   if keys.length() == 0 || keys.length() != values.length() {
-    return false
+    return Err(RedisError::InvalidArgument)
   }
   for key in keys {
     if self.check_expired(key) || self.data.contains(key) {
-      return false
+      return Ok(false)
     }
   }
   for i = 0; i < keys.length(); i = i + 1 {
     self.put(keys[i], RedisValue::String(values[i]))
     self.expires.remove(keys[i])
   }
-  true
+  Ok(true)
+}
+
+pub fn Database::msetnx(self : Database, keys : Array[String], values : Array[String]) -> Bool {
+  match self.try_msetnx(keys, values) {
+    Ok(applied) => applied
+    Err(_) => false
+  }
 }
 
 pub fn Database::try_append(self : Database, key : String, value : String) -> Result[Int, RedisError] {

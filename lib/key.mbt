@@ -61,6 +61,79 @@ pub fn Database::pexpireat(self : Database, key : String, unix_milliseconds : In
   }
 }
 
+fn Database::set_expire_with_options(
+  self : Database,
+  key : String,
+  expire_time : Int64,
+  nx : Bool,
+  xx : Bool,
+  gt : Bool,
+  lt : Bool,
+) -> Bool {
+  if (nx && (xx || gt || lt)) || (gt && lt) {
+    return false
+  }
+  if self.check_expired(key) || !self.data.contains(key) {
+    return false
+  }
+  match self.expires.get(key) {
+    Some(current) => {
+      if nx {
+        return false
+      }
+      if gt && expire_time <= current {
+        return false
+      }
+      if lt && expire_time >= current {
+        return false
+      }
+    }
+    None => {
+      if nx {
+        self.set_expire(key, expire_time)
+        return true
+      }
+      if xx || gt {
+        return false
+      }
+    }
+  }
+  self.set_expire(key, expire_time)
+  true
+}
+
+pub fn Database::expire_with_options(
+  self : Database,
+  key : String,
+  seconds : Int,
+  nx : Bool,
+  xx : Bool,
+  gt : Bool,
+  lt : Bool,
+) -> Bool {
+  match checked_add_i64(self.current_time, seconds.to_int64() * 1000) {
+    Some(expire_time) =>
+      self.set_expire_with_options(key, expire_time, nx, xx, gt, lt)
+    None => false
+  }
+}
+
+pub fn Database::pexpire_with_options(
+  self : Database,
+  key : String,
+  milliseconds : Int64,
+  nx : Bool,
+  xx : Bool,
+  gt : Bool,
+  lt : Bool,
+) -> Bool {
+  match checked_add_i64(self.current_time, milliseconds) {
+    Some(expire_time) =>
+      self.set_expire_with_options(key, expire_time, nx, xx, gt, lt)
+    None => false
+  }
+}
+
 pub fn Database::ttl(self : Database, key : String) -> Int64 {
   if !self.data.contains(key) {
     -2

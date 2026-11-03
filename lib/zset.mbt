@@ -643,6 +643,20 @@ pub fn Database::zrevrange_with_scores(self : Database, key : String, start : In
   }
 }
 
+fn Database::zsets_valid(self : Database, keys : Array[String]) -> Bool {
+  for key in keys {
+    if self.check_expired(key) {
+      continue
+    }
+    match self.data.get(key) {
+      Some(RedisValue::ZSet(_)) => ()
+      None => ()
+      Some(_) => return false
+    }
+  }
+  true
+}
+
 fn lex_bound_valid(bound : String) -> Bool {
   if bound == "-" || bound == "+" {
     true
@@ -972,6 +986,286 @@ pub fn Database::zscan(
       (next, result)
     }
     _ => (0, [])
+  }
+}
+
+pub fn Database::try_zscan(
+  self : Database,
+  key : String,
+  cursor : Int,
+  count : Int,
+) -> Result[(Int, Array[(String, Float)]), RedisError] {
+  if self.check_expired(key) {
+    Ok((0, []))
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::ZSet(_)) => Ok(self.zscan(key, cursor, count))
+      Some(_) => Err(RedisError::WrongType)
+      None => Ok((0, []))
+    }
+  }
+}
+
+pub fn Database::try_zrandmember(self : Database, key : String) -> Result[String, RedisError] {
+  if self.check_expired(key) {
+    Err(RedisError::NotFound)
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::ZSet(zset)) =>
+        if zset.length() == 0 {
+          Err(RedisError::NotFound)
+        } else {
+          match self.zrandmember(key) {
+            Some(value) => Ok(value)
+            None => Err(RedisError::NotFound)
+          }
+        }
+      Some(_) => Err(RedisError::WrongType)
+      None => Err(RedisError::NotFound)
+    }
+  }
+}
+
+pub fn Database::try_zunion(self : Database, keys : Array[String]) -> Result[Array[(String, Float)], RedisError] {
+  if !self.zsets_valid(keys) {
+    Err(RedisError::WrongType)
+  } else {
+    Ok(self.zunion(keys))
+  }
+}
+
+pub fn Database::try_zinter(self : Database, keys : Array[String]) -> Result[Array[(String, Float)], RedisError] {
+  if !self.zsets_valid(keys) {
+    Err(RedisError::WrongType)
+  } else {
+    Ok(self.zinter(keys))
+  }
+}
+
+pub fn Database::try_zdiff(self : Database, keys : Array[String]) -> Result[Array[(String, Float)], RedisError] {
+  if !self.zsets_valid(keys) {
+    Err(RedisError::WrongType)
+  } else {
+    Ok(self.zdiff(keys))
+  }
+}
+
+pub fn Database::try_zunionstore(
+  self : Database,
+  destination : String,
+  keys : Array[String],
+) -> Result[Int, RedisError] {
+  if !self.zsets_valid(keys) {
+    return Err(RedisError::WrongType)
+  }
+  let result = self.zunion(keys)
+  let scores : Map[String, Float] = Map([], capacity=result.length())
+  for pair in result {
+    scores.set(pair.0, pair.1)
+  }
+  self.put(destination, RedisValue::ZSet(scores))
+  self.expires.remove(destination)
+  Ok(result.length())
+}
+
+pub fn Database::zunionstore(self : Database, destination : String, keys : Array[String]) -> Int {
+  match self.try_zunionstore(destination, keys) {
+    Ok(count) => count
+    Err(_) => -1
+  }
+}
+
+pub fn Database::try_zinterstore(
+  self : Database,
+  destination : String,
+  keys : Array[String],
+) -> Result[Int, RedisError] {
+  if !self.zsets_valid(keys) {
+    return Err(RedisError::WrongType)
+  }
+  let result = self.zinter(keys)
+  let scores : Map[String, Float] = Map([], capacity=result.length())
+  for pair in result {
+    scores.set(pair.0, pair.1)
+  }
+  self.put(destination, RedisValue::ZSet(scores))
+  self.expires.remove(destination)
+  Ok(result.length())
+}
+
+pub fn Database::zinterstore(self : Database, destination : String, keys : Array[String]) -> Int {
+  match self.try_zinterstore(destination, keys) {
+    Ok(count) => count
+    Err(_) => -1
+  }
+}
+
+pub fn Database::try_zdiffstore(
+  self : Database,
+  destination : String,
+  keys : Array[String],
+) -> Result[Int, RedisError] {
+  if !self.zsets_valid(keys) {
+    return Err(RedisError::WrongType)
+  }
+  let result = self.zdiff(keys)
+  let scores : Map[String, Float] = Map([], capacity=result.length())
+  for pair in result {
+    scores.set(pair.0, pair.1)
+  }
+  self.put(destination, RedisValue::ZSet(scores))
+  self.expires.remove(destination)
+  Ok(result.length())
+}
+
+pub fn Database::zdiffstore(self : Database, destination : String, keys : Array[String]) -> Int {
+  match self.try_zdiffstore(destination, keys) {
+    Ok(count) => count
+    Err(_) => -1
+  }
+}
+
+pub fn Database::try_zintercard(
+  self : Database,
+  keys : Array[String],
+  limit : Int,
+) -> Result[Int, RedisError] {
+  if !self.zsets_valid(keys) {
+    return Err(RedisError::WrongType)
+  }
+  let count = self.zinter(keys).length()
+  Ok(if limit > 0 && count > limit { limit } else { count })
+}
+
+pub fn Database::zintercard(self : Database, keys : Array[String], limit : Int) -> Int {
+  match self.try_zintercard(keys, limit) {
+    Ok(count) => count
+    Err(_) => -1
+  }
+}
+
+pub fn Database::try_zrangestore(
+  self : Database,
+  destination : String,
+  source : String,
+  start : Int,
+  end : Int,
+) -> Result[Int, RedisError] {
+  if self.check_expired(source) {
+    return Ok(0)
+  }
+  match self.data.get(source) {
+    Some(RedisValue::ZSet(_)) => {
+      let result = self.zrange_with_scores(source, start, end)
+      let scores : Map[String, Float] = Map([], capacity=result.length())
+      for pair in result {
+        scores.set(pair.0, pair.1)
+      }
+      self.put(destination, RedisValue::ZSet(scores))
+      self.expires.remove(destination)
+      Ok(result.length())
+    }
+    Some(_) => Err(RedisError::WrongType)
+    None => Ok(0)
+  }
+}
+
+pub fn Database::zrangestore(
+  self : Database,
+  destination : String,
+  source : String,
+  start : Int,
+  end : Int,
+) -> Int {
+  match self.try_zrangestore(destination, source, start, end) {
+    Ok(count) => count
+    Err(_) => -1
+  }
+}
+
+pub fn Database::zrandmember_count(self : Database, key : String, count : Int) -> Array[String] {
+  if self.check_expired(key) {
+    return []
+  }
+  match self.data.get(key) {
+    Some(RedisValue::ZSet(zset)) => {
+      let members : Array[String] = []
+      for member_val, _ in zset {
+        members.push(member_val)
+      }
+      self.random_sample(members, count)
+    }
+    _ => []
+  }
+}
+
+pub fn Database::zpopmin_count(
+  self : Database,
+  key : String,
+  count : Int,
+) -> Array[(String, Float)] {
+  if self.check_expired(key) || count <= 0 {
+    return []
+  }
+  match self.data.get(key) {
+    Some(RedisValue::ZSet(zset)) => {
+      let sorted = self.get_sorted_zset(key)
+      let take = if count > sorted.length() { sorted.length() } else { count }
+      let result : Array[(String, Float)] = []
+      let removed : Array[String] = []
+      for i = 0; i < take; i = i + 1 {
+        result.push(sorted[i])
+        removed.push(sorted[i].0)
+      }
+      for member_val in removed {
+        zset.remove(member_val)
+      }
+      if take > 0 {
+        if zset.length() == 0 {
+          self.remove_if_empty(key, 0)
+        } else {
+          self.write_through_remove_zset_members(key, removed)
+        }
+      }
+      result
+    }
+    _ => []
+  }
+}
+
+pub fn Database::zpopmax_count(
+  self : Database,
+  key : String,
+  count : Int,
+) -> Array[(String, Float)] {
+  if self.check_expired(key) || count <= 0 {
+    return []
+  }
+  match self.data.get(key) {
+    Some(RedisValue::ZSet(zset)) => {
+      let sorted = self.get_sorted_zset(key)
+      let len = sorted.length()
+      let take = if count > len { len } else { count }
+      let result : Array[(String, Float)] = []
+      let removed : Array[String] = []
+      for i = 0; i < take; i = i + 1 {
+        let item = sorted[len - 1 - i]
+        result.push(item)
+        removed.push(item.0)
+      }
+      for member_val in removed {
+        zset.remove(member_val)
+      }
+      if take > 0 {
+        if zset.length() == 0 {
+          self.remove_if_empty(key, 0)
+        } else {
+          self.write_through_remove_zset_members(key, removed)
+        }
+      }
+      result
+    }
+    _ => []
   }
 }
 

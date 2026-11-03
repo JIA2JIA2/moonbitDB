@@ -298,3 +298,36 @@ pub fn Database::hscan(
   }
 }
 
+pub fn Database::try_hscan(
+  self : Database,
+  key : String,
+  cursor : Int,
+  count : Int,
+) -> Result[(Int, Array[(String, String)]), RedisError] {
+  if self.check_expired(key) {
+    Ok((0, []))
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::Hash(_)) => Ok(self.hscan(key, cursor, count))
+      Some(_) => Err(RedisError::WrongType)
+      None => Ok((0, []))
+    }
+  }
+}
+
+pub fn Database::hrandfield(self : Database, key : String, count : Int) -> Array[String] {
+  if self.check_expired(key) {
+    return []
+  }
+  match self.data.get(key) {
+    Some(RedisValue::Hash(hash)) => {
+      let fields : Array[String] = []
+      for field, _ in hash {
+        fields.push(field)
+      }
+      self.random_sample(fields, count)
+    }
+    _ => []
+  }
+}
+

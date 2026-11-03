@@ -169,6 +169,10 @@ fn main {
   println("SMISMEMBER: tech=\{flags[0]}, database=\{flags[1]}")
   println("MSETNX with existing: \{db.msetnx(["name", "nx"], ["x", "y"])}")
   println("ZUNION leaderboard: \{db.zunion(["leaderboard"]).length()}")
+  println("ZUNIONSTORE leaderboard:copy: \{db.zunionstore("leaderboard:copy", ["leaderboard"])}")
+  println("LPOS tasks Urgent Task: \{show_opt_int(db.lpos("tasks", "Urgent Task"))}")
+  println("HRANDFIELD user:1 2: \{db.hrandfield("user:1", 2).length()}")
+  println("SRANDMEMBER tags 2: \{db.srandmember_count("tags:post:1", 2).length()}")
   let (zscan_cursor, zscan_batch) = db.zscan("leaderboard", 0, 2)
   println("ZSCAN leaderboard 0 2: cursor=\{zscan_cursor}, members=\{zscan_batch.length()}")
 

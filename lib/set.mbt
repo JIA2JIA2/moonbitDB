@@ -520,3 +520,74 @@ pub fn Database::sscan(
   }
 }
 
+pub fn Database::try_sscan(
+  self : Database,
+  key : String,
+  cursor : Int,
+  count : Int,
+) -> Result[(Int, Array[String]), RedisError] {
+  if self.check_expired(key) {
+    Ok((0, []))
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::Set(_)) => Ok(self.sscan(key, cursor, count))
+      Some(_) => Err(RedisError::WrongType)
+      None => Ok((0, []))
+    }
+  }
+}
+
+pub fn Database::try_sintercard(
+  self : Database,
+  keys : Array[String],
+  limit : Int,
+) -> Result[Int, RedisError] {
+  if !self.sets_valid(keys) {
+    Err(RedisError::WrongType)
+  } else {
+    Ok(self.sintercard(keys, limit))
+  }
+}
+
+pub fn Database::try_smismember(
+  self : Database,
+  key : String,
+  members : Array[String],
+) -> Result[Array[Bool], RedisError] {
+  if self.check_expired(key) {
+    let result : Array[Bool] = []
+    for _ in members {
+      result.push(false)
+    }
+    Ok(result)
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::Set(_)) => Ok(self.smismember(key, members))
+      Some(_) => Err(RedisError::WrongType)
+      None => {
+        let result : Array[Bool] = []
+        for _ in members {
+          result.push(false)
+        }
+        Ok(result)
+      }
+    }
+  }
+}
+
+pub fn Database::srandmember_count(self : Database, key : String, count : Int) -> Array[String] {
+  if self.check_expired(key) {
+    return []
+  }
+  match self.data.get(key) {
+    Some(RedisValue::Set(set)) => {
+      let members : Array[String] = []
+      for member_val, _ in set {
+        members.push(member_val)
+      }
+      self.random_sample(members, count)
+    }
+    _ => []
+  }
+}
+

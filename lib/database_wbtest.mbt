@@ -3318,3 +3318,365 @@ test "scan_snapshot_cache_invalidation" {
   @test.assert_eq(db.hscan_snapshots.length(), 0)
   @test.assert_eq(db.sscan_snapshots.length(), 0)
 }
+
+test "try_api_r3_commands" {
+  let db = Database::new()
+  db.set("str", "v") |> ignore
+
+  @test.assert_eq(
+    match db.try_hscan("str", 0, 10) {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    true,
+  )
+  db.hmset("h", ["f"], ["v"])
+  @test.assert_eq(
+    match db.try_hscan("h", 0, 10) {
+      Ok((_, pairs)) => pairs.length()
+      Err(_) => -1
+    },
+    1,
+  )
+
+  @test.assert_eq(
+    match db.try_lmove("missing", "dest", true, true) {
+      Err(RedisError::NotFound) => true
+      _ => false
+    },
+    true,
+  )
+  db.rpush_all("l", ["a", "b"]) |> ignore
+  db.set("dest", "x") |> ignore
+  @test.assert_eq(
+    match db.try_lmove("l", "dest", true, true) {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(db.llen("l"), 2)
+
+  @test.assert_eq(
+    match db.try_sintercard(["str"], 0) {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(
+    match db.try_smismember("str", ["a"]) {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(
+    match db.try_zscan("str", 0, 10) {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(
+    match db.try_zrandmember("str") {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(
+    match db.try_zunion(["str"]) {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(
+    match db.try_msetnx(["a"], []) {
+      Err(RedisError::InvalidArgument) => true
+      _ => false
+    },
+    true,
+  )
+}
+
+test "set_get_and_expire_options" {
+  let db = Database::new()
+  db.set("s", "old") |> ignore
+  @test.assert_eq(db.set_get("s", "new"), Some("old"))
+  @test.assert_eq(db.get("s"), Some("new"))
+  @test.assert_eq(db.set_get("missing", "v"), None)
+  @test.assert_eq(db.get("missing"), Some("v"))
+  db.hset("h", "f", "v") |> ignore
+  @test.assert_eq(db.set_get("h", "x"), None)
+  @test.assert_eq(db.type_of("h"), "hash")
+  @test.assert_eq(
+    match db.try_set_get("h", "x") {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    true,
+  )
+
+  db.set("k", "v") |> ignore
+  @test.assert_eq(db.expire_with_options("k", 100, true, false, false, false), true)
+  @test.assert_eq(db.ttl("k"), 100)
+  @test.assert_eq(db.expire_with_options("k", 200, true, false, false, false), false)
+  @test.assert_eq(db.expire_with_options("k", 200, false, true, false, false), true)
+  @test.assert_eq(db.ttl("k"), 200)
+  @test.assert_eq(db.expire_with_options("k", 100, false, false, false, true), true)
+  @test.assert_eq(db.ttl("k"), 100)
+  @test.assert_eq(db.expire_with_options("k", 300, false, false, true, false), true)
+  @test.assert_eq(db.ttl("k"), 300)
+  @test.assert_eq(db.expire_with_options("k", 100, false, false, true, false), false)
+  @test.assert_eq(db.expire_with_options("k", 100, true, true, false, false), false)
+
+  db.set("no_ttl", "v") |> ignore
+  @test.assert_eq(db.expire_with_options("no_ttl", 100, false, true, false, false), false)
+  @test.assert_eq(db.expire_with_options("no_ttl", 100, false, false, false, true), true)
+  @test.assert_eq(db.ttl("no_ttl"), 100)
+}
+
+test "zset_store_and_card_commands" {
+  let db = Database::new()
+  db.zadd("z1", 1.0, "a") |> ignore
+  db.zadd("z1", 2.0, "b") |> ignore
+  db.zadd("z1", 3.0, "c") |> ignore
+  db.zadd("z2", 10.0, "b") |> ignore
+  db.zadd("z2", 20.0, "c") |> ignore
+  db.zadd("z2", 30.0, "d") |> ignore
+  db.set("str", "v") |> ignore
+
+  @test.assert_eq(db.zunionstore("u", ["z1", "z2"]), 4)
+  @test.assert_eq(
+    db.zrange_with_scores("u", 0, -1),
+    [("a", 1.0), ("b", 12.0), ("c", 23.0), ("d", 30.0)],
+  )
+  @test.assert_eq(db.zinterstore("i", ["z1", "z2"]), 2)
+  @test.assert_eq(db.zrange_with_scores("i", 0, -1), [("b", 12.0), ("c", 23.0)])
+  @test.assert_eq(db.zdiffstore("d", ["z1", "z2"]), 1)
+  @test.assert_eq(db.zrange_with_scores("d", 0, -1), [("a", 1.0)])
+  @test.assert_eq(db.zrangestore("r", "z1", 0, 1), 2)
+  @test.assert_eq(db.zrange_with_scores("r", 0, -1), [("a", 1.0), ("b", 2.0)])
+  @test.assert_eq(db.zintercard(["z1", "z2"], 0), 2)
+  @test.assert_eq(db.zintercard(["z1", "z2"], 1), 1)
+  @test.assert_eq(db.zintercard(["z1", "str"], 0), -1)
+}
+
+test "count_and_random_extensions" {
+  let db = Database::new()
+  db.sadd_all("s", ["a", "b", "c", "d"]) |> ignore
+  @test.assert_eq(db.srandmember_count("s", 2).length(), 2)
+  @test.assert_eq(db.srandmember_count("s", 10).length(), 4)
+  @test.assert_eq(db.srandmember_count("s", -5).length(), 5)
+
+  db.hmset("h", ["f1", "f2", "f3"], ["v1", "v2", "v3"])
+  @test.assert_eq(db.hrandfield("h", 2).length(), 2)
+  @test.assert_eq(db.hrandfield("h", 10).length(), 3)
+
+  db.zadd("z", 1.0, "a") |> ignore
+  db.zadd("z", 2.0, "b") |> ignore
+  db.zadd("z", 3.0, "c") |> ignore
+  @test.assert_eq(db.zrandmember_count("z", 2).length(), 2)
+  @test.assert_eq(db.zrandmember_count("z", -4).length(), 4)
+
+  db.rpush_all("list", ["a", "b", "a"]) |> ignore
+  @test.assert_eq(db.lpos("list", "a"), Some(0))
+  @test.assert_eq(db.lpos("list", "b"), Some(1))
+  @test.assert_eq(db.lpos("list", "missing"), None)
+  @test.assert_eq(db.lpop_count("list", 2), ["a", "b"])
+  @test.assert_eq(db.lrange("list", 0, -1), ["a"])
+  @test.assert_eq(db.rpop_count("list", 1), ["a"])
+  @test.assert_eq(db.exists("list"), false)
+
+  db.zadd("zs", 1.0, "a") |> ignore
+  db.zadd("zs", 2.0, "b") |> ignore
+  db.zadd("zs", 3.0, "c") |> ignore
+  db.zadd("zs", 4.0, "d") |> ignore
+  @test.assert_eq(db.zpopmin_count("zs", 2), [("a", 1.0), ("b", 2.0)])
+  @test.assert_eq(db.zpopmax_count("zs", 2), [("d", 4.0), ("c", 3.0)])
+  @test.assert_eq(db.exists("zs"), false)
+}
+
+test "error_message_variants" {
+  @test.assert_eq(RedisError::WrongType.message().length() > 0, true)
+  @test.assert_eq(RedisError::NotInteger.message().length() > 0, true)
+  @test.assert_eq(RedisError::NotFound.message().length() > 0, true)
+  @test.assert_eq(RedisError::InvalidArgument.message().length() > 0, true)
+  @test.assert_eq(RedisError::Overflow.message().length() > 0, true)
+}
+
+test "set_list_error_paths_more" {
+  let db = Database::new()
+  db.set("str", "v") |> ignore
+
+  @test.assert_eq(db.sintercard([], 0), 0)
+  @test.assert_eq(db.sintercard(["missing"], 0), 0)
+  @test.assert_eq(db.smismember("missing", ["a", "b"]), [false, false])
+  @test.assert_eq(
+    match db.try_smismember("missing", ["a"]) {
+      Ok(values) => values.length()
+      Err(_) => -1
+    },
+    1,
+  )
+  @test.assert_eq(db.srandmember_count("missing", 2).length(), 0)
+  @test.assert_eq(db.srandmember_count("missing", -2).length(), 0)
+  db.sadd("s", "a") |> ignore
+  @test.assert_eq(db.srandmember_count("s", 0).length(), 0)
+  @test.assert_eq(
+    match db.try_sadd_all("str", ["a"]) {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(
+    match db.try_srem_all("str", ["a"]) {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(
+    match db.try_srem_all("s", []) {
+      Err(RedisError::InvalidArgument) => true
+      _ => false
+    },
+    true,
+  )
+
+  @test.assert_eq(db.lpop_count("missing", 2).length(), 0)
+  @test.assert_eq(db.rpop_count("missing", 2).length(), 0)
+  @test.assert_eq(db.lpop_count("str", 2).length(), 0)
+  @test.assert_eq(db.lpop_count("s", 0).length(), 0)
+  @test.assert_eq(
+    match db.try_lpos("missing", "a") {
+      Err(RedisError::NotFound) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(
+    match db.try_lpos("str", "a") {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    true,
+  )
+  db.rpush_all("l1", ["a", "b"]) |> ignore
+  @test.assert_eq(
+    match db.try_lmove("l1", "l1", true, true) {
+      Ok(value) => value
+      Err(_) => ""
+    },
+    "a",
+  )
+  @test.assert_eq(db.lrange("l1", 0, -1), ["a", "b"])
+}
+
+test "zset_error_paths_more" {
+  let db = Database::new()
+  db.set("str", "v") |> ignore
+  db.zadd("z", 1.0, "a") |> ignore
+
+  @test.assert_eq(
+    match db.try_zscan("missing", 0, 10) {
+      Ok((cursor, items)) => cursor == 0 && items.length() == 0
+      Err(_) => false
+    },
+    true,
+  )
+  @test.assert_eq(
+    match db.try_zunion(["missing"]) {
+      Ok(items) => items.length()
+      Err(_) => -1
+    },
+    0,
+  )
+  @test.assert_eq(
+    match db.try_zinter(["missing"]) {
+      Ok(items) => items.length()
+      Err(_) => -1
+    },
+    0,
+  )
+  @test.assert_eq(
+    match db.try_zdiff(["missing"]) {
+      Ok(items) => items.length()
+      Err(_) => -1
+    },
+    0,
+  )
+  @test.assert_eq(
+    match db.try_zrandmember("missing") {
+      Err(RedisError::NotFound) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(db.zrandmember_count("missing", 2).length(), 0)
+  @test.assert_eq(db.zrandmember_count("z", 0).length(), 0)
+  @test.assert_eq(db.zpopmin_count("missing", 2).length(), 0)
+  @test.assert_eq(db.zpopmax_count("z", 0).length(), 0)
+  @test.assert_eq(db.zpopmin_count("str", 2).length(), 0)
+  @test.assert_eq(db.zintercard([], 0), 0)
+  @test.assert_eq(db.zintercard(["missing"], 0), 0)
+  @test.assert_eq(
+    match db.try_zunionstore("d", ["str"]) {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(db.zunionstore("d", ["str"]), -1)
+  @test.assert_eq(
+    match db.try_zrangestore("d", "missing", 0, -1) {
+      Ok(count) => count
+      Err(_) => -1
+    },
+    0,
+  )
+  @test.assert_eq(db.zrangestore("d", "str", 0, -1), -1)
+}
+
+test "expire_and_scan_error_paths_more" {
+  let db = Database::new()
+  db.set("k", "v") |> ignore
+  @test.assert_eq(db.pexpire_with_options("k", 1500L, false, false, false, false), true)
+  @test.assert_eq(db.pttl("k"), 1500)
+  @test.assert_eq(db.expire_with_options("missing", 10, false, false, false, false), false)
+
+  @test.assert_eq(db.hrandfield("missing", 2).length(), 0)
+  db.hset("h", "f", "v") |> ignore
+  @test.assert_eq(db.hrandfield("h", 0).length(), 0)
+  @test.assert_eq(
+    match db.try_hscan("missing", 0, 10) {
+      Ok((cursor, pairs)) => cursor == 0 && pairs.length() == 0
+      Err(_) => false
+    },
+    true,
+  )
+  @test.assert_eq(
+    match db.try_sscan("missing", 0, 10) {
+      Ok((cursor, values)) => cursor == 0 && values.length() == 0
+      Err(_) => false
+    },
+    true,
+  )
+  @test.assert_eq(
+    match db.try_set_get("new", "v") {
+      Ok(None) => true
+      _ => false
+    },
+    true,
+  )
+  @test.assert_eq(
+    match db.try_msetnx(["a", "b"], ["1"]) {
+      Err(RedisError::InvalidArgument) => true
+      _ => false
+    },
+    true,
+  )
+}
