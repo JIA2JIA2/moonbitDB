@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**95 个测试用例，全部通过**。
+当前测试覆盖：**99 个测试用例，全部通过**。
 
 ## 库导入指南
 
@@ -259,6 +259,8 @@ moonbitDB/
 | `ZPOPMIN` | `(key) -> (String, Float)?` | 弹出最小分数成员 |
 | `ZPOPMAX` | `(key) -> (String, Float)?` | 弹出最大分数成员 |
 | `ZMSCORE` | `(key, members) -> Array[Float?]` | 批量获取成员分数 |
+
+> 分数相同时按 member 字典序排列（与 Redis 语义一致）。`ZRANGEBYSCORE`/`ZCOUNT` 使用二分查找定位分数区间。
 
 ### 批量命令
 

@@ -245,13 +245,19 @@ fn Database::remove_if_empty(self : Database, key : String, count : Int) -> Unit
 }
 
 fn Database::next_rand(self : Database) -> Int {
-  self.rand_state = self.rand_state * 1103515245 + 12345
-  let v = self.rand_state
-  if v < 0 {
-    -v
-  } else {
-    v
+  let mut x = self.rand_state & 0x7fffffff
+  if x == 0 {
+    x = 1
   }
+  x = x ^ (x << 13)
+  x = x ^ (x >> 17)
+  x = x ^ (x << 5)
+  x = x & 0x7fffffff
+  if x == 0 {
+    x = 1
+  }
+  self.rand_state = x
+  x
 }
 
 pub fn Database::set(self : Database, key : String, value : String) -> Unit {
@@ -527,29 +533,30 @@ pub fn match_pattern(pattern : String, str : String) -> Bool {
 pub fn match_pattern_helper(pattern : String, str : String, p_idx : Int, s_idx : Int) -> Bool {
   let p_len = pattern.length()
   let s_len = str.length()
-  
-  if p_idx == p_len {
-    return s_idx == s_len
-  }
-  
-  if p_idx < p_len && s_idx < s_len && (pattern[p_idx] == str[s_idx] || pattern[p_idx] == '?') {
-    match_pattern_helper(pattern, str, p_idx + 1, s_idx + 1)
-  } else if p_idx < p_len && pattern[p_idx] == '*' {
-    if p_idx == p_len - 1 {
-      true
+  let mut p = p_idx
+  let mut s = s_idx
+  let mut star = -1
+  let mut star_s = 0
+  while s < s_len {
+    if p < p_len && (pattern[p] == '?' || pattern[p] == str[s]) {
+      p = p + 1
+      s = s + 1
+    } else if p < p_len && pattern[p] == '*' {
+      star = p
+      p = p + 1
+      star_s = s
+    } else if star != -1 {
+      p = star + 1
+      star_s = star_s + 1
+      s = star_s
     } else {
-      let mut i = s_idx
-      while i <= s_len {
-        if match_pattern_helper(pattern, str, p_idx + 1, i) {
-          return true
-        }
-        i = i + 1
-      }
-      false
+      return false
     }
-  } else {
-    false
   }
+  while p < p_len && pattern[p] == '*' {
+    p = p + 1
+  }
+  p == p_len
 }
 
 pub fn Database::keys_pattern(self : Database, pattern : String) -> Array[String] {
@@ -1065,39 +1072,46 @@ pub fn Database::lrem(self : Database, key : String, count : Int, value : String
       Some(RedisValue::List(deque)) => {
         let arr = deque.to_array()
         let len = arr.length()
-        let removed = Map([], capacity=len)
-        let mut count_remaining = count
+        let result = []
         let mut removed_count = 0
-
         if count > 0 {
           for i = 0; i < len; i = i + 1 {
-            if count_remaining > 0 && arr[i] == value {
-              removed.set(int_to_string(i), true)
-              count_remaining = count_remaining - 1
+            if removed_count < count && arr[i] == value {
               removed_count = removed_count + 1
+            } else {
+              result.push(arr[i])
             }
           }
         } else if count < 0 {
+          let limit = -count
+          let mut seen = 0
+          let mut cut = -1
           for i = len - 1; i >= 0; i = i - 1 {
-            if count_remaining < 0 && arr[i] == value {
-              removed.set(int_to_string(i), true)
-              count_remaining = count_remaining + 1
+            if arr[i] == value {
+              seen = seen + 1
+              if seen == limit {
+                cut = i
+                break
+              }
+            }
+          }
+          if cut == -1 && seen > 0 {
+            cut = 0
+          }
+          for i = 0; i < len; i = i + 1 {
+            if cut != -1 && i >= cut && arr[i] == value {
               removed_count = removed_count + 1
+            } else {
+              result.push(arr[i])
             }
           }
         } else {
           for i = 0; i < len; i = i + 1 {
             if arr[i] == value {
-              removed.set(int_to_string(i), true)
               removed_count = removed_count + 1
+            } else {
+              result.push(arr[i])
             }
-          }
-        }
-
-        let result = []
-        for i = 0; i < len; i = i + 1 {
-          if !removed.contains(int_to_string(i)) {
-            result.push(arr[i])
           }
         }
 
@@ -1480,10 +1494,15 @@ pub fn Database::spop(self : Database, key : String) -> String? {
         if set.length() == 0 {
           return None
         }
+        let target = self.next_rand() % set.length()
+        let mut i = 0
         let mut popped : String? = None
         for m, _ in set {
-          popped = Some(m)
-          break
+          if i == target {
+            popped = Some(m)
+            break
+          }
+          i = i + 1
         }
         match popped {
           Some(v) => {
@@ -1587,7 +1606,7 @@ pub fn merge(left : Array[(String, Float)], right : Array[(String, Float)]) -> A
   let mut i = 0
   let mut j = 0
   while i < left.length() && j < right.length() {
-    if left[i].1 <= right[j].1 {
+    if left[i].1 < right[j].1 || (left[i].1 == right[j].1 && left[i].0.compare(right[j].0) <= 0) {
       result.push(left[i])
       i = i + 1
     } else {
@@ -1668,26 +1687,54 @@ fn Database::get_sorted_zset(self : Database, key : String) -> Array[(String, Fl
   }
 }
 
+fn lower_bound(sorted : Array[(String, Float)], score : Float) -> Int {
+  let mut lo = 0
+  let mut hi = sorted.length()
+  while lo < hi {
+    let mid = (lo + hi) / 2
+    if sorted[mid].1 < score {
+      lo = mid + 1
+    } else {
+      hi = mid
+    }
+  }
+  lo
+}
+
+fn upper_bound(sorted : Array[(String, Float)], score : Float) -> Int {
+  let mut lo = 0
+  let mut hi = sorted.length()
+  while lo < hi {
+    let mid = (lo + hi) / 2
+    if sorted[mid].1 <= score {
+      lo = mid + 1
+    } else {
+      hi = mid
+    }
+  }
+  lo
+}
+
 pub fn Database::zrangebyscore(self : Database, key : String, min_score : Float, max_score : Float) -> Array[String] {
   let sorted = self.get_sorted_zset(key)
+  let lo = lower_bound(sorted, min_score)
+  let hi = upper_bound(sorted, max_score)
   let result = []
-  for item in sorted {
-    if item.1 >= min_score && item.1 <= max_score {
-      result.push(item.0)
-    }
+  for i = lo; i < hi; i = i + 1 {
+    result.push(sorted[i].0)
   }
   result
 }
 
 pub fn Database::zcount(self : Database, key : String, min_score : Float, max_score : Float) -> Int {
   let sorted = self.get_sorted_zset(key)
-  let mut count = 0
-  for item in sorted {
-    if item.1 >= min_score && item.1 <= max_score {
-      count = count + 1
-    }
+  let lo = lower_bound(sorted, min_score)
+  let hi = upper_bound(sorted, max_score)
+  if hi > lo {
+    hi - lo
+  } else {
+    0
   }
-  count
 }
 
 pub fn Database::zrevrange(self : Database, key : String, start : Int, end : Int) -> Array[String] {
@@ -1708,11 +1755,11 @@ pub fn Database::zrevrange(self : Database, key : String, start : Int, end : Int
 
 pub fn Database::zrevrangebyscore(self : Database, key : String, max_score : Float, min_score : Float) -> Array[String] {
   let sorted = self.get_sorted_zset(key)
+  let lo = lower_bound(sorted, min_score)
+  let hi = upper_bound(sorted, max_score)
   let result = []
-  for i = sorted.length() - 1; i >= 0; i = i - 1 {
-    if sorted[i].1 >= min_score && sorted[i].1 <= max_score {
-      result.push(sorted[i].0)
-    }
+  for i = hi - 1; i >= lo; i = i - 1 {
+    result.push(sorted[i].0)
   }
   result
 }
@@ -3603,6 +3650,67 @@ test "rpoplpush_same_key_preserves_ttl" {
   db.expire("q", 100) |> ignore
   debug_inspect(db.rpoplpush("q", "q"), content="Some(\"only\")")
   debug_inspect(db.ttl("q") >= 0, content="true")
+}
+
+test "zset_score_tie_lexicographic" {
+  let db = Database::new()
+  db.zadd("z", 1.0, "b") |> ignore
+  db.zadd("z", 1.0, "a") |> ignore
+  db.zadd("z", 1.0, "c") |> ignore
+  db.zadd("z", 0.0, "z") |> ignore
+  let asc = db.zrange("z", 0, -1)
+  debug_inspect(asc.length(), content="4")
+  debug_inspect(asc[0], content="\"z\"")
+  debug_inspect(asc[1], content="\"a\"")
+  debug_inspect(asc[2], content="\"b\"")
+  debug_inspect(asc[3], content="\"c\"")
+  let desc = db.zrevrange("z", 0, 2)
+  debug_inspect(desc[0], content="\"c\"")
+  debug_inspect(desc[1], content="\"b\"")
+  debug_inspect(desc[2], content="\"a\"")
+}
+
+test "zset_range_by_score_bounds" {
+  let db = Database::new()
+  db.zadd("z", 1.0, "a") |> ignore
+  db.zadd("z", 2.0, "b") |> ignore
+  db.zadd("z", 2.0, "c") |> ignore
+  db.zadd("z", 3.0, "d") |> ignore
+  let mid = db.zrangebyscore("z", 2.0, 2.0)
+  debug_inspect(mid.length(), content="2")
+  debug_inspect(mid[0], content="\"b\"")
+  debug_inspect(mid[1], content="\"c\"")
+  debug_inspect(db.zcount("z", 2.0, 2.0), content="2")
+  debug_inspect(db.zcount("z", 1.5, 2.5), content="2")
+  let rev = db.zrevrangebyscore("z", 2.0, 2.0)
+  debug_inspect(rev[0], content="\"c\"")
+  debug_inspect(rev[1], content="\"b\"")
+  debug_inspect(db.zrangebyscore("z", 4.0, 5.0).length(), content="0")
+  debug_inspect(db.zcount("z", 5.0, 1.0), content="0")
+}
+
+test "lrem_counts_exceeding_occurrences" {
+  let db = Database::new()
+  for item in ["a", "a", "b", "a"] {
+    db.rpush("l", item) |> ignore
+  }
+  debug_inspect(db.lrem("l", 5, "a"), content="3")
+  debug_inspect(db.llen("l"), content="1")
+  debug_inspect(db.lindex("l", 0), content="Some(\"b\")")
+
+  for item in ["a", "b", "a"] {
+    db.rpush("l2", item) |> ignore
+  }
+  debug_inspect(db.lrem("l2", -5, "a"), content="2")
+  debug_inspect(db.lindex("l2", 0), content="Some(\"b\")")
+}
+
+test "pattern_matching_no_exponential_backtracking" {
+  debug_inspect(match_pattern("a*a*a*a*a*b", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), content="false")
+  debug_inspect(match_pattern("*a*b*", "xxaxxb"), content="true")
+  debug_inspect(match_pattern("a?c", "abc"), content="true")
+  debug_inspect(match_pattern("a?c", "ac"), content="false")
+  debug_inspect(match_pattern("*", ""), content="true")
 }
 
 test "batch_extended_edge_cases" {
