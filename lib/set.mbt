@@ -486,11 +486,12 @@ pub fn Database::srandmember(self : Database, key : String) -> String? {
   }
 }
 
-pub fn Database::sscan(
+pub fn Database::sscan_with_match(
   self : Database,
   key : String,
   cursor : Int,
   count : Int,
+  pattern : String?,
 ) -> (Int, Array[String]) {
   if self.check_expired(key) {
     return (0, [])
@@ -515,12 +516,18 @@ pub fn Database::sscan(
         self.sscan_snapshots.remove(key)
         return (0, [])
       }
-      let end = if start + limit > len { len } else { start + limit }
       let result : Array[String] = []
-      for i = start; i < end; i = i + 1 {
-        result.push(members[i])
+      let mut i = start
+      let mut taken = 0
+      while i < len && taken < limit {
+        let member_val = members[i]
+        if pattern_match(member_val, pattern) {
+          result.push(member_val)
+          taken = taken + 1
+        }
+        i = i + 1
       }
-      let next = if end >= len { 0 } else { end }
+      let next = if i >= len { 0 } else { i }
       if next == 0 {
         self.sscan_snapshots.remove(key)
       }
@@ -528,6 +535,15 @@ pub fn Database::sscan(
     }
     _ => (0, [])
   }
+}
+
+pub fn Database::sscan(
+  self : Database,
+  key : String,
+  cursor : Int,
+  count : Int,
+) -> (Int, Array[String]) {
+  self.sscan_with_match(key, cursor, count, None)
 }
 
 pub fn Database::try_sscan(

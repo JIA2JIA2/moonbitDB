@@ -101,6 +101,39 @@ pub fn Database::object_encoding(self : Database, key : String) -> String? {
   }
 }
 
+pub fn Database::object_refcount(self : Database, key : String) -> Int? {
+  if self.check_expired(key) {
+    None
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::String(_)) => Some(1)
+      Some(RedisValue::Hash(h)) => Some(h.length())
+      Some(RedisValue::List(d)) => Some(d.length())
+      Some(RedisValue::Set(s)) => Some(s.length())
+      Some(RedisValue::ZSet(z)) => Some(z.length())
+      None => None
+    }
+  }
+}
+
+pub fn Database::object_idletime(self : Database, key : String) -> Int? {
+  if self.check_expired(key) {
+    None
+  } else {
+    match self.expires.get(key) {
+      Some(expire_time) => {
+        let remaining = expire_time - self.current_time
+        if remaining > 0 {
+          Some((remaining / 1000).to_int())
+        } else {
+          Some(0)
+        }
+      }
+      None => Some(0)
+    }
+  }
+}
+
 pub fn Database::multi(self : Database) -> String {
   if self.in_transaction {
     "ERR MULTI calls can not be nested"

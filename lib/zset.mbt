@@ -363,15 +363,36 @@ fn upper_bound(sorted : Array[(String, Float)], score : Float) -> Int {
   lo
 }
 
-pub fn Database::zrangebyscore(self : Database, key : String, min_score : Float, max_score : Float) -> Array[String] {
+pub fn Database::zrangebyscore_with_limit(
+  self : Database,
+  key : String,
+  min_score : Float,
+  max_score : Float,
+  offset : Int,
+  count : Int,
+) -> Array[String] {
   let sorted = self.get_sorted_zset(key)
   let lo = lower_bound(sorted, min_score)
   let hi = upper_bound(sorted, max_score)
   let result = []
-  for i = lo; i < hi; i = i + 1 {
+  let mut i = lo
+  if offset > 0 {
+    i = i + offset
+    if i >= hi {
+      return result
+    }
+  }
+  let mut taken = 0
+  while i < hi && (count <= 0 || taken < count) {
     result.push(sorted[i].0)
+    i = i + 1
+    taken = taken + 1
   }
   result
+}
+
+pub fn Database::zrangebyscore(self : Database, key : String, min_score : Float, max_score : Float) -> Array[String] {
+  self.zrangebyscore_with_limit(key, min_score, max_score, 0, 0)
 }
 
 pub fn Database::zcount(self : Database, key : String, min_score : Float, max_score : Float) -> Int {
@@ -985,11 +1006,12 @@ pub fn Database::zdiff(self : Database, keys : Array[String]) -> Array[(String, 
   sort_by_score(items)
 }
 
-pub fn Database::zscan(
+pub fn Database::zscan_with_match(
   self : Database,
   key : String,
   cursor : Int,
   count : Int,
+  pattern : String?,
 ) -> (Int, Array[(String, Float)]) {
   if self.check_expired(key) {
     return (0, [])
@@ -1003,16 +1025,31 @@ pub fn Database::zscan(
       if start >= len {
         return (0, [])
       }
-      let end = if start + limit > len { len } else { start + limit }
       let result : Array[(String, Float)] = []
-      for i = start; i < end; i = i + 1 {
-        result.push(items[i])
+      let mut i = start
+      let mut taken = 0
+      while i < len && taken < limit {
+        let item = items[i]
+        if pattern_match(item.0, pattern) {
+          result.push(item)
+          taken = taken + 1
+        }
+        i = i + 1
       }
-      let next = if end >= len { 0 } else { end }
+      let next = if i >= len { 0 } else { i }
       (next, result)
     }
     _ => (0, [])
   }
+}
+
+pub fn Database::zscan(
+  self : Database,
+  key : String,
+  cursor : Int,
+  count : Int,
+) -> (Int, Array[(String, Float)]) {
+  self.zscan_with_match(key, cursor, count, None)
 }
 
 pub fn Database::try_zscan(

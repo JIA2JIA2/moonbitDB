@@ -260,11 +260,31 @@ pub fn Database::hsetnx(self : Database, key : String, field : String, value : S
   }
 }
 
-pub fn Database::hscan(
+fn pattern_match(text : String, pattern : String?) -> Bool {
+  match pattern {
+    None => true
+    Some(p) => {
+      if p == "*" {
+        true
+      } else if p.has_prefix("*") {
+        let suffix = p[1:p.length()]
+        text.has_suffix(suffix)
+      } else if p.has_suffix("*") {
+        let prefix = p[0:p.length() - 1]
+        text.has_prefix(prefix)
+      } else {
+        text == p
+      }
+    }
+  }
+}
+
+pub fn Database::hscan_with_match(
   self : Database,
   key : String,
   cursor : Int,
   count : Int,
+  pattern : String?,
 ) -> (Int, Array[(String, String)]) {
   if self.check_expired(key) {
     return (0, [])
@@ -289,16 +309,21 @@ pub fn Database::hscan(
         self.hscan_snapshots.remove(key)
         return (0, [])
       }
-      let end = if start + limit > len { len } else { start + limit }
       let result : Array[(String, String)] = []
-      for i = start; i < end; i = i + 1 {
+      let mut i = start
+      let mut taken = 0
+      while i < len && taken < limit {
         let field = fields[i]
-        match hash.get(field) {
-          Some(value) => result.push((field, value))
-          None => ()
+        if pattern_match(field, pattern) {
+          match hash.get(field) {
+            Some(value) => result.push((field, value))
+            None => ()
+          }
+          taken = taken + 1
         }
+        i = i + 1
       }
-      let next = if end >= len { 0 } else { end }
+      let next = if i >= len { 0 } else { i }
       if next == 0 {
         self.hscan_snapshots.remove(key)
       }
@@ -306,6 +331,15 @@ pub fn Database::hscan(
     }
     _ => (0, [])
   }
+}
+
+pub fn Database::hscan(
+  self : Database,
+  key : String,
+  cursor : Int,
+  count : Int,
+) -> (Int, Array[(String, String)]) {
+  self.hscan_with_match(key, cursor, count, None)
 }
 
 pub fn Database::try_hscan(

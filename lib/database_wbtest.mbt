@@ -3020,24 +3020,26 @@ test "set_options_and_getex" {
   let db = Database::new()
 
   @test.assert_eq(
-    match db.set_with_options("k", "v", true, false, None, None, false) {
-      Ok(applied) => applied
+    match db.set_with_options("k", "v", true, false, false, None, None, false) {
+      Ok(_) => true
       Err(_) => false
     },
     true,
   )
   @test.assert_eq(
-    match db.set_with_options("k", "v2", true, false, None, None, false) {
-      Ok(applied) => applied
+    match db.set_with_options("k", "v2", true, false, false, None, None, false) {
+      Ok(Some(_)) => true
+      Ok(None) => false
       Err(_) => false
     },
     false,
   )
   @test.assert_eq(db.get("k"), Some("v"))
   @test.assert_eq(
-    match db.set_with_options("missing", "v", false, true, None, None, false) {
-      Ok(applied) => applied
-      Err(_) => true
+    match db.set_with_options("missing", "v", false, true, false, None, None, false) {
+      Ok(Some(_)) => true
+      Ok(None) => false
+      Err(_) => false
     },
     false,
   )
@@ -3046,16 +3048,16 @@ test "set_options_and_getex" {
   @test.assert_eq(db.setxx("missing", "v"), false)
 
   @test.assert_eq(
-    match db.set_with_options("ex", "v", false, false, Some(10), None, false) {
-      Ok(applied) => applied
+    match db.set_with_options("ex", "v", false, false, false, Some(10), None, false) {
+      Ok(_) => true
       Err(_) => false
     },
     true,
   )
   @test.assert_eq(db.ttl("ex"), 10)
   @test.assert_eq(
-    match db.set_with_options("px", "v", false, false, None, Some(1500L), false) {
-      Ok(applied) => applied
+    match db.set_with_options("px", "v", false, false, false, None, Some(1500L), false) {
+      Ok(_) => true
       Err(_) => false
     },
     true,
@@ -3065,8 +3067,8 @@ test "set_options_and_getex" {
   db.set("keep", "v") |> ignore
   db.expire("keep", 100) |> ignore
   @test.assert_eq(
-    match db.set_with_options("keep", "v2", false, false, None, None, true) {
-      Ok(applied) => applied
+    match db.set_with_options("keep", "v2", false, false, false, None, None, true) {
+      Ok(_) => true
       Err(_) => false
     },
     true,
@@ -3074,14 +3076,14 @@ test "set_options_and_getex" {
   @test.assert_eq(db.ttl("keep"), 100)
 
   @test.assert_eq(
-    match db.set_with_options("x", "v", true, true, None, None, false) {
+    match db.set_with_options("x", "v", true, true, false, None, None, false) {
       Err(RedisError::InvalidArgument) => true
       _ => false
     },
     true,
   )
   @test.assert_eq(
-    match db.set_with_options("x", "v", false, false, Some(10), Some(10L), false) {
+    match db.set_with_options("x", "v", false, false, false, Some(10), Some(10L), false) {
       Err(RedisError::InvalidArgument) => true
       _ => false
     },
@@ -3090,7 +3092,7 @@ test "set_options_and_getex" {
 
   db.set("g", "v") |> ignore
   @test.assert_eq(
-    match db.try_getex("g", Some(20L)) {
+    match db.try_getex_px("g", 20L) {
       Ok(value) => value
       Err(_) => ""
     },
@@ -3098,7 +3100,7 @@ test "set_options_and_getex" {
   )
   @test.assert_eq(db.pttl("g"), 20)
   @test.assert_eq(
-    match db.try_getex("g", None) {
+    match db.try_getex_persist("g") {
       Ok(value) => value
       Err(_) => ""
     },
@@ -3106,7 +3108,7 @@ test "set_options_and_getex" {
   )
   @test.assert_eq(db.ttl("g"), -1)
   @test.assert_eq(
-    match db.try_getex("missing", None) {
+    match db.try_getex_persist("missing") {
       Err(RedisError::NotFound) => true
       _ => false
     },
@@ -3783,21 +3785,21 @@ test "coverage_edge_cases" {
   @test.assert_eq(db.pexpire_with_options("k", 1000L, true, false, false, false), true)
   @test.assert_eq(db.pexpire_with_options("k", 2000L, false, false, false, true), false)
   @test.assert_eq(
-    match db.set_with_options("ex0", "v", false, false, Some(0), None, false) {
+    match db.set_with_options("ex0", "v", false, false, false, Some(0), None, false) {
       Err(RedisError::InvalidArgument) => true
       _ => false
     },
     true,
   )
   @test.assert_eq(
-    match db.set_with_options("px0", "v", false, false, None, Some(0L), false) {
+    match db.set_with_options("px0", "v", false, false, false, None, Some(0L), false) {
       Err(RedisError::InvalidArgument) => true
       _ => false
     },
     true,
   )
   @test.assert_eq(
-    match db.set_with_options("keep2", "v", false, false, Some(10), None, true) {
+    match db.set_with_options("keep2", "v", false, false, false, Some(10), None, true) {
       Err(RedisError::InvalidArgument) => true
       _ => false
     },

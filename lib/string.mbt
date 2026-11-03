@@ -90,13 +90,6 @@ pub fn Database::try_set_get(
   }
 }
 
-pub fn Database::set_get(self : Database, key : String, value : String) -> String? {
-  match self.try_set_get(key, value) {
-    Ok(old_value) => old_value
-    Err(_) => None
-  }
-}
-
 pub fn Database::try_mset(
   self : Database,
   keys : Array[String],
@@ -170,10 +163,11 @@ pub fn Database::set_with_options(
   value : String,
   nx : Bool,
   xx : Bool,
+  get : Bool,
   ex_seconds : Int?,
   px_milliseconds : Int64?,
   keep_ttl : Bool,
-) -> Result[Bool, RedisError] {
+) -> Result[String?, RedisError] {
   if nx && xx {
     return Err(RedisError::InvalidArgument)
   }
@@ -194,10 +188,25 @@ pub fn Database::set_with_options(
   self.check_expired(key) |> ignore
   let exists = self.data.contains(key)
   if nx && exists {
-    return Ok(false)
+    return Ok(None)
   }
   if xx && !exists {
-    return Ok(false)
+    return Ok(None)
+  }
+  if exists {
+    match self.data.get(key) {
+      Some(RedisValue::String(_)) => ()
+      Some(_) => return Err(RedisError::WrongType)
+      None => ()
+    }
+  }
+  let old_value = if get {
+    match self.try_get(key) {
+      Ok(v) => Some(v)
+      Err(_) => None
+    }
+  } else {
+    None
   }
   let ttl : Int64? = if keep_ttl {
     if exists {
@@ -231,46 +240,130 @@ pub fn Database::set_with_options(
     Some(expire_time) => self.set_expire(key, expire_time)
     None => self.expires.remove(key)
   }
-  Ok(true)
+  Ok(old_value)
 }
 
 pub fn Database::setxx(self : Database, key : String, value : String) -> Bool {
-  match self.set_with_options(key, value, false, true, None, None, false) {
-    Ok(applied) => applied
+  let existed = !self.check_expired(key) && self.data.contains(key)
+  match self.set_with_options(key, value, false, true, false, None, None, false) {
+    Ok(_) => existed
     Err(_) => false
   }
 }
 
-pub fn Database::try_getex(self : Database, key : String, expire_ms : Int64?) -> Result[String, RedisError] {
+pub fn Database::set_get(self : Database, key : String, value : String) -> String? {
+  match self.set_with_options(key, value, false, false, true, None, None, false) {
+    Ok(old_value) => old_value
+    Err(_) => None
+  }
+}
+
+pub fn Database::try_getex_persist(
+  self : Database,
+  key : String,
+) -> Result[String, RedisError] {
   match self.try_get(key) {
     Err(error) => Err(error)
-    Ok(value) =>
-      match expire_ms {
-        Some(milliseconds) =>
-          if milliseconds <= 0 {
-            Err(RedisError::InvalidArgument)
-          } else {
-            match checked_add_i64(self.current_time, milliseconds) {
-              Some(expire_time) => {
-                self.set_expire(key, expire_time)
-                Ok(value)
-              }
-              None => Err(RedisError::InvalidArgument)
-            }
+    Ok(value) => {
+      self.expires.remove(key)
+      self.maybe_compact_expire_heap()
+      Ok(value)
+    }
+  }
+}
+
+pub fn Database::try_getex_ex(
+  self : Database,
+  key : String,
+  seconds : Int,
+) -> Result[String, RedisError] {
+  match self.try_get(key) {
+    Err(error) => Err(error)
+    Ok(value) => {
+      if seconds <= 0 {
+        Err(RedisError::InvalidArgument)
+      } else {
+        match checked_add_i64(self.current_time, seconds.to_int64() * 1000) {
+          Some(expire_time) => {
+            self.set_expire(key, expire_time)
+            Ok(value)
           }
-        None => {
-          self.expires.remove(key)
-          self.maybe_compact_expire_heap()
-          Ok(value)
+          None => Err(RedisError::InvalidArgument)
         }
       }
+    }
+  }
+}
+
+pub fn Database::try_getex_px(
+  self : Database,
+  key : String,
+  milliseconds : Int64,
+) -> Result[String, RedisError] {
+  match self.try_get(key) {
+    Err(error) => Err(error)
+    Ok(value) => {
+      if milliseconds <= 0 {
+        Err(RedisError::InvalidArgument)
+      } else {
+        match checked_add_i64(self.current_time, milliseconds) {
+          Some(expire_time) => {
+            self.set_expire(key, expire_time)
+            Ok(value)
+          }
+          None => Err(RedisError::InvalidArgument)
+        }
+      }
+    }
+  }
+}
+
+pub fn Database::try_getex_exat(
+  self : Database,
+  key : String,
+  timestamp_ms : Int64,
+) -> Result[String, RedisError] {
+  match self.try_get(key) {
+    Err(error) => Err(error)
+    Ok(value) => {
+      if timestamp_ms <= self.current_time {
+        Err(RedisError::InvalidArgument)
+      } else {
+        self.set_expire(key, timestamp_ms)
+        Ok(value)
+      }
+    }
+  }
+}
+
+pub fn Database::try_getex_pxat(
+  self : Database,
+  key : String,
+  timestamp_ms : Int64,
+) -> Result[String, RedisError] {
+  match self.try_get(key) {
+    Err(error) => Err(error)
+    Ok(value) => {
+      if timestamp_ms <= self.current_time {
+        Err(RedisError::InvalidArgument)
+      } else {
+        self.set_expire(key, timestamp_ms)
+        Ok(value)
+      }
+    }
   }
 }
 
 pub fn Database::getex(self : Database, key : String, expire_ms : Int64?) -> String? {
-  match self.try_getex(key, expire_ms) {
-    Ok(value) => Some(value)
-    Err(_) => None
+  match expire_ms {
+    Some(ms) => match self.try_getex_px(key, ms) {
+      Ok(value) => Some(value)
+      Err(_) => None
+    }
+    None => match self.try_getex_persist(key) {
+      Ok(value) => Some(value)
+      Err(_) => None
+    }
   }
 }
 

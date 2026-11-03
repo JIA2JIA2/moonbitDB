@@ -155,9 +155,9 @@ fn main() -> Unit {
   db.advance_time(35000)
   println("  65秒后 EXISTS = \{db.exists("session:token_abc")}")
   println("  TTL = \{db.ttl("session:token_abc")} (-2 表示不存在)")
-  let set_opt = db.set_with_options("session:opt", "v", false, false, Some(30), None, false)
+  let set_opt = db.set_with_options("session:opt", "v", false, false, false, Some(30), None, false)
   let set_opt_msg = match set_opt {
-    Ok(applied) => "\{applied}"
+    Ok(_) => "OK"
     Err(error) => @lib.RedisError::message(error)
   }
   println("  SET session:opt EX 30 = \{set_opt_msg}, TTL = \{db.ttl("session:opt")}")
