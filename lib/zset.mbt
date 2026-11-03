@@ -224,6 +224,25 @@ fn Database::get_sorted_lex(self : Database, key : String) -> Array[String] {
   }
 }
 
+fn find_insert_position(
+  items : Array[(String, Float)],
+  score : Float,
+  member_val : String,
+) -> Int {
+  let mut left = 0
+  let mut right = items.length()
+  while left < right {
+    let mid = (left + right) / 2
+    let mid_item = items.get(mid).unwrap()
+    if mid_item.1 < score || (mid_item.1 == score && mid_item.0.lexical_compare(member_val) < 0) {
+      left = mid + 1
+    } else {
+      right = mid
+    }
+  }
+  left
+}
+
 fn update_sorted_items(
   items : Array[(String, Float)],
   member_val : String,
@@ -237,17 +256,14 @@ fn update_sorted_items(
   }
   match new_score {
     Some(score) => {
+      let pos = find_insert_position(base, score, member_val)
       let result : Array[(String, Float)] = []
-      let mut inserted = false
-      for item in base {
-        if !inserted && (score < item.1 || (score == item.1 && member_val.lexical_compare(item.0) <= 0)) {
-          result.push((member_val, score))
-          inserted = true
-        }
-        result.push(item)
+      for i = 0; i < pos; i = i + 1 {
+        result.push(base.get(i).unwrap())
       }
-      if !inserted {
-        result.push((member_val, score))
+      result.push((member_val, score))
+      for i = pos; i < base.length(); i = i + 1 {
+        result.push(base.get(i).unwrap())
       }
       result
     }
