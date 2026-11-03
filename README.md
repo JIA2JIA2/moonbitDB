@@ -69,40 +69,36 @@ moon test
 
 当前测试覆盖：**99 个测试用例，全部通过**。
 
+### 运行基准与覆盖率
+
+```bash
+moon bench
+moon coverage analyze -- -f summary
+```
+
 ## 库导入指南
 
 在其他 MoonBit 项目中使用 moonbitDB 作为依赖，需要以下步骤：
 
 ### 1. 添加模块依赖
 
-在你的项目 `moon.mod.json` 的 `deps` 字段中添加 moonbitDB 依赖：
-
-```json
-{
-  "name": "your-name/your-project",
-  "deps": {
-    "JIA2JIA2/moonbitdb": "0.1.3"
-  }
-}
-```
-
-### 2. 同步依赖
-
 ```bash
-moon update
+moon add JIA2JIA2/moonbitdb@0.1.3
 ```
 
-### 3. 声明包导入
+该命令会更新 `moon.mod` 并同步依赖，推荐优先使用。
 
-在你的包 `moon.pkg.json` 的 `import` 字段中引入核心库：
+### 2. 声明包导入
 
-```json
-{
-  "import": ["JIA2JIA2/moonbitdb/lib"]
+在你的包 `moon.pkg` 中引入核心库：
+
+```moonbit
+import {
+  "JIA2JIA2/moonbitdb/lib",
 }
 ```
 
-### 4. 使用
+### 3. 使用
 
 ```moonbit
 fn main {
@@ -113,7 +109,7 @@ fn main {
 }
 ```
 
-> **注意**：`moon update` 是必须步骤，添加依赖后未执行此命令将导致编译错误。
+> **注意**：若手动编辑 `moon.mod` 添加依赖，需执行 `moon update` 同步，否则会导致编译错误。
 > 导入路径为 `JIA2JIA2/moonbitdb/lib`（注意包含 `/lib` 后缀），不是 `JIA2JIA2/moonbitdb`。
 
 ## 项目结构
@@ -121,24 +117,35 @@ fn main {
 ```
 moonbitDB/
 ├── lib/                        # 核心库（非 main 包，可被其他包 import）
-│   ├── database.mbt            # 核心数据库实现（~3200 行）
-│   └── moon.pkg.json
+│   ├── database.mbt            # Database 结构与核心辅助方法
+│   ├── string.mbt              # String 与批量命令
+│   ├── key.mbt                 # Key 与过期命令
+│   ├── hash.mbt                # Hash 命令
+│   ├── list.mbt                # List 命令
+│   ├── set.mbt                 # Set 命令
+│   ├── zset.mbt                # Sorted Set 命令
+│   ├── deque.mbt               # List 底层双端队列
+│   ├── util.mbt                # 整数解析与通配符匹配
+│   ├── server.mbt              # 服务器命令
+│   ├── database_wbtest.mbt     # 白盒测试（99 个用例）
+│   ├── database_bench_test.mbt # 基准测试
+│   └── moon.pkg
 ├── demo.mbt                    # 快速开始演示（主包入口）
-├── moon.pkg.json               # 主包配置（is_main: true，依赖 lib）
+├── moon.pkg                    # 主包配置（is_main: true，依赖 lib）
 ├── examples/                   # 场景部署示例（独立子包，均可运行）
 │   ├── basic_usage/            # 基础 API 使用示例
 │   │   ├── main.mbt
-│   │   └── moon.pkg.json
+│   │   └── moon.pkg
 │   ├── leaderboard/            # 游戏排行榜场景
 │   │   ├── main.mbt
-│   │   └── moon.pkg.json
+│   │   └── moon.pkg
 │   ├── shopping_cart/          # 电商购物车 / 缓存场景
 │   │   ├── main.mbt
-│   │   └── moon.pkg.json
+│   │   └── moon.pkg
 │   └── cli_repl/               # 命令行交互演示
 │       ├── main.mbt
-│       └── moon.pkg.json
-├── moon.mod.json               # 模块配置（moonbitdb/moonbitdb）
+│       └── moon.pkg
+├── moon.mod                    # 模块配置（JIA2JIA2/moonbitdb）
 └── README.md                   # 本文档
 ```
 
@@ -146,7 +153,7 @@ moonbitDB/
 
 ## 支持的命令
 
-共支持 **92 个命令**，覆盖 Redis 核心功能。
+共支持 **94 个命令**，覆盖 Redis 核心功能。
 
 > **类型安全约定**：对已存在但类型不匹配的 key，写操作**不会覆盖**原数据。失败返回值约定如下：`HSET`/`LPUSH`/`RPUSH`/`APPEND` 返回 `-1`，`SADD`/`ZADD` 返回 `false`，`INCR`/`DECR`/`HINCRBY` 返回 `None`，`HMSET` 为空操作，`SINTERSTORE`/`SUNIONSTORE`/`SDIFFSTORE` 返回 `-1`。时间相关 API 使用 `Int64` 毫秒，可安全表示真实 Unix 时间戳与超过 24 天的 TTL。
 
@@ -288,7 +295,7 @@ moonbitDB/
 
 ## 完整公共 API 文档
 
-以下列出 `lib/database.mbt` 中所有公共 API 的完整签名。通过 `@lib` 访问。
+以下列出 `lib/` 中所有公共 API 的完整签名。通过 `@lib` 访问。
 
 ### Database 结构体
 
@@ -463,6 +470,7 @@ moonbitDB/
 | `uint16_to_digit` | `(c : UInt16) -> Int?` | Unicode 字符转数字 |
 | `digit_to_uint16` | `(n : Int) -> UInt16` | 数字转 Unicode 字符 |
 | `parse_int` | `(s : String) -> Int?` | 字符串解析为整数 |
+| `parse_int64` | `(s : String) -> Int64?` | 字符串解析为 64 位整数 |
 | `int_to_string` | `(n : Int) -> String` | 整数转字符串 |
 | `sort_by_score` | `(items : Array[(String, Float)]) -> Array[(String, Float)]` | 按分数排序 |
 | `merge_sort` | `(arr : Array[(String, Float)]) -> Array[(String, Float)]` | 归并排序 |
@@ -597,7 +605,7 @@ moon run examples/cli_repl --target native
 - Set — 集合（无序唯一元素）
 - Sorted Set — 有序集合（分数排序）
 
-**命令语义**（8 大命令组，80+ 个命令）：
+**命令语义**（8 大命令组，94 个命令）：
 
 | 命令组 | 命令数量 | 代表命令 |
 |--------|----------|----------|

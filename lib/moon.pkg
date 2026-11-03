@@ -1,3 +1,7 @@
+import {
+  "moonbitlang/core/bench",
+} for "test"
+
 options(
   name: "lib",
 )
