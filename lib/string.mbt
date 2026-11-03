@@ -92,14 +92,22 @@ pub fn Database::mdel(self : Database, keys : Array[String]) -> Int {
   count
 }
 
-pub fn Database::get(self : Database, key : String) -> String? {
+pub fn Database::try_get(self : Database, key : String) -> Result[String, RedisError] {
   if self.check_expired(key) {
-    None
+    Err(RedisError::NotFound)
   } else {
     match self.data.get(key) {
-      Some(RedisValue::String(s)) => Some(s)
-      _ => None
+      Some(RedisValue::String(s)) => Ok(s)
+      Some(_) => Err(RedisError::WrongType)
+      None => Err(RedisError::NotFound)
     }
+  }
+}
+
+pub fn Database::get(self : Database, key : String) -> String? {
+  match self.try_get(key) {
+    Ok(value) => Some(value)
+    Err(_) => None
   }
 }
 
@@ -136,25 +144,39 @@ pub fn Database::strlen(self : Database, key : String) -> Int {
   }
 }
 
-pub fn Database::incrby(self : Database, key : String, increment : Int64) -> Int64? {
+pub fn Database::try_incrby(self : Database, key : String, increment : Int64) -> Result[Int64, RedisError] {
   self.check_expired(key) |> ignore
   let current = match self.data.get(key) {
     Some(RedisValue::String(s)) => s
     None => "0"
-    Some(_) => return None
+    Some(_) => return Err(RedisError::WrongType)
   }
   match parse_int64(current) {
     Some(n) => {
       let new_value = n + increment
       self.put(key, RedisValue::String("\{new_value}"))
-      Some(new_value)
+      Ok(new_value)
     }
-    None => None
+    None => Err(RedisError::NotInteger)
   }
 }
 
+pub fn Database::incrby(self : Database, key : String, increment : Int64) -> Int64? {
+  match self.try_incrby(key, increment) {
+    Ok(value) => Some(value)
+    Err(_) => None
+  }
+}
+
+pub fn Database::try_decrby(self : Database, key : String, decrement : Int64) -> Result[Int64, RedisError] {
+  self.try_incrby(key, -decrement)
+}
+
 pub fn Database::decrby(self : Database, key : String, decrement : Int64) -> Int64? {
-  self.incrby(key, -decrement)
+  match self.try_decrby(key, decrement) {
+    Ok(value) => Some(value)
+    Err(_) => None
+  }
 }
 
 pub fn Database::incr(self : Database, key : String) -> Int64? {
@@ -191,22 +213,22 @@ fn null_padding(count : Int) -> String {
   String::from_array(chars)
 }
 
-pub fn Database::setrange(self : Database, key : String, offset : Int, value : String) -> Int {
+pub fn Database::try_setrange(self : Database, key : String, offset : Int, value : String) -> Result[Int, RedisError] {
   if offset < 0 {
-    return -1
+    return Err(RedisError::InvalidArgument)
   }
   if self.check_expired(key) {
     if value.length() == 0 {
-      return 0
+      return Ok(0)
     }
     let new_val = null_padding(offset) + value
     self.put(key, RedisValue::String(new_val))
-    new_val.length()
+    Ok(new_val.length())
   } else {
     match self.data.get(key) {
       Some(RedisValue::String(s)) => {
         if value.length() == 0 {
-          return s.length()
+          return Ok(s.length())
         }
         let len = s.length()
         let new_val = if offset >= len {
@@ -221,18 +243,25 @@ pub fn Database::setrange(self : Database, key : String, offset : Int, value : S
           s[0:offset].to_owned() + value + tail
         }
         self.put(key, RedisValue::String(new_val))
-        new_val.length()
+        Ok(new_val.length())
       }
-      Some(_) => -1
+      Some(_) => Err(RedisError::WrongType)
       None => {
         if value.length() == 0 {
-          return 0
+          return Ok(0)
         }
         let new_val = null_padding(offset) + value
         self.put(key, RedisValue::String(new_val))
-        new_val.length()
+        Ok(new_val.length())
       }
     }
+  }
+}
+
+pub fn Database::setrange(self : Database, key : String, offset : Int, value : String) -> Int {
+  match self.try_setrange(key, offset, value) {
+    Ok(length) => length
+    Err(_) => -1
   }
 }
 

@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**110 个测试用例，全部通过**。
+当前测试覆盖：**113 个测试用例，全部通过**。
 
 ### 运行基准与覆盖率
 
@@ -127,7 +127,7 @@ moonbitDB/
 │   ├── deque.mbt               # List 底层双端队列
 │   ├── util.mbt                # 整数解析与通配符匹配
 │   ├── server.mbt              # 服务器命令
-│   ├── database_wbtest.mbt     # 白盒测试（110 个用例）
+│   ├── database_wbtest.mbt     # 白盒测试（113 个用例）
 │   ├── database_bench_test.mbt # 基准测试
 │   └── moon.pkg
 ├── demo.mbt                    # 快速开始演示（主包入口）
@@ -308,6 +308,19 @@ moonbitDB/
 
 以下列出 `lib/` 中所有公共 API 的完整签名。通过 `@lib` 访问。
 
+### 错误模型
+
+需要区分“key 不存在 / 类型错误 / 非整数 / 参数非法”时，使用 `try_*` 系列方法，它们返回 `Result[T, RedisError]`：
+
+| 类型 | 取值 | 说明 |
+|------|------|------|
+| `RedisError` | `WrongType` | 对错误类型的 key 执行操作 |
+| `RedisError` | `NotInteger` | 值不是合法整数 |
+| `RedisError` | `NotFound` | key 不存在或已过期 |
+| `RedisError` | `InvalidArgument` | 参数非法（如负 offset、空批量参数） |
+
+> 旧方法保持兼容：`get/incrby/...` 仍返回 `Option`，`hset/lpush/...` 仍返回 `-1`/`false` 哨兵值；需要精确错误时调用对应的 `try_*` 方法。`RedisError::message()` 可获取 Redis 风格错误文本。
+
 ### Database 结构体
 
 #### 构造函数与辅助方法
@@ -325,6 +338,10 @@ moonbitDB/
 |------|------|------|
 | `set` | `(self : Database, key : String, value : String) -> Unit` | 设置字符串值 |
 | `get` | `(self : Database, key : String) -> String?` | 获取字符串值 |
+| `try_get` | `(self : Database, key : String) -> Result[String, RedisError]` | 获取字符串值并区分错误 |
+| `try_incrby` | `(self : Database, key : String, increment : Int64) -> Result[Int64, RedisError]` | 精确错误版自增 |
+| `try_decrby` | `(self : Database, key : String, decrement : Int64) -> Result[Int64, RedisError]` | 精确错误版自减 |
+| `try_setrange` | `(self : Database, key : String, offset : Int, value : String) -> Result[Int, RedisError]` | 精确错误版覆盖写入 |
 | `del` | `(self : Database, key : String) -> Bool` | 删除 key |
 | `exists` | `(self : Database, key : String) -> Bool` | 检查 key 是否存在 |
 | `append` | `(self : Database, key : String, value : String) -> Int` | 追加字符串，返回新长度 |
@@ -347,6 +364,7 @@ moonbitDB/
 | `keys` | `(self : Database) -> Array[String]` | 列出所有 key |
 | `keys_pattern` | `(self : Database, pattern : String) -> Array[String]` | 模式匹配 key |
 | `scan` | `(self : Database, cursor : Int, count : Int) -> (Int, Array[String])` | 游标遍历 key |
+| `scan_match` | `(self : Database, cursor : Int, count : Int, pattern : String) -> (Int, Array[String])` | 带模式匹配的游标遍历 |
 | `type_of` | `(self : Database, key : String) -> String` | 返回值类型 |
 | `expire` | `(self : Database, key : String, seconds : Int) -> Bool` | 设置过期时间（秒） |
 | `pexpire` | `(self : Database, key : String, milliseconds : Int64) -> Bool` | 设置过期时间（毫秒） |
@@ -359,6 +377,7 @@ moonbitDB/
 | `renamenx` | `(self : Database, old_key : String, new_key : String) -> Bool` | 仅在新 key 不存在时重命名 |
 | `randomkey` | `(self : Database) -> String?` | 随机返回一个 key |
 | `copy` | `(self : Database, source : String, destination : String) -> Bool` | 复制 key（深拷贝，不复制 TTL） |
+| `copy_with_replace` | `(self : Database, source : String, destination : String, replace : Bool) -> Bool` | 可选覆盖目标 key 的复制 |
 | `touch` | `(self : Database, keys : Array[String]) -> Int` | 返回存在的 key 数量 |
 | `unlink` | `(self : Database, key : String) -> Bool` | 删除 key（同 del） |
 
@@ -367,6 +386,7 @@ moonbitDB/
 | 方法 | 签名 | 说明 |
 |------|------|------|
 | `hset` | `(self : Database, key : String, field : String, value : String) -> Int` | 设置 hash 字段，返回新建字段数 |
+| `try_hset` | `(self : Database, key : String, field : String, value : String) -> Result[Int, RedisError]` | 精确错误版设置字段 |
 | `hsetnx` | `(self : Database, key : String, field : String, value : String) -> Bool` | 仅当字段不存在时设置 |
 | `hget` | `(self : Database, key : String, field : String) -> String?` | 获取 hash 字段 |
 | `hdel` | `(self : Database, key : String, field : String) -> Bool` | 删除 hash 字段 |
@@ -376,6 +396,7 @@ moonbitDB/
 | `hkeys` | `(self : Database, key : String) -> Array[String]` | 获取 hash 所有字段名 |
 | `hvals` | `(self : Database, key : String) -> Array[String]` | 获取 hash 所有字段值 |
 | `hincrby` | `(self : Database, key : String, field : String, increment : Int64) -> Int64?` | hash 字段整数自增 |
+| `try_hincrby` | `(self : Database, key : String, field : String, increment : Int64) -> Result[Int64, RedisError]` | 精确错误版字段自增 |
 | `hstrlen` | `(self : Database, key : String, field : String) -> Int` | hash 字段值长度 |
 
 #### List 操作
@@ -383,7 +404,11 @@ moonbitDB/
 | 方法 | 签名 | 说明 |
 |------|------|------|
 | `lpush` | `(self : Database, key : String, value : String) -> Int` | 左端插入 |
+| `try_lpush` | `(self : Database, key : String, value : String) -> Result[Int, RedisError]` | 精确错误版左端插入 |
+| `lpush_all` | `(self : Database, key : String, values : Array[String]) -> Int` | 批量左端插入（按 Redis 顺序反转） |
+| `rpush_all` | `(self : Database, key : String, values : Array[String]) -> Int` | 批量右端插入 |
 | `rpush` | `(self : Database, key : String, value : String) -> Int` | 右端插入 |
+| `try_rpush` | `(self : Database, key : String, value : String) -> Result[Int, RedisError]` | 精确错误版右端插入 |
 | `lpop` | `(self : Database, key : String) -> String?` | 左端弹出 |
 | `rpop` | `(self : Database, key : String) -> String?` | 右端弹出 |
 | `llen` | `(self : Database, key : String) -> Int` | 列表长度 |
@@ -402,16 +427,22 @@ moonbitDB/
 | 方法 | 签名 | 说明 |
 |------|------|------|
 | `sadd` | `(self : Database, key : String, value : String) -> Bool` | 添加成员 |
+| `try_sadd` | `(self : Database, key : String, value : String) -> Result[Bool, RedisError]` | 精确错误版添加成员 |
+| `sadd_all` | `(self : Database, key : String, values : Array[String]) -> Int` | 批量添加，返回新增数量 |
+| `srem_all` | `(self : Database, key : String, values : Array[String]) -> Int` | 批量删除，返回删除数量 |
 | `smembers` | `(self : Database, key : String) -> Array[String]` | 所有成员 |
 | `srem` | `(self : Database, key : String, value : String) -> Bool` | 删除成员 |
 | `scard` | `(self : Database, key : String) -> Int` | 成员数量 |
 | `sismember` | `(self : Database, key : String, value : String) -> Bool` | 检查成员是否存在 |
 | `sinter` | `(self : Database, keys : Array[String]) -> Array[String]` | 多集合交集 |
 | `sinterstore` | `(self : Database, destination : String, keys : Array[String]) -> Int` | 交集存储到 dest |
+| `try_sinterstore` | `(self : Database, destination : String, keys : Array[String]) -> Result[Int, RedisError]` | 精确错误版交集存储 |
 | `sunion` | `(self : Database, keys : Array[String]) -> Array[String]` | 多集合并集 |
 | `sunionstore` | `(self : Database, destination : String, keys : Array[String]) -> Int` | 并集存储到 dest |
+| `try_sunionstore` | `(self : Database, destination : String, keys : Array[String]) -> Result[Int, RedisError]` | 精确错误版并集存储 |
 | `sdiff` | `(self : Database, keys : Array[String]) -> Array[String]` | 多集合差集 |
 | `sdiffstore` | `(self : Database, destination : String, keys : Array[String]) -> Int` | 差集存储到 dest |
+| `try_sdiffstore` | `(self : Database, destination : String, keys : Array[String]) -> Result[Int, RedisError]` | 精确错误版差集存储 |
 | `smove` | `(self : Database, source : String, destination : String, value : String) -> Bool` | 跨集合移动元素 |
 | `spop` | `(self : Database, key : String) -> String?` | 随机弹出元素 |
 | `srandmember` | `(self : Database, key : String) -> String?` | 随机返回一个成员（不删除） |
@@ -421,6 +452,7 @@ moonbitDB/
 | 方法 | 签名 | 说明 |
 |------|------|------|
 | `zadd` | `(self : Database, key : String, score : Float, member_val : String) -> Bool` | 添加/更新成员 |
+| `try_zadd` | `(self : Database, key : String, score : Float, member_val : String) -> Result[Bool, RedisError]` | 精确错误版添加/更新成员 |
 | `zrange` | `(self : Database, key : String, start : Int, end : Int) -> Array[String]` | 按排名升序获取范围 |
 | `zcard` | `(self : Database, key : String) -> Int` | 成员数量 |
 | `zscore` | `(self : Database, key : String, member_val : String) -> Float?` | 获取成员分数 |
@@ -435,6 +467,7 @@ moonbitDB/
 | `zrank` | `(self : Database, key : String, member_val : String) -> Int?` | 升序排名 |
 | `zrevrank` | `(self : Database, key : String, member_val : String) -> Int?` | 降序排名 |
 | `zincrby` | `(self : Database, key : String, increment : Float, member_val : String) -> Float` | 增加分数 |
+| `try_zincrby` | `(self : Database, key : String, increment : Float, member_val : String) -> Result[Float, RedisError]` | 精确错误版增加分数 |
 | `zremrangebyrank` | `(self : Database, key : String, start : Int, end : Int) -> Int` | 按排名范围删除 |
 | `zremrangebyscore` | `(self : Database, key : String, min_score : Float, max_score : Float) -> Int` | 按分数范围删除 |
 | `zpopmin` | `(self : Database, key : String) -> (String, Float)?` | 弹出最小分数成员 |

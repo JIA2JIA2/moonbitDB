@@ -1,9 +1,9 @@
-pub fn Database::zadd(self : Database, key : String, score : Float, member_val : String) -> Bool {
+pub fn Database::try_zadd(self : Database, key : String, score : Float, member_val : String) -> Result[Bool, RedisError] {
   self.check_expired(key) |> ignore
   let zset = match self.data.get(key) {
     Some(RedisValue::ZSet(z)) => z
     None => Map([], capacity=10)
-    Some(_) => return false
+    Some(_) => return Err(RedisError::WrongType)
   }
   let existed = zset.contains(member_val)
   zset.set(member_val, score)
@@ -14,7 +14,14 @@ pub fn Database::zadd(self : Database, key : String, score : Float, member_val :
     Some(cached) => self.zset_sorted_cache.set(key, update_sorted_items(cached, member_val, Some(score)))
     None => ()
   }
-  !existed
+  Ok(!existed)
+}
+
+pub fn Database::zadd(self : Database, key : String, score : Float, member_val : String) -> Bool {
+  match self.try_zadd(key, score, member_val) {
+    Ok(added) => added
+    Err(_) => false
+  }
 }
 
 pub fn Database::zrange(self : Database, key : String, start : Int, end : Int) -> Array[String] {
@@ -332,12 +339,12 @@ pub fn Database::zrevrank(self : Database, key : String, member_val : String) ->
   }
 }
 
-pub fn Database::zincrby(self : Database, key : String, increment : Float, member_val : String) -> Float {
+pub fn Database::try_zincrby(self : Database, key : String, increment : Float, member_val : String) -> Result[Float, RedisError] {
   self.check_expired(key) |> ignore
   let zset = match self.data.get(key) {
     Some(RedisValue::ZSet(z)) => z
     None => Map([], capacity=10)
-    Some(_) => return 0.0
+    Some(_) => return Err(RedisError::WrongType)
   }
   let current_score = match zset.get(member_val) {
     Some(s) => s
@@ -352,7 +359,14 @@ pub fn Database::zincrby(self : Database, key : String, increment : Float, membe
     Some(cached) => self.zset_sorted_cache.set(key, update_sorted_items(cached, member_val, Some(new_score)))
     None => ()
   }
-  new_score
+  Ok(new_score)
+}
+
+pub fn Database::zincrby(self : Database, key : String, increment : Float, member_val : String) -> Float {
+  match self.try_zincrby(key, increment, member_val) {
+    Ok(score) => score
+    Err(_) => 0.0
+  }
 }
 
 pub fn Database::zremrangebyrank(self : Database, key : String, start : Int, end : Int) -> Int {

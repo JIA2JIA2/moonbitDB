@@ -1,25 +1,87 @@
-pub fn Database::lpush(self : Database, key : String, value : String) -> Int {
+pub fn Database::try_lpush(self : Database, key : String, value : String) -> Result[Int, RedisError] {
   self.check_expired(key) |> ignore
   let deque = match self.data.get(key) {
     Some(RedisValue::List(d)) => d
     None => Deque::new()
-    Some(_) => return -1
+    Some(_) => return Err(RedisError::WrongType)
   }
   deque.push_front(value)
   self.put(key, RedisValue::List(deque))
-  deque.length()
+  Ok(deque.length())
 }
 
-pub fn Database::rpush(self : Database, key : String, value : String) -> Int {
+pub fn Database::lpush(self : Database, key : String, value : String) -> Int {
+  match self.try_lpush(key, value) {
+    Ok(length) => length
+    Err(_) => -1
+  }
+}
+
+pub fn Database::try_rpush(self : Database, key : String, value : String) -> Result[Int, RedisError] {
   self.check_expired(key) |> ignore
   let deque = match self.data.get(key) {
     Some(RedisValue::List(d)) => d
     None => Deque::new()
-    Some(_) => return -1
+    Some(_) => return Err(RedisError::WrongType)
   }
   deque.push_back(value)
   self.put(key, RedisValue::List(deque))
-  deque.length()
+  Ok(deque.length())
+}
+
+pub fn Database::rpush(self : Database, key : String, value : String) -> Int {
+  match self.try_rpush(key, value) {
+    Ok(length) => length
+    Err(_) => -1
+  }
+}
+
+pub fn Database::try_lpush_all(self : Database, key : String, values : Array[String]) -> Result[Int, RedisError] {
+  self.check_expired(key) |> ignore
+  if values.length() == 0 {
+    return Err(RedisError::InvalidArgument)
+  }
+  let deque = match self.data.get(key) {
+    Some(RedisValue::List(d)) => d
+    None => Deque::new()
+    Some(_) => return Err(RedisError::WrongType)
+  }
+  for value in values {
+    deque.push_front(value)
+  }
+  self.put(key, RedisValue::List(deque))
+  Ok(deque.length())
+}
+
+pub fn Database::lpush_all(self : Database, key : String, values : Array[String]) -> Int {
+  match self.try_lpush_all(key, values) {
+    Ok(length) => length
+    Err(_) => -1
+  }
+}
+
+pub fn Database::try_rpush_all(self : Database, key : String, values : Array[String]) -> Result[Int, RedisError] {
+  self.check_expired(key) |> ignore
+  if values.length() == 0 {
+    return Err(RedisError::InvalidArgument)
+  }
+  let deque = match self.data.get(key) {
+    Some(RedisValue::List(d)) => d
+    None => Deque::new()
+    Some(_) => return Err(RedisError::WrongType)
+  }
+  for value in values {
+    deque.push_back(value)
+  }
+  self.put(key, RedisValue::List(deque))
+  Ok(deque.length())
+}
+
+pub fn Database::rpush_all(self : Database, key : String, values : Array[String]) -> Int {
+  match self.try_rpush_all(key, values) {
+    Ok(length) => length
+    Err(_) => -1
+  }
 }
 
 pub fn Database::lpop(self : Database, key : String) -> String? {

@@ -38,20 +38,27 @@ pub fn Database::hmget(self : Database, key : String, fields : Array[String]) ->
   }
 }
 
-pub fn Database::hset(self : Database, key : String, field : String, value : String) -> Int {
+pub fn Database::try_hset(self : Database, key : String, field : String, value : String) -> Result[Int, RedisError] {
   self.check_expired(key) |> ignore
   let hash = match self.data.get(key) {
     Some(RedisValue::Hash(h)) => h
     None => Map([], capacity=10)
-    Some(_) => return -1
+    Some(_) => return Err(RedisError::WrongType)
   }
   let existed = hash.contains(field)
   hash.set(field, value)
   self.put(key, RedisValue::Hash(hash))
   if existed {
-    0
+    Ok(0)
   } else {
-    1
+    Ok(1)
+  }
+}
+
+pub fn Database::hset(self : Database, key : String, field : String, value : String) -> Int {
+  match self.try_hset(key, field, value) {
+    Ok(created) => created
+    Err(_) => -1
   }
 }
 
@@ -164,24 +171,37 @@ pub fn Database::hstrlen(self : Database, key : String, field : String) -> Int {
   }
 }
 
-pub fn Database::hincrby(self : Database, key : String, field : String, increment : Int64) -> Int64? {
+pub fn Database::try_hincrby(
+  self : Database,
+  key : String,
+  field : String,
+  increment : Int64,
+) -> Result[Int64, RedisError] {
   self.check_expired(key) |> ignore
   let hash = match self.data.get(key) {
     Some(RedisValue::Hash(h)) => h
     None => Map([], capacity=10)
-    Some(_) => return None
+    Some(_) => return Err(RedisError::WrongType)
   }
   let current = match hash.get(field) {
     Some(value) =>
       match parse_int64(value) {
         Some(n) => n
-        None => return None
+        None => return Err(RedisError::NotInteger)
       }
     None => 0
   }
-  hash.set(field, "\{(current + increment)}")
+  let new_value = current + increment
+  hash.set(field, "\{new_value}")
   self.put(key, RedisValue::Hash(hash))
-  Some(current + increment)
+  Ok(new_value)
+}
+
+pub fn Database::hincrby(self : Database, key : String, field : String, increment : Int64) -> Int64? {
+  match self.try_hincrby(key, field, increment) {
+    Ok(value) => Some(value)
+    Err(_) => None
+  }
 }
 
 pub fn Database::hsetnx(self : Database, key : String, field : String, value : String) -> Bool {

@@ -273,7 +273,12 @@ fn clone_redis_value(value : RedisValue) -> RedisValue {
   }
 }
 
-pub fn Database::copy(self : Database, source : String, destination : String) -> Bool {
+pub fn Database::copy_with_replace(
+  self : Database,
+  source : String,
+  destination : String,
+  replace : Bool,
+) -> Bool {
   if source == destination {
     return false
   }
@@ -281,16 +286,39 @@ pub fn Database::copy(self : Database, source : String, destination : String) ->
     return false
   }
   self.check_expired(destination) |> ignore
-  if self.data.contains(destination) {
+  if !replace && self.data.contains(destination) {
     return false
   }
   match self.data.get(source) {
     Some(value) => {
+      if replace {
+        self.expires.remove(destination)
+      }
       self.put(destination, clone_redis_value(value))
       true
     }
     None => false
   }
+}
+
+pub fn Database::copy(self : Database, source : String, destination : String) -> Bool {
+  self.copy_with_replace(source, destination, false)
+}
+
+pub fn Database::scan_match(
+  self : Database,
+  cursor : Int,
+  count : Int,
+  pattern : String,
+) -> (Int, Array[String]) {
+  let (next, keys) = self.scan(cursor, count)
+  let result : Array[String] = []
+  for key in keys {
+    if match_pattern(pattern, key) {
+      result.push(key)
+    }
+  }
+  (next, result)
 }
 
 pub fn Database::touch(self : Database, keys : Array[String]) -> Int {

@@ -1,16 +1,90 @@
-pub fn Database::sadd(self : Database, key : String, value : String) -> Bool {
+pub fn Database::try_sadd(self : Database, key : String, value : String) -> Result[Bool, RedisError] {
   self.check_expired(key) |> ignore
   let set = match self.data.get(key) {
     Some(RedisValue::Set(s)) => s
     None => Map([], capacity=10)
-    Some(_) => return false
+    Some(_) => return Err(RedisError::WrongType)
   }
   if set.contains(value) {
-    false
+    Ok(false)
   } else {
     set.set(value, true)
     self.put(key, RedisValue::Set(set))
-    true
+    Ok(true)
+  }
+}
+
+pub fn Database::sadd(self : Database, key : String, value : String) -> Bool {
+  match self.try_sadd(key, value) {
+    Ok(added) => added
+    Err(_) => false
+  }
+}
+
+pub fn Database::try_sadd_all(self : Database, key : String, values : Array[String]) -> Result[Int, RedisError] {
+  self.check_expired(key) |> ignore
+  if values.length() == 0 {
+    return Err(RedisError::InvalidArgument)
+  }
+  let set = match self.data.get(key) {
+    Some(RedisValue::Set(s)) => s
+    None => Map([], capacity=10)
+    Some(_) => return Err(RedisError::WrongType)
+  }
+  let mut added = 0
+  for value in values {
+    if !set.contains(value) {
+      set.set(value, true)
+      added = added + 1
+    }
+  }
+  if added > 0 {
+    self.put(key, RedisValue::Set(set))
+  }
+  Ok(added)
+}
+
+pub fn Database::sadd_all(self : Database, key : String, values : Array[String]) -> Int {
+  match self.try_sadd_all(key, values) {
+    Ok(added) => added
+    Err(_) => -1
+  }
+}
+
+pub fn Database::try_srem_all(self : Database, key : String, values : Array[String]) -> Result[Int, RedisError] {
+  if values.length() == 0 {
+    return Err(RedisError::InvalidArgument)
+  }
+  if self.check_expired(key) {
+    return Ok(0)
+  }
+  match self.data.get(key) {
+    Some(RedisValue::Set(set)) => {
+      let mut removed = 0
+      for value in values {
+        if set.contains(value) {
+          set.remove(value)
+          removed = removed + 1
+        }
+      }
+      if removed > 0 {
+        if set.length() == 0 {
+          self.delete_key(key)
+        } else {
+          self.put(key, RedisValue::Set(set))
+        }
+      }
+      Ok(removed)
+    }
+    Some(_) => Err(RedisError::WrongType)
+    None => Ok(0)
+  }
+}
+
+pub fn Database::srem_all(self : Database, key : String, values : Array[String]) -> Int {
+  match self.try_srem_all(key, values) {
+    Ok(removed) => removed
+    Err(_) => -1
   }
 }
 
@@ -113,9 +187,9 @@ pub fn Database::sinter(self : Database, keys : Array[String]) -> Array[String] 
   arr
 }
 
-pub fn Database::sinterstore(self : Database, destination : String, keys : Array[String]) -> Int {
+pub fn Database::try_sinterstore(self : Database, destination : String, keys : Array[String]) -> Result[Int, RedisError] {
   if !self.sets_valid(keys) {
-    return -1
+    return Err(RedisError::WrongType)
   }
   let result = self.sinter(keys)
   let new_set = Map([], capacity=result.length())
@@ -124,7 +198,14 @@ pub fn Database::sinterstore(self : Database, destination : String, keys : Array
   }
   self.put(destination, RedisValue::Set(new_set))
   self.expires.remove(destination)
-  result.length()
+  Ok(result.length())
+}
+
+pub fn Database::sinterstore(self : Database, destination : String, keys : Array[String]) -> Int {
+  match self.try_sinterstore(destination, keys) {
+    Ok(count) => count
+    Err(_) => -1
+  }
 }
 
 pub fn Database::sunion(self : Database, keys : Array[String]) -> Array[String] {
@@ -142,9 +223,9 @@ pub fn Database::sunion(self : Database, keys : Array[String]) -> Array[String] 
   arr
 }
 
-pub fn Database::sunionstore(self : Database, destination : String, keys : Array[String]) -> Int {
+pub fn Database::try_sunionstore(self : Database, destination : String, keys : Array[String]) -> Result[Int, RedisError] {
   if !self.sets_valid(keys) {
-    return -1
+    return Err(RedisError::WrongType)
   }
   let result = self.sunion(keys)
   let new_set = Map([], capacity=result.length())
@@ -153,7 +234,14 @@ pub fn Database::sunionstore(self : Database, destination : String, keys : Array
   }
   self.put(destination, RedisValue::Set(new_set))
   self.expires.remove(destination)
-  result.length()
+  Ok(result.length())
+}
+
+pub fn Database::sunionstore(self : Database, destination : String, keys : Array[String]) -> Int {
+  match self.try_sunionstore(destination, keys) {
+    Ok(count) => count
+    Err(_) => -1
+  }
 }
 
 pub fn Database::sdiff(self : Database, keys : Array[String]) -> Array[String] {
@@ -184,9 +272,9 @@ pub fn Database::sdiff(self : Database, keys : Array[String]) -> Array[String] {
   arr
 }
 
-pub fn Database::sdiffstore(self : Database, destination : String, keys : Array[String]) -> Int {
+pub fn Database::try_sdiffstore(self : Database, destination : String, keys : Array[String]) -> Result[Int, RedisError] {
   if !self.sets_valid(keys) {
-    return -1
+    return Err(RedisError::WrongType)
   }
   let result = self.sdiff(keys)
   let new_set = Map([], capacity=result.length())
@@ -195,7 +283,14 @@ pub fn Database::sdiffstore(self : Database, destination : String, keys : Array[
   }
   self.put(destination, RedisValue::Set(new_set))
   self.expires.remove(destination)
-  result.length()
+  Ok(result.length())
+}
+
+pub fn Database::sdiffstore(self : Database, destination : String, keys : Array[String]) -> Int {
+  match self.try_sdiffstore(destination, keys) {
+    Ok(count) => count
+    Err(_) => -1
+  }
 }
 
 pub fn Database::smove(self : Database, source : String, destination : String, value : String) -> Bool {

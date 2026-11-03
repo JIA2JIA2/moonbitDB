@@ -2448,3 +2448,160 @@ test "zset_rank_and_lex_cache" {
   debug_inspect(db.zrank("z2", "c"), content="Some(0)")
   debug_inspect(db.zrange("z2", 0, -1)[0], content="\"c\"")
 }
+
+test "try_api_error_model" {
+  let db = Database::new()
+  debug_inspect(
+    match db.try_get("missing") {
+      Err(RedisError::NotFound) => true
+      _ => false
+    },
+    content="true",
+  )
+  db.hset("h", "f", "v") |> ignore
+  debug_inspect(
+    match db.try_get("h") {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    content="true",
+  )
+
+  db.set("s", "10") |> ignore
+  debug_inspect(
+    match db.try_get("s") {
+      Ok(value) => value
+      _ => ""
+    },
+    content="\"10\"",
+  )
+  debug_inspect(
+    match db.try_incrby("s", 5) {
+      Ok(value) => "\{value}"
+      Err(_) => "err"
+    },
+    content="\"15\"",
+  )
+  db.set("bad", "x") |> ignore
+  debug_inspect(
+    match db.try_incrby("bad", 1) {
+      Err(RedisError::NotInteger) => true
+      _ => false
+    },
+    content="true",
+  )
+  debug_inspect(
+    match db.try_incrby("h", 1) {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    content="true",
+  )
+
+  debug_inspect(
+    match db.try_hincrby("h", "f", 1) {
+      Err(RedisError::NotInteger) => true
+      _ => false
+    },
+    content="true",
+  )
+  debug_inspect(
+    match db.try_hset("s", "f", "v") {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    content="true",
+  )
+  debug_inspect(
+    match db.try_lpush("s", "x") {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    content="true",
+  )
+  debug_inspect(
+    match db.try_sadd("s", "x") {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    content="true",
+  )
+  debug_inspect(
+    match db.try_zadd("s", 1.0, "x") {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    content="true",
+  )
+  debug_inspect(
+    match db.try_zincrby("s", 1.0, "x") {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    content="true",
+  )
+  debug_inspect(
+    match db.try_setrange("s", -1, "x") {
+      Err(RedisError::InvalidArgument) => true
+      _ => false
+    },
+    content="true",
+  )
+  debug_inspect(
+    match db.try_sinterstore("dest", ["s"]) {
+      Err(RedisError::WrongType) => true
+      _ => false
+    },
+    content="true",
+  )
+  debug_inspect(RedisError::WrongType.message().length() > 0, content="true")
+}
+
+test "batch_set_commands" {
+  let db = Database::new()
+  debug_inspect(db.rpush_all("q", ["a", "b", "c"]), content="3")
+  debug_inspect(db.lindex("q", 0), content="Some(\"a\")")
+  debug_inspect(db.lpush_all("q", ["x", "y"]), content="5")
+  debug_inspect(db.lindex("q", 0), content="Some(\"y\")")
+  debug_inspect(db.lindex("q", 1), content="Some(\"x\")")
+  debug_inspect(db.lpush_all("q", []), content="-1")
+  db.set("str", "v") |> ignore
+  debug_inspect(db.lpush_all("str", ["a"]), content="-1")
+
+  debug_inspect(db.sadd_all("set", ["a", "b", "a"]), content="2")
+  debug_inspect(db.srem_all("set", ["a", "c"]), content="1")
+  debug_inspect(db.scard("set"), content="1")
+  debug_inspect(db.sadd_all("str", ["a"]), content="-1")
+}
+
+test "scan_match_and_copy_replace" {
+  let db = Database::new()
+  for i = 0; i < 20; i = i + 1 {
+    db.set("user:\{i}", "v") |> ignore
+  }
+  db.set("order:1", "v") |> ignore
+
+  let matched = Map([], capacity=20)
+  let mut cursor = 0
+  while true {
+    let (next, keys) = db.scan_match(cursor, 5, "user:*")
+    for key in keys {
+      matched.set(key, true)
+    }
+    if next == 0 {
+      break
+    }
+    cursor = next
+  }
+  debug_inspect(matched.length(), content="20")
+  debug_inspect(matched.contains("order:1"), content="false")
+
+  db.zadd("src", 1.0, "a") |> ignore
+  db.set("dst", "old") |> ignore
+  db.expire("dst", 100) |> ignore
+  debug_inspect(db.copy_with_replace("src", "dst", false), content="false")
+  debug_inspect(db.copy_with_replace("src", "dst", true), content="true")
+  debug_inspect(db.type_of("dst"), content="\"zset\"")
+  debug_inspect(db.ttl("dst"), content="-1")
+  debug_inspect(db.copy_with_replace("src", "fresh", false), content="true")
+}
