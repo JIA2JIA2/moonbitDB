@@ -81,9 +81,7 @@ fn main {
   println("----------------------------------------")
   for product in products {
     let key = "product:\{product.id}"
-    db.hset(key, "name", product.name) |> ignore
-    db.hset(key, "price", "\{product.price}") |> ignore
-    db.hset(key, "stock", "\{product.stock}") |> ignore
+    db.hmset(key, ["name", "price", "stock"], [product.name, "\{product.price}", "\{product.stock}"])
     db.expire(key, 3600) |> ignore
     println("  缓存商品: \{product.name} (ID: \{product.id}, TTL: 3600s)")
   }
@@ -113,9 +111,7 @@ fn main {
   println("----------------------------------------")
   let history_key = "history:user:1001"
   let viewed = ["p1002", "p1001", "p1004", "p1003", "p1005", "p1001", "p1002"]
-  for pid in viewed {
-    db.lpush(history_key, pid) |> ignore
-  }
+  db.lpush_all(history_key, viewed) |> ignore
   println("  最近浏览的5个商品:")
   let recent = db.lrange(history_key, 0, 4)
   for i = 0; i < recent.length(); i = i + 1 {
@@ -128,10 +124,7 @@ fn main {
   println("\n⭐ 阶段4：商品收藏（Set）")
   println("----------------------------------------")
   let fav_key = "favorites:user:1001"
-  db.sadd(fav_key, "p1001") |> ignore
-  db.sadd(fav_key, "p1002") |> ignore
-  db.sadd(fav_key, "p1004") |> ignore
-  db.sadd(fav_key, "p1001") |> ignore
+  db.sadd_all(fav_key, ["p1001", "p1002", "p1004", "p1001"]) |> ignore
   println("  收藏商品数: \{db.scard(fav_key)}")
   let favs = db.smembers(fav_key)
   for pid in favs {
@@ -142,25 +135,26 @@ fn main {
   println("\n🔗 阶段5：共同收藏（Set交集）")
   println("----------------------------------------")
   let user2_fav = "favorites:user:1002"
-  db.sadd(user2_fav, "p1001") |> ignore
-  db.sadd(user2_fav, "p1003") |> ignore
-  db.sadd(user2_fav, "p1005") |> ignore
+  db.sadd_all(user2_fav, ["p1001", "p1003", "p1005"]) |> ignore
   let common = db.sinter([fav_key, user2_fav])
   println("  两位用户共同收藏: \{common.length()} 件")
   for pid in common {
     let name = show_opt(db.hget("product:\{pid}", "name"))
     println("    - \{name}")
   }
+  let invalid_inter = db.try_sinter([fav_key, "product:p1001"])
+  let invalid_msg = match invalid_inter {
+    Ok(values) => "[\{values.join(", ")}]"
+    Err(error) => @lib.RedisError::message(error)
+  }
+  println("  类型错误演示 TRY_SINTER = \{invalid_msg}")
 
   println("\n🏷️ 阶段6：商品标签（Set）")
   println("----------------------------------------")
-  db.sadd("tag:编程", "p1001") |> ignore
-  db.sadd("tag:硬件", "p1002") |> ignore
-  db.sadd("tag:硬件", "p1003") |> ignore
-  db.sadd("tag:硬件", "p1004") |> ignore
-  db.sadd("tag:外设", "p1003") |> ignore
-  db.sadd("tag:外设", "p1005") |> ignore
-  db.sadd("tag:显示器", "p1004") |> ignore
+  db.sadd_all("tag:编程", ["p1001"]) |> ignore
+  db.sadd_all("tag:硬件", ["p1002", "p1003", "p1004"]) |> ignore
+  db.sadd_all("tag:外设", ["p1003", "p1005"]) |> ignore
+  db.sadd_all("tag:显示器", ["p1004"]) |> ignore
   let hardware = db.smembers("tag:硬件")
   println("  '硬件'标签商品数: \{hardware.length()}")
   for pid in hardware {
@@ -225,6 +219,12 @@ fn main {
       None => println("    \{hot_keys[i]} = (nil)")
     }
   }
+  let invalid_batch = db.try_mset(["hot:1"], [])
+  let invalid_batch_msg = match invalid_batch {
+    Ok(_) => "OK"
+    Err(error) => @lib.RedisError::message(error)
+  }
+  println("  长度不一致的 TRY_MSET = \{invalid_batch_msg}")
 
   println("\n📈 阶段10：系统状态总览")
   println("----------------------------------------")

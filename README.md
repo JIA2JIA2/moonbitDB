@@ -328,6 +328,13 @@ moonbitDB/
 
 > 旧方法保持兼容：`get/incrby/...` 仍返回 `Option`，`hset/lpush/...` 仍返回 `-1`/`false` 哨兵值；需要精确错误时调用对应的 `try_*` 方法。`RedisError::message()` 可获取 Redis 风格错误文本。
 
+```moonbit
+match db.try_incrby("name", 1) {
+  Ok(value) => println("new value: \{value}")
+  Err(error) => println(@lib.RedisError::message(error))
+}
+```
+
 ### Database 结构体
 
 #### 构造函数与辅助方法
@@ -534,7 +541,7 @@ moonbitDB/
 | 函数 | 签名 | 说明 |
 |------|------|------|
 | `match_pattern` | `(pattern : String, str : String) -> Bool` | 通配符模式匹配（支持 `*` `?`） |
-| `match_pattern_helper` | `(pattern : String, str : String, p_idx : Int, s_idx : Int) -> Bool` | 模式匹配递归辅助函数 |
+| `match_pattern_helper` | `(pattern : String, str : String, p_idx : Int, s_idx : Int) -> Bool` | 模式匹配迭代辅助函数 |
 | `uint16_to_digit` | `(c : UInt16) -> Int?` | Unicode 字符转数字 |
 | `digit_to_uint16` | `(n : Int) -> UInt16` | 数字转 Unicode 字符 |
 | `parse_int` | `(s : String) -> Int?` | 字符串解析为整数 |
@@ -568,23 +575,25 @@ moon run . --target native
   INCR counter = 11
 
 📌 2. Hash 用户信息存储
-  HLEN user:1001 = 3
+  HLEN user:1001 = 5
 
 📌 3. List 任务队列
-  LRANGE tasks 0 -1 = [完成报告, 代码审查, 团队会议]
+  LRANGE tasks 0 -1 = [紧急任务, 完成报告, 代码审查, 团队会议]
 
 📌 4. Set 标签系统
   SCARD = 3 (自动去重)
+  TRY_SINTER 遇到错误类型 = WRONGTYPE Operation against a key holding the wrong kind of value
 
 📌 5. Sorted Set 排行榜
-  TOP 3 (ZREVRANGE 0 2):
+  TOP 3 (ZREVRANGE WITHSCORES):
     #1 玩家D - 3200分
     #2 玩家B - 2500分
 
-📌 6. Key 过期机制
+📌 6. Key 过期与管理
   65秒后 EXISTS = false
 
-📌 7. 批量操作
+📌 7. 批量操作与错误模型
+  TRY_MSET 长度不一致 = ERR invalid argument
 📌 8. 服务器信息
 ========================================
   ✅ 演示完成！
@@ -642,7 +651,7 @@ moon run examples/shopping_cart --target native
 
 ### 5. CLI 命令行交互
 
-模拟 Redis 风格的命令行交互，自动执行 45 条演示命令并输出结果。
+模拟 Redis 风格的命令行交互，自动执行 62 条演示命令并输出结果。
 
 ```bash
 moon run examples/cli_repl --target native
@@ -650,7 +659,7 @@ moon run examples/cli_repl --target native
 
 参考 [examples/cli_repl/main.mbt](examples/cli_repl/main.mbt)
 
-支持解析和执行 60+ 命令，包括 SET/GET/HSET/LPUSH/SADD/ZADD/MSET 等全部命令类型。
+支持解析和执行 55 个命令，包括 SET/GET/HSET/LPUSH/SADD/ZADD/SCAN/COPY 等常用命令。
 
 ## 许可证
 

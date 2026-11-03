@@ -38,23 +38,21 @@ fn main {
     let player = players[i]
     let score = Float::from_int(i * 100 + 50)
     db.zadd("leaderboard:global", score, player.id) |> ignore
-    db.hset("player:\{player.id}", "name", player.name) |> ignore
-    db.hset("player:\{player.id}", "score", "\{i * 100 + 50}") |> ignore
+    db.hmset("player:\{player.id}", ["name", "score"], [player.name, "\{i * 100 + 50}"])
     println("  玩家 \{player.name} (ID: \{player.id}): \{i * 100 + 50} 分")
   }
 
   println("\n🏆 阶段2：查询排行榜 TOP 5")
   println("----------------------------------------")
-  let top5_ids = db.zrevrange("leaderboard:global", 0, 4)
+  let top5 = db.zrevrange_with_scores("leaderboard:global", 0, 4)
   println("  排名 | 玩家ID | 玩家名称 | 分数")
   println("  -----|--------|----------|------")
-  for i = 0; i < top5_ids.length(); i = i + 1 {
-    let pid = top5_ids[i]
+  for i = 0; i < top5.length(); i = i + 1 {
+    let (pid, score) = top5[i]
     let pname = match db.hget("player:\{pid}", "name") {
       Some(n) => n
       None => "Unknown"
     }
-    let score = show_opt_float(db.zscore("leaderboard:global", pid))
     println("   #\{i + 1}  | \{pid}     | \{pname}    | \{score}")
   }
 
@@ -109,6 +107,7 @@ fn main {
   db.expire("leaderboard:daily", 86400) |> ignore
   println("  每日排行榜已创建，24小时后自动过期")
   println("  TTL: \{db.ttl("leaderboard:daily")} 秒")
+  println("  COPY 每日榜单快照: \{db.copy("leaderboard:daily", "leaderboard:daily:snapshot")}")
 
   println("\n👑 阶段7：弹出每日前三名领奖")
   println("----------------------------------------")
@@ -145,9 +144,7 @@ fn main {
   println("\n📋 阶段9：使用List管理消息队列")
   println("----------------------------------------")
   let messages = ["系统维护通知", "新版本发布", "活动奖励发放", "赛季更新预告"]
-  for msg in messages {
-    db.rpush("notifications:global", msg) |> ignore
-  }
+  db.rpush_all("notifications:global", messages) |> ignore
   println("  消息队列长度: \{db.llen("notifications:global")}")
   println("  逐条消费消息:")
   while db.llen("notifications:global") > 0 {

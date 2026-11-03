@@ -138,6 +138,22 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
       result
     }
+    "SCAN" => {
+      if parts.length() < 3 { ["ERR wrong number"] }
+      else {
+        match (parse_int(parts[1]), parse_int(parts[2])) {
+          (Some(cursor), Some(count)) => {
+            let (next, keys) = db.scan(cursor, count)
+            let result = ["(cursor) \{next}"]
+            for i = 0; i < keys.length(); i = i + 1 {
+              result.push("  \{i + 1}) \"\{keys[i]}\"")
+            }
+            result
+          }
+          _ => ["ERR value is not an integer"]
+        }
+      }
+    }
     "TYPE" => {
       if parts.length() < 2 { ["ERR wrong number"] }
       else { [db.type_of(parts[1])] }
@@ -149,6 +165,24 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
     "STRLEN" => {
       if parts.length() < 2 { ["ERR wrong number"] }
       else { ["(integer) \{db.strlen(parts[1])}"] }
+    }
+    "GETRANGE" => {
+      if parts.length() < 4 { ["ERR wrong number"] }
+      else {
+        match (parse_int(parts[2]), parse_int(parts[3])) {
+          (Some(start), Some(end)) => ["\"\{db.getrange(parts[1], start, end)}\""]
+          _ => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "SETRANGE" => {
+      if parts.length() < 4 { ["ERR wrong number"] }
+      else {
+        match parse_int(parts[2]) {
+          Some(offset) => ["(integer) \{db.setrange(parts[1], offset, parts[3])}"]
+          None => ["ERR value is not an integer"]
+        }
+      }
     }
     "INCR" => {
       if parts.length() < 2 { ["ERR wrong number"] }
@@ -164,6 +198,32 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       else {
         match db.decr(parts[1]) {
           Some(v) => ["(integer) \{v}"]
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "INCRBY" => {
+      if parts.length() < 3 { ["ERR wrong number"] }
+      else {
+        match parse_int(parts[2]) {
+          Some(delta) =>
+            match db.incrby(parts[1], delta.to_int64()) {
+              Some(v) => ["(integer) \{v}"]
+              None => ["ERR value is not an integer or out of range"]
+            }
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "DECRBY" => {
+      if parts.length() < 3 { ["ERR wrong number"] }
+      else {
+        match parse_int(parts[2]) {
+          Some(delta) =>
+            match db.decrby(parts[1], delta.to_int64()) {
+              Some(v) => ["(integer) \{v}"]
+              None => ["ERR value is not an integer or out of range"]
+            }
           None => ["ERR value is not an integer"]
         }
       }
@@ -185,9 +245,33 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       if parts.length() < 2 { ["ERR wrong number"] }
       else { if db.persist(parts[1]) { ["(integer) 1"] } else { ["(integer) 0"] } }
     }
+    "COPY" => {
+      if parts.length() < 3 { ["ERR wrong number"] }
+      else { if db.copy(parts[1], parts[2]) { ["(integer) 1"] } else { ["(integer) 0"] } }
+    }
+    "TOUCH" => {
+      if parts.length() < 2 { ["ERR wrong number"] }
+      else {
+        let keys = []
+        for i = 1; i < parts.length(); i = i + 1 {
+          keys.push(parts[i])
+        }
+        ["(integer) \{db.touch(keys)}"]
+      }
+    }
+    "UNLINK" => {
+      if parts.length() < 2 { ["ERR wrong number"] }
+      else { if db.unlink(parts[1]) { ["(integer) 1"] } else { ["(integer) 0"] } }
+    }
     "HSET" => {
       if parts.length() < 4 { ["ERR wrong number"] }
       else { db.hset(parts[1], parts[2], parts[3]) |> ignore; ["OK"] }
+    }
+    "HSETNX" => {
+      if parts.length() < 4 { ["ERR wrong number"] }
+      else {
+        if db.hsetnx(parts[1], parts[2], parts[3]) { ["(integer) 1"] } else { ["(integer) 0"] }
+      }
     }
     "HGET" => {
       if parts.length() < 3 { ["ERR wrong number"] }
@@ -318,6 +402,17 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
         }
       }
     }
+    "ZRANGEBYLEX" => {
+      if parts.length() < 4 { ["ERR wrong number"] }
+      else {
+        let items = db.zrangebylex(parts[1], parts[2], parts[3])
+        let result = []
+        for i = 0; i < items.length(); i = i + 1 {
+          result.push("  \{i + 1}) \"\{items[i]}\"")
+        }
+        result
+      }
+    }
     "ZCARD" => {
       if parts.length() < 2 { ["ERR wrong number"] }
       else { ["(integer) \{db.zcard(parts[1])}"] }
@@ -353,16 +448,20 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "MSET" => {
-      let keys = []
-      let vals = []
-      let mut i = 1
-      while i + 1 < parts.length() {
-        keys.push(parts[i])
-        vals.push(parts[i + 1])
-        i = i + 2
+      if parts.length() < 3 || (parts.length() - 1) % 2 != 0 {
+        ["ERR wrong number of arguments"]
+      } else {
+        let keys = []
+        let vals = []
+        let mut i = 1
+        while i + 1 < parts.length() {
+          keys.push(parts[i])
+          vals.push(parts[i + 1])
+          i = i + 2
+        }
+        db.mset(keys, vals)
+        ["OK"]
       }
-      db.mset(keys, vals)
-      ["OK"]
     }
     "MGET" => {
       let keys = []
@@ -413,14 +512,13 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
     }
     "HELP" => {
       [
-        "  SET key value | GET key | DEL key | EXISTS key",
-        "  KEYS | TYPE key | APPEND key value | STRLEN key",
-        "  INCR key | DECR key | EXPIRE key s | TTL key",
-        "  HSET key f v | HGET key f | HGETALL key | HLEN key",
-        "  LPUSH/RPUSH key v | LPOP/RPOP key | LRANGE key s e",
-        "  SADD key m | SMEMBERS key | SREM key m | SCARD key",
-        "  ZADD key s m | ZRANGE key s e | ZRANK key m",
-        "  MSET/MGET/MDEL ... | DBSIZE | FLUSHDB | PING | INFO",
+        "  SET/GET/DEL/EXISTS | KEYS/SCAN | TYPE | APPEND/STRLEN",
+        "  GETRANGE/SETRANGE | INCR/DECR/INCRBY/DECRBY | EXPIRE/TTL",
+        "  HSET/HSETNX/HGET/HGETALL/HLEN",
+        "  LPUSH/RPUSH/LPOP/RPOP/LRANGE",
+        "  SADD/SMEMBERS/SREM/SCARD/SISMEMBER",
+        "  ZADD/ZRANGE/ZRANGEBYLEX/ZRANK/ZINCRBY",
+        "  MSET/MGET/MDEL | COPY/TOUCH/UNLINK | DBSIZE/FLUSHDB/PING/INFO",
         "  ADVANCE ms | HELP | QUIT"
       ]
     }
@@ -443,14 +541,21 @@ fn main {
     "GET age",
     "INCR age",
     "GET age",
+    "INCRBY age 5",
+    "DECRBY age 2",
     "APPEND name ' Smith'",
     "GET name",
     "STRLEN name",
+    "GETRANGE name 0 4",
+    "SETRANGE name 0 A",
     "EXPIRE name 60",
     "TTL name",
     "HSET user:1 username alice",
     "HSET user:1 email alice@test.com",
+    "HSETNX user:1 username bob",
+    "HSETNX user:1 city Beijing",
     "HGET user:1 username",
+    "HGET user:1 city",
     "HLEN user:1",
     "LPUSH tasks 'Task 1'",
     "LPUSH tasks 'Task 2'",
@@ -470,8 +575,17 @@ fn main {
     "ZRANK scores bob",
     "ZINCRBY scores 50 alice",
     "ZRANGE scores 0 -1",
+    "ZADD names 0 alice",
+    "ZADD names 0 bob",
+    "ZADD names 0 carol",
+    "ZADD names 0 dave",
+    "ZRANGEBYLEX names [b (d",
     "MSET a 1 b 2 c 3",
     "MGET a b c d",
+    "COPY name name:copy",
+    "TOUCH name user:1 name:copy",
+    "UNLINK name:copy",
+    "SCAN 0 5",
     "KEYS",
     "TYPE name",
     "TYPE user:1",

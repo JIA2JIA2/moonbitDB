@@ -45,14 +45,21 @@ fn main() -> Unit {
   println("  INCR counter = \{show_opt_int64(db.incr("counter"))}")
   println("  INCR counter = \{show_opt_int64(db.incr("counter"))}")
   println("  DECR counter = \{show_opt_int64(db.decr("counter"))}")
-  
+  println("  INCRBY counter 5 = \{show_opt_int64(db.incrby("counter", 5))}")
+  println("  GETRANGE greeting 0 4 = \"\{db.getrange("greeting", 0, 4)}\"")
+  println("  SETRANGE greeting 7 'MoonBit' = \{db.setrange("greeting", 7, "MoonBit")} (新长度)")
+
   println("\n📌 2. Hash 用户信息存储")
   println("----------------------------------------")
   db.hset("user:1001", "username", "alice") |> ignore
   db.hset("user:1001", "email", "alice@example.com") |> ignore
   db.hset("user:1001", "level", "42") |> ignore
   println("  HSET user:1001 {username, email, level}")
+  println("  HSETNX username bob = \{db.hsetnx("user:1001", "username", "bob")} (已存在，不覆盖)")
+  db.hmset("user:1001", ["nickname", "city"], ["Ally", "Beijing"])
+  println("  HMSET user:1001 {nickname, city}")
   println("  HGET user:1001 username = \{show_opt(db.hget("user:1001", "username"))}")
+  println("  HGET user:1001 city = \{show_opt(db.hget("user:1001", "city"))}")
   println("  HLEN user:1001 = \{db.hlen("user:1001")}")
   let user_email = db.hget("user:1001", "email")
   let has_email = match user_email {
@@ -69,10 +76,10 @@ fn main() -> Unit {
   
   println("\n📌 3. List 任务队列")
   println("----------------------------------------")
-  db.rpush("tasks", "完成报告") |> ignore
-  db.rpush("tasks", "代码审查") |> ignore
-  db.rpush("tasks", "团队会议") |> ignore
-  println("  RPUSH tasks [完成报告, 代码审查, 团队会议]")
+  db.rpush_all("tasks", ["完成报告", "代码审查", "团队会议"]) |> ignore
+  println("  RPUSH_ALL tasks [完成报告, 代码审查, 团队会议]")
+  db.lpush_all("tasks", ["紧急任务"]) |> ignore
+  println("  LPUSH_ALL tasks [紧急任务]")
   println("  LLEN tasks = \{db.llen("tasks")}")
   let task_list = db.lrange("tasks", 0, -1)
   println("  LRANGE tasks 0 -1 = [\{task_list.join(", ")}]")
@@ -82,15 +89,19 @@ fn main() -> Unit {
   
   println("\n📌 4. Set 标签系统")
   println("----------------------------------------")
-  db.sadd("tags:post:1", "技术") |> ignore
-  db.sadd("tags:post:1", "编程") |> ignore
-  db.sadd("tags:post:1", "MoonBit") |> ignore
-  db.sadd("tags:post:1", "技术") |> ignore
-  println("  SADD tags:post:1 {技术, 编程, MoonBit, 技术}")
-  println("  SCARD = \{db.scard("tags:post:1")} (自动去重)")
+  let added = db.sadd_all("tags:post:1", ["技术", "编程", "MoonBit", "技术"])
+  println("  SADD_ALL tags:post:1 {技术, 编程, MoonBit, 技术} = \{added} (自动去重)")
+  println("  SCARD = \{db.scard("tags:post:1")}")
   println("  SISMEMBER MoonBit = \{db.sismember("tags:post:1", "MoonBit")}")
   let tags = db.smembers("tags:post:1")
   println("  SMEMBERS = [\{tags.join(", ")}]")
+  db.set("not_a_set", "plain string") |> ignore
+  let inter = db.try_sinter(["tags:post:1", "not_a_set"])
+  let inter_msg = match inter {
+    Ok(values) => "[\{values.join(", ")}]"
+    Err(error) => @lib.RedisError::message(error)
+  }
+  println("  TRY_SINTER 遇到错误类型 = \{inter_msg}")
   
   println("\n📌 5. Sorted Set 排行榜")
   println("----------------------------------------")
@@ -102,15 +113,18 @@ fn main() -> Unit {
   println("  ZCARD = \{db.zcard("leaderboard")}")
   println("  ZSCORE 玩家B = \{show_opt_float(db.zscore("leaderboard", "玩家B"))}")
   println("  ZRANK 玩家B = \{show_opt_int(db.zrank("leaderboard", "玩家B"))} (从小到大)")
-  let top3 = db.zrevrange("leaderboard", 0, 2)
-  println("  TOP 3 (ZREVRANGE 0 2):")
+  let top3 = db.zrevrange_with_scores("leaderboard", 0, 2)
+  println("  TOP 3 (ZREVRANGE WITHSCORES):")
   for i = 0; i < top3.length(); i = i + 1 {
-    let score = db.zscore("leaderboard", top3[i])
-    let score_str = show_opt_float(score)
-    println("    #\{i + 1} \{top3[i]} - \{score_str}分")
+    println("    #\{i + 1} \{top3[i].0} - \{top3[i].1}分")
   }
+  for name in ["alice", "bob", "carol", "dave"] {
+    db.zadd("lex:names", 0.0, name) |> ignore
+  }
+  let lex = db.zrangebylex("lex:names", "[b", "(d")
+  println("  ZRANGEBYLEX [b (d = [\{lex.join(", ")}]")
   
-  println("\n📌 6. Key 过期机制")
+  println("\n📌 6. Key 过期与管理")
   println("----------------------------------------")
   db.set("session:token_abc", "user:1001")
   db.expire("session:token_abc", 60) |> ignore
@@ -121,8 +135,14 @@ fn main() -> Unit {
   db.advance_time(35000)
   println("  65秒后 EXISTS = \{db.exists("session:token_abc")}")
   println("  TTL = \{db.ttl("session:token_abc")} (-2 表示不存在)")
+  db.set("session:backup", "user:1001") |> ignore
+  println("  COPY session:backup -> session:copy = \{db.copy("session:backup", "session:copy")}")
+  println("  TOUCH 3 keys = \{db.touch(["session:backup", "session:copy", "missing"])}")
+  println("  UNLINK session:backup = \{db.unlink("session:backup")}")
+  let (cursor, batch) = db.scan(0, 5)
+  println("  SCAN 0 5 = cursor \{cursor}, [\{batch.join(", ")}]")
   
-  println("\n📌 7. 批量操作")
+  println("\n📌 7. 批量操作与错误模型")
   println("----------------------------------------")
   db.mset(["config:theme", "config:lang", "config:tz"], ["dark", "zh-CN", "Asia/Shanghai"]) |> ignore
   println("  MSET 3个配置项")
@@ -132,6 +152,19 @@ fn main() -> Unit {
   for i = 0; i < config_vals.length(); i = i + 1 {
     println("    \{keys[i]} = \{show_opt(config_vals[i])}")
   }
+  let bad_mset = db.try_mset(["single_key"], [])
+  let bad_mset_msg = match bad_mset {
+    Ok(_) => "OK"
+    Err(error) => @lib.RedisError::message(error)
+  }
+  println("  TRY_MSET 长度不一致 = \{bad_mset_msg}")
+  db.set("bad_number", "abc")
+  let bad_incr = db.try_incrby("bad_number", 1)
+  let bad_incr_msg = match bad_incr {
+    Ok(value) => "\{value}"
+    Err(error) => @lib.RedisError::message(error)
+  }
+  println("  TRY_INCRBY 非整数 = \{bad_incr_msg}")
   
   println("\n📌 8. 服务器信息")
   println("----------------------------------------")
