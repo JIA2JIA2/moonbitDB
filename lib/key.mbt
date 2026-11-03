@@ -3,7 +3,7 @@ pub fn Database::expire(self : Database, key : String, seconds : Int) -> Bool {
     return false
   }
   if self.data.contains(key) {
-    self.expires.set(key, self.current_time + seconds.to_int64() * 1000)
+    self.set_expire(key, self.current_time + seconds.to_int64() * 1000)
     true
   } else {
     false
@@ -15,7 +15,7 @@ pub fn Database::pexpire(self : Database, key : String, milliseconds : Int64) ->
     return false
   }
   if self.data.contains(key) {
-    self.expires.set(key, self.current_time + milliseconds)
+    self.set_expire(key, self.current_time + milliseconds)
     true
   } else {
     false
@@ -27,7 +27,7 @@ pub fn Database::expireat(self : Database, key : String, unix_seconds : Int64) -
     return false
   }
   if self.data.contains(key) {
-    self.expires.set(key, unix_seconds * 1000)
+    self.set_expire(key, unix_seconds * 1000)
     true
   } else {
     false
@@ -39,7 +39,7 @@ pub fn Database::pexpireat(self : Database, key : String, unix_milliseconds : In
     return false
   }
   if self.data.contains(key) {
-    self.expires.set(key, unix_milliseconds)
+    self.set_expire(key, unix_milliseconds)
     true
   } else {
     false
@@ -173,7 +173,7 @@ pub fn Database::rename(self : Database, old_key : String, new_key : String) -> 
       self.zset_sorted_cache.remove(new_key)
       match self.expires.get(old_key) {
         Some(expire_time) => {
-          self.expires.set(new_key, expire_time)
+          self.set_expire(new_key, expire_time)
           self.expires.remove(old_key)
         }
         None => self.expires.remove(new_key)
@@ -196,16 +196,35 @@ pub fn Database::renamenx(self : Database, old_key : String, new_key : String) -
 }
 
 pub fn Database::scan(self : Database, cursor : Int, count : Int) -> (Int, Array[String]) {
-  self.collect_expired()
-  let all_keys : Array[String] = []
-  for key, _ in self.data {
-    all_keys.push(key)
+  let all_keys = if cursor == 0 {
+    self.collect_expired()
+    let keys : Array[String] = []
+    for key, _ in self.data {
+      keys.push(key)
+    }
+    keys.sort()
+    self.scan_snapshot = Some(keys)
+    keys
+  } else {
+    match self.scan_snapshot {
+      Some(keys) => keys
+      None => {
+        self.collect_expired()
+        let keys : Array[String] = []
+        for key, _ in self.data {
+          keys.push(key)
+        }
+        keys.sort()
+        self.scan_snapshot = Some(keys)
+        keys
+      }
+    }
   }
-  all_keys.sort()
   let len = all_keys.length()
   let limit = if count <= 0 { 10 } else { count }
   let start = if cursor < 0 { 0 } else { cursor }
   if start >= len {
+    self.scan_snapshot = None
     return (0, [])
   }
   let end = if start + limit > len { len } else { start + limit }
@@ -214,6 +233,9 @@ pub fn Database::scan(self : Database, cursor : Int, count : Int) -> (Int, Array
     result.push(all_keys[i])
   }
   let next = if end >= len { 0 } else { end }
+  if next == 0 {
+    self.scan_snapshot = None
+  }
   (next, result)
 }
 

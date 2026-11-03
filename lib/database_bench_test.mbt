@@ -4,6 +4,8 @@ test "bench zset read paths" (it : @bench.T) {
     db.zadd("rank", Float::from_int(i), "member:\{i}") |> ignore
   }
   db.zrange("rank", 0, -1) |> ignore
+  db.zrank("rank", "member:500") |> ignore
+  db.zrangebylex("rank", "-", "+") |> ignore
   it.bench(name="zrange 1000", () => {
     db.zrange("rank", 0, -1) |> ignore
   })
@@ -12,6 +14,23 @@ test "bench zset read paths" (it : @bench.T) {
   })
   it.bench(name="zcount 1000", () => {
     db.zcount("rank", 250.0, 750.0) |> ignore
+  })
+  it.bench(name="zrank 1000", () => {
+    db.zrank("rank", "member:500") |> ignore
+  })
+  it.bench(name="zrangebylex 1000", () => {
+    db.zrangebylex("rank", "-", "+") |> ignore
+  })
+}
+
+test "bench scan" (it : @bench.T) {
+  let db = @lib.Database::new()
+  for i = 0; i < 1000; i = i + 1 {
+    db.set("scan:\{i}", "v") |> ignore
+  }
+  let (cursor, _) = db.scan(0, 100)
+  it.bench(name="scan 1000 batch 100", () => {
+    db.scan(cursor, 100) |> ignore
   })
 }
 

@@ -21,7 +21,7 @@ pub fn Database::setex(self : Database, key : String, seconds : Int, value : Str
     false
   } else {
     self.put(key, RedisValue::String(value))
-    self.expires.set(key, self.current_time + seconds.to_int64() * 1000)
+    self.set_expire(key, self.current_time + seconds.to_int64() * 1000)
     true
   }
 }

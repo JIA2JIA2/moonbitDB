@@ -7,7 +7,13 @@ pub fn Database::zadd(self : Database, key : String, score : Float, member_val :
   }
   let existed = zset.contains(member_val)
   zset.set(member_val, score)
-  self.put(key, RedisValue::ZSet(zset))
+  self.data.set(key, RedisValue::ZSet(zset))
+  self.zset_rank_cache.remove(key)
+  self.zset_lex_cache.remove(key)
+  match self.zset_sorted_cache.get(key) {
+    Some(cached) => self.zset_sorted_cache.set(key, update_sorted_items(cached, member_val, Some(score)))
+    None => ()
+  }
   !existed
 }
 
@@ -110,6 +116,7 @@ pub fn Database::zrem(self : Database, key : String, member_val : String) -> Boo
         let existed = zset.contains(member_val)
         if existed {
           zset.remove(member_val)
+          self.invalidate_zset_cache(key)
           self.remove_if_empty(key, zset.length())
         }
         existed
@@ -134,10 +141,80 @@ fn Database::get_sorted_zset(self : Database, key : String) -> Array[(String, Fl
           }
           let sorted = sort_by_score(items)
           self.zset_sorted_cache.set(key, sorted)
+          let ranks = Map([], capacity=sorted.length())
+          for i = 0; i < sorted.length(); i = i + 1 {
+            ranks.set(sorted[i].0, i)
+          }
+          self.zset_rank_cache.set(key, ranks)
           sorted
         }
       }
     _ => []
+  }
+}
+
+fn Database::get_rank_map(self : Database, key : String) -> Map[String, Int] {
+  match self.zset_rank_cache.get(key) {
+    Some(ranks) => ranks
+    None => {
+      let sorted = self.get_sorted_zset(key)
+      let ranks = Map([], capacity=sorted.length())
+      for i = 0; i < sorted.length(); i = i + 1 {
+        ranks.set(sorted[i].0, i)
+      }
+      self.zset_rank_cache.set(key, ranks)
+      ranks
+    }
+  }
+}
+
+fn Database::get_sorted_lex(self : Database, key : String) -> Array[String] {
+  match self.zset_lex_cache.get(key) {
+    Some(cached) => cached
+    None => {
+      let members : Array[String] = []
+      match self.data.get(key) {
+        Some(RedisValue::ZSet(zset)) =>
+          for member_val, _ in zset {
+            members.push(member_val)
+          }
+        _ => ()
+      }
+      members.sort()
+      self.zset_lex_cache.set(key, members)
+      members
+    }
+  }
+}
+
+fn update_sorted_items(
+  items : Array[(String, Float)],
+  member_val : String,
+  new_score : Float?,
+) -> Array[(String, Float)] {
+  let base : Array[(String, Float)] = []
+  for item in items {
+    if item.0 != member_val {
+      base.push(item)
+    }
+  }
+  match new_score {
+    Some(score) => {
+      let result : Array[(String, Float)] = []
+      let mut inserted = false
+      for item in base {
+        if !inserted && (score < item.1 || (score == item.1 && member_val.compare(item.0) <= 0)) {
+          result.push((member_val, score))
+          inserted = true
+        }
+        result.push(item)
+      }
+      if !inserted {
+        result.push((member_val, score))
+      }
+      result
+    }
+    None => base
   }
 }
 
@@ -227,15 +304,7 @@ pub fn Database::zrank(self : Database, key : String, member_val : String) -> In
         if !zset.contains(member_val) {
           None
         } else {
-          let sorted = self.get_sorted_zset(key)
-          let mut rank = 0
-          for i = 0; i < sorted.length(); i = i + 1 {
-            if sorted[i].0 == member_val {
-              rank = i
-              break
-            }
-          }
-          Some(rank)
+          self.get_rank_map(key).get(member_val)
         }
       }
       _ => None
@@ -252,16 +321,10 @@ pub fn Database::zrevrank(self : Database, key : String, member_val : String) ->
         if !zset.contains(member_val) {
           None
         } else {
-          let sorted = self.get_sorted_zset(key)
-          let len = sorted.length()
-          let mut rank = 0
-          for i = 0; i < len; i = i + 1 {
-            if sorted[i].0 == member_val {
-              rank = len - 1 - i
-              break
-            }
+          match self.get_rank_map(key).get(member_val) {
+            Some(rank) => Some(zset.length() - 1 - rank)
+            None => None
           }
-          Some(rank)
         }
       }
       _ => None
@@ -282,7 +345,13 @@ pub fn Database::zincrby(self : Database, key : String, increment : Float, membe
   }
   let new_score = current_score + increment
   zset.set(member_val, new_score)
-  self.put(key, RedisValue::ZSet(zset))
+  self.data.set(key, RedisValue::ZSet(zset))
+  self.zset_rank_cache.remove(key)
+  self.zset_lex_cache.remove(key)
+  match self.zset_sorted_cache.get(key) {
+    Some(cached) => self.zset_sorted_cache.set(key, update_sorted_items(cached, member_val, Some(new_score)))
+    None => ()
+  }
   new_score
 }
 
@@ -303,7 +372,7 @@ pub fn Database::zremrangebyrank(self : Database, key : String, start : Int, end
           removed = removed + 1
         }
         if removed > 0 {
-          self.zset_sorted_cache.remove(key)
+          self.invalidate_zset_cache(key)
           self.remove_if_empty(key, zset.length())
         }
         removed
@@ -329,7 +398,7 @@ pub fn Database::zremrangebyscore(self : Database, key : String, min_score : Flo
           zset.remove(m)
         }
         if to_remove.length() > 0 {
-          self.zset_sorted_cache.remove(key)
+          self.invalidate_zset_cache(key)
           self.remove_if_empty(key, zset.length())
         }
         to_remove.length()
@@ -351,7 +420,7 @@ pub fn Database::zpopmin(self : Database, key : String) -> (String, Float)? {
         } else {
           let min_item = sorted[0]
           zset.remove(min_item.0)
-          self.zset_sorted_cache.remove(key)
+          self.invalidate_zset_cache(key)
           self.remove_if_empty(key, zset.length())
           Some(min_item)
         }
@@ -374,7 +443,7 @@ pub fn Database::zpopmax(self : Database, key : String) -> (String, Float)? {
         } else {
           let max_item = sorted[len - 1]
           zset.remove(max_item.0)
-          self.zset_sorted_cache.remove(key)
+          self.invalidate_zset_cache(key)
           self.remove_if_empty(key, zset.length())
           Some(max_item)
         }
@@ -508,12 +577,8 @@ pub fn Database::zrangebylex(self : Database, key : String, min_bound : String, 
     return []
   }
   match self.data.get(key) {
-    Some(RedisValue::ZSet(zset)) => {
-      let members : Array[String] = []
-      for member_val, _ in zset {
-        members.push(member_val)
-      }
-      members.sort()
+    Some(RedisValue::ZSet(_)) => {
+      let members = self.get_sorted_lex(key)
       let result = []
       for member_val in members {
         if lex_lower_ok(member_val, min_bound) && lex_upper_ok(member_val, max_bound) {

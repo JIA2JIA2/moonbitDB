@@ -2364,3 +2364,87 @@ test "touch_unlink_operations" {
   debug_inspect(db.exists("a"), content="false")
   debug_inspect(db.unlink("a"), content="false")
 }
+
+test "expire_heap_stress" {
+  let db = Database::new()
+  for i = 0; i < 100; i = i + 1 {
+    db.set("ttl:\{i}", "v") |> ignore
+    db.pexpire("ttl:\{i}", (i + 1).to_int64()) |> ignore
+  }
+  db.advance_time(50)
+  debug_inspect(db.dbsize(), content="50")
+  debug_inspect(db.exists("ttl:49"), content="false")
+  debug_inspect(db.exists("ttl:50"), content="true")
+
+  db.set("update", "v") |> ignore
+  db.pexpire("update", 100) |> ignore
+  db.advance_time(80)
+  debug_inspect(db.exists("update"), content="true")
+  db.pexpire("update", 10) |> ignore
+  db.advance_time(20)
+  debug_inspect(db.exists("update"), content="false")
+
+  db.set("keep", "v") |> ignore
+  db.pexpire("keep", 100) |> ignore
+  debug_inspect(db.persist("keep"), content="true")
+  db.advance_time(200)
+  debug_inspect(db.exists("keep"), content="true")
+
+  db.set("renamed", "v") |> ignore
+  db.expire("renamed", 100) |> ignore
+  db.rename("renamed", "renamed2") |> ignore
+  debug_inspect(db.ttl("renamed2") > 0, content="true")
+  db.advance_time(101000)
+  debug_inspect(db.exists("renamed2"), content="false")
+
+  db.flushdb()
+  debug_inspect(db.expire_heap.length(), content="0")
+}
+
+test "scan_snapshot_consistency" {
+  let db = Database::new()
+  for i = 0; i < 30; i = i + 1 {
+    db.set("scan:\{i}", "v") |> ignore
+  }
+  let (c1, b1) = db.scan(0, 10)
+  debug_inspect(b1.length(), content="10")
+  let (c2, b2) = db.scan(c1, 10)
+  debug_inspect(b2.length(), content="10")
+
+  db.set("scan:new", "v") |> ignore
+  let (c3, b3) = db.scan(c2, 10)
+  debug_inspect(b3.length(), content="10")
+  debug_inspect(c3, content="30")
+
+  let (c4, b4) = db.scan(0, 100)
+  debug_inspect(b4.length(), content="31")
+  debug_inspect(c4, content="0")
+  debug_inspect(b4.contains("scan:new"), content="true")
+}
+
+test "zset_rank_and_lex_cache" {
+  let db = Database::new()
+  db.zadd("z", 1.0, "a") |> ignore
+  db.zadd("z", 2.0, "b") |> ignore
+  db.zadd("z", 3.0, "c") |> ignore
+  debug_inspect(db.zrank("z", "c"), content="Some(2)")
+  debug_inspect(db.zrevrank("z", "a"), content="Some(2)")
+
+  db.zadd("z", 0.0, "c") |> ignore
+  debug_inspect(db.zrank("z", "c"), content="Some(0)")
+  debug_inspect(db.zrank("z", "b"), content="Some(2)")
+
+  let lex1 = db.zrangebylex("z", "-", "+")
+  let lex2 = db.zrangebylex("z", "-", "+")
+  debug_inspect(lex1.length(), content="3")
+  debug_inspect(lex2[0], content="\"a\"")
+
+  db.zrem("z", "b") |> ignore
+  let lex3 = db.zrangebylex("z", "-", "+")
+  debug_inspect(lex3.length(), content="2")
+  debug_inspect(db.zrank("z", "c"), content="Some(0)")
+
+  db.rename("z", "z2") |> ignore
+  debug_inspect(db.zrank("z2", "c"), content="Some(0)")
+  debug_inspect(db.zrange("z2", 0, -1)[0], content="\"c\"")
+}

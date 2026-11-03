@@ -7,6 +7,10 @@ pub fn Database::flushdb(self : Database) -> Unit {
   self.data = Map([], capacity=1000)
   self.expires = Map([], capacity=1000)
   self.zset_sorted_cache = Map([], capacity=100)
+  self.zset_rank_cache = Map([], capacity=100)
+  self.zset_lex_cache = Map([], capacity=100)
+  self.scan_snapshot = None
+  self.expire_heap = []
 }
 
 pub fn Database::flushall(self : Database) -> Unit {
