@@ -410,6 +410,27 @@ pub fn Database::getex(self : Database, key : String, expire_ms : Int64?) -> Str
   }
 }
 
+pub fn Database::getex_ex(self : Database, key : String, seconds : Int) -> String? {
+  match self.try_getex_ex(key, seconds) {
+    Ok(value) => Some(value)
+    Err(_) => None
+  }
+}
+
+pub fn Database::getex_exat(self : Database, key : String, timestamp_ms : Int64) -> String? {
+  match self.try_getex_exat(key, timestamp_ms) {
+    Ok(value) => Some(value)
+    Err(_) => None
+  }
+}
+
+pub fn Database::getex_pxat(self : Database, key : String, timestamp_ms : Int64) -> String? {
+  match self.try_getex_pxat(key, timestamp_ms) {
+    Ok(value) => Some(value)
+    Err(_) => None
+  }
+}
+
 pub fn Database::try_msetnx(
   self : Database,
   keys : Array[String],

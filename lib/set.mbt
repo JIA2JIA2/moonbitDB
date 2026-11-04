@@ -476,6 +476,35 @@ pub fn Database::spop(self : Database, key : String) -> String? {
   }
 }
 
+pub fn Database::spop_count(self : Database, key : String, count : Int) -> Array[String] {
+  if count <= 0 {
+    return []
+  }
+  if self.check_expired(key) {
+    return []
+  }
+  match self.data.get(key) {
+    Some(RedisValue::Set(set)) => {
+      if set.length() == 0 {
+        return []
+      }
+      let members : Array[String] = []
+      for m, _ in set {
+        members.push(m)
+      }
+      let take = if count > members.length() { members.length() } else { count }
+      let sampled = self.random_sample(members, take)
+      for m in sampled {
+        set.remove(m)
+      }
+      self.sscan_snapshots.remove(key)
+      self.remove_if_empty(key, set.length())
+      sampled
+    }
+    _ => []
+  }
+}
+
 pub fn Database::srandmember(self : Database, key : String) -> String? {
   if self.check_expired(key) {
     return None

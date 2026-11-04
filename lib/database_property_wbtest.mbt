@@ -241,7 +241,7 @@ test "command list is unique and complete" {
     @test.assert_eq(seen.contains(command), false)
     seen.set(command, true)
   }
-  @test.assert_eq(commands.length(), 141)
+  @test.assert_eq(commands.length(), 146)
 }
 
 test "integer parser edge cases" {

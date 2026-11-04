@@ -64,7 +64,7 @@ pub fn Database::time(self : Database) -> (Int64, Int64) {
 pub fn Database::command() -> Array[String] {
   [
     "SET", "GET", "DEL", "EXISTS", "KEYS", "KEYS_PATTERN", "SCAN", "TYPE", "APPEND", "STRLEN",
-    "INCR", "DECR", "INCRBY", "DECRBY", "SETNX", "SETEX", "GETDEL", "GETSET", "GETEX",
+    "INCR", "DECR", "INCRBY", "DECRBY", "SETNX", "SETEX", "PSETEX", "GETDEL", "GETSET", "GETEX",
     "GETRANGE", "SETRANGE",
     "EXPIRE", "PEXPIRE", "EXPIREAT", "PEXPIREAT", "TTL", "PTTL", "PERSIST",
     "MSET", "MSETNX", "MGET", "MDEL",
@@ -82,10 +82,11 @@ pub fn Database::command() -> Array[String] {
     "DBSIZE", "FLUSHDB", "FLUSHALL", "RANDOMKEY", "RENAME", "RENAMENX", "COPY", "TOUCH", "UNLINK",
     "MULTI", "EXEC", "DISCARD",
     "LMPOP", "ZMPOP",
-    "PING", "ECHO", "INFO", "TIME", "COMMAND", "OBJECT_ENCODING",
+    "PING", "ECHO", "INFO", "TIME", "COMMAND", "COMMAND_INFO", "OBJECT_ENCODING", "OBJECT_REFCOUNT", "OBJECT_IDLETIME",
     "AUTH", "CLIENT", "CONFIG", "SLOWLOG",
     "SELECT", "MOVE", "DUMP", "RESTORE", "MONITOR",
-    "OBJECT_FREQ"
+    "OBJECT_FREQ",
+    "BITCOUNT"
   ]
 }
 

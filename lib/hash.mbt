@@ -83,6 +83,39 @@ pub fn Database::hset(self : Database, key : String, field : String, value : Str
   }
 }
 
+pub fn Database::try_hset_all(
+  self : Database,
+  key : String,
+  fields : Array[String],
+  values : Array[String],
+) -> Result[Int, RedisError] {
+  if fields.length() == 0 || fields.length() != values.length() {
+    return Err(RedisError::InvalidArgument)
+  }
+  self.check_expired(key) |> ignore
+  let hash = match self.data.get(key) {
+    Some(RedisValue::Hash(h)) => h
+    None => Map([], capacity=10)
+    Some(_) => return Err(RedisError::WrongType)
+  }
+  let mut created = 0
+  for i = 0; i < fields.length(); i = i + 1 {
+    if !hash.contains(fields[i]) {
+      created = created + 1
+    }
+    hash.set(fields[i], values[i])
+  }
+  self.put(key, RedisValue::Hash(hash))
+  Ok(created)
+}
+
+pub fn Database::hset_all(self : Database, key : String, fields : Array[String], values : Array[String]) -> Int {
+  match self.try_hset_all(key, fields, values) {
+    Ok(count) => count
+    Err(_) => -1
+  }
+}
+
 pub fn Database::try_hget(self : Database, key : String, field : String) -> Result[String, RedisError] {
   if self.check_expired(key) {
     Err(RedisError::NotFound)

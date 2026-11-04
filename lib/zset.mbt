@@ -454,6 +454,9 @@ pub fn Database::zrangebyscore_with_limit(
   let hi = upper_bound(sorted, max_score)
   let result = []
   let mut i = lo
+  if offset < 0 {
+    return result
+  }
   if offset > 0 {
     i = i + offset
     if i >= hi {
@@ -523,6 +526,38 @@ pub fn Database::zrevrangebyscore(self : Database, key : String, max_score : Flo
   let result = []
   for i = hi - 1; i >= lo; i = i - 1 {
     result.push(sorted[i].0)
+  }
+  result
+}
+
+pub fn Database::zrevrangebyscore_with_limit(
+  self : Database,
+  key : String,
+  max_score : Float,
+  min_score : Float,
+  offset : Int,
+  count : Int,
+) -> Array[String] {
+  let sorted = self.get_sorted_zset(key)
+  let lo = lower_bound(sorted, min_score)
+  let hi = upper_bound(sorted, max_score)
+  let result = []
+  let total = hi - lo
+  if total <= 0 || offset < 0 {
+    return result
+  }
+  let mut i = hi - 1
+  if offset > 0 {
+    if offset >= total {
+      return result
+    }
+    i = hi - 1 - offset
+  }
+  let mut taken = 0
+  while i >= lo && (count <= 0 || taken < count) {
+    result.push(sorted[i].0)
+    i = i - 1
+    taken = taken + 1
   }
   result
 }
@@ -958,6 +993,46 @@ pub fn Database::zrevrangebylex(
       result
     }
     _ => []
+  }
+}
+
+pub fn Database::try_zrevrangebylex_with_limit(
+  self : Database,
+  key : String,
+  max_bound : String,
+  min_bound : String,
+  offset : Int,
+  count : Int,
+) -> Result[Array[String], RedisError] {
+  if !lex_bound_valid(min_bound) || !lex_bound_valid(max_bound) {
+    return Ok([])
+  }
+  if self.check_expired(key) {
+    return Ok([])
+  }
+  match self.data.get(key) {
+    Some(RedisValue::ZSet(_)) => {
+      let members = self.get_sorted_lex(key)
+      let start = lex_lower_index(members, min_bound)
+      let end = lex_upper_index(members, max_bound)
+      let total = end - start
+      if total <= 0 || offset < 0 {
+        return Ok([])
+      }
+      let apply_offset = if offset > total { total } else { offset }
+      let apply_count = if count <= 0 { total - apply_offset } else { count }
+      let apply_end = if apply_offset + apply_count > total { total } else { apply_offset + apply_count }
+      let result : Array[String] = []
+      let mut index = end - 1 - apply_offset
+      let stop = end - apply_end
+      while index >= stop {
+        result.push(members[index])
+        index = index - 1
+      }
+      Ok(result)
+    }
+    Some(_) => Err(RedisError::WrongType)
+    None => Ok([])
   }
 }
 

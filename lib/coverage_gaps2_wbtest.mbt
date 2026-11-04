@@ -27,7 +27,7 @@ test "coverage_deque_gaps" {
 
 test "coverage_set_expired_gaps" {
   let db = Database::new()
-  db.sadd_all("es1", ["a", "b"]) |> ignore
+  db.sadd_all("es1", ["a", "b"]) |> ignore |> ignore
   db.pexpire("es1", 1L) |> ignore
   db.advance_time(10)
 
@@ -51,7 +51,7 @@ test "coverage_set_expired_gaps" {
   @test.assert_eq(db.sscan("es1", 0, 10), (0, []))
   @test.assert_eq(db.sscan_with_match("missing", 0, 10, Some("*")).1.length(), 0)
 
-  db.sadd_all("live", ["x", "y"]) |> ignore
+  db.sadd_all("live", ["x", "y"]) |> ignore |> ignore
   @test.assert_eq(db.srandmember("live") != None, true)
   @test.assert_eq(db.sinter(["live", "nope1", "nope2"]).length(), 0)
   @test.assert_eq(db.sdiff(["live"]).length(), 2)
@@ -78,7 +78,7 @@ test "coverage_getex_variants" {
     Err(RedisError::NotFound) => @test.assert_eq(true, true)
     _ => @test.assert_eq(true, false)
   }
-  db.hset("gh", "f", "v") |> ignore
+  db.hset("gh", "f", "v") |> ignore |> ignore
   match db.try_getex_ex("gh", 100) {
     Err(RedisError::WrongType) => @test.assert_eq(true, true)
     _ => @test.assert_eq(true, false)
@@ -162,7 +162,7 @@ test "d1_past_timestamp_deletes_key" {
 test "d1_try_lset_and_consistency" {
   let db = Database::new()
   db.set("h1", "x")
-  db.hset("hh", "f", "v") |> ignore
+  db.hset("hh", "f", "v") |> ignore |> ignore
 
   match db.try_lset("missing", 0, "v") {
     Err(RedisError::NotFound) => @test.assert_eq(true, true)
@@ -197,4 +197,85 @@ test "d1_try_lset_and_consistency" {
   @test.assert_eq(db.hmset("hm1", ["a", "b"], ["1", "2"]), true)
   @test.assert_eq(db.hmset("h1", ["a"], ["1"]), false)
   @test.assert_eq(db.hmset("hm1", ["a"], []), false)
+}
+
+test "d2_reverse_range_limits" {
+  let db = Database::new()
+  db.set("str", "x")
+  db.zadd("z", 0.0, "a") |> ignore
+  db.zadd("z", 0.0, "b") |> ignore
+  db.zadd("z", 0.0, "c") |> ignore
+  db.zadd("z", 0.0, "d") |> ignore
+
+  match db.try_zrevrangebylex_with_limit("z", "+", "-", 1, 2) {
+    Ok(items) => @test.assert_eq(items, ["c", "b"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrevrangebylex_with_limit("z", "+", "-", 0, 0) {
+    Ok(items) => @test.assert_eq(items, ["d", "c", "b", "a"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrevrangebylex_with_limit("z", "+", "-", -1, 2) {
+    Ok(items) => @test.assert_eq(items.length(), 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrevrangebylex_with_limit("z", "+", "-", 10, 2) {
+    Ok(items) => @test.assert_eq(items.length(), 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrevrangebylex_with_limit("str", "+", "-", 0, 1) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_zrevrangebylex_with_limit("z", "bad", "-", 0, 1) {
+    Ok(items) => @test.assert_eq(items.length(), 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+
+  db.zadd("zs", 1.0, "a") |> ignore
+  db.zadd("zs", 2.0, "b") |> ignore
+  db.zadd("zs", 3.0, "c") |> ignore
+  db.zadd("zs", 4.0, "d") |> ignore
+  @test.assert_eq(db.zrevrangebyscore_with_limit("zs", 4.0, 1.0, 1, 2), ["c", "b"])
+  @test.assert_eq(db.zrevrangebyscore_with_limit("zs", 4.0, 1.0, 0, 0), ["d", "c", "b", "a"])
+  @test.assert_eq(db.zrevrangebyscore_with_limit("zs", 4.0, 1.0, -1, 2), [])
+  @test.assert_eq(db.zrevrangebyscore_with_limit("zs", 4.0, 1.0, 10, 2), [])
+  @test.assert_eq(db.zrangebyscore_with_limit("zs", 1.0, 4.0, -1, 2), [])
+  @test.assert_eq(db.zrangebyscore_with_limit("zs", 1.0, 4.0, 1, 2), ["b", "c"])
+}
+
+test "d2_getex_convenience_spop_hsetall" {
+  let db = Database::new()
+  db.set("g1", "v")
+  @test.assert_eq(db.getex_ex("g1", 100), Some("v"))
+  @test.assert_eq(db.pttl("g1"), 100000)
+  @test.assert_eq(db.getex_ex("g1", 0), None)
+  @test.assert_eq(db.getex_exat("g1", 1000000L), Some("v"))
+  @test.assert_eq(db.ttl("g1") > 0, true)
+  @test.assert_eq(db.getex_pxat("g1", 2000000L), Some("v"))
+  @test.assert_eq(db.pttl("g1") > 0, true)
+  @test.assert_eq(db.getex_pxat("g1", 0L), None)
+
+  db.sadd_all("s1", ["a", "b", "c", "d"]) |> ignore |> ignore
+  @test.assert_eq(db.spop_count("s1", 2).length(), 2)
+  @test.assert_eq(db.scard("s1"), 2)
+  @test.assert_eq(db.spop_count("s1", 10).length(), 2)
+  @test.assert_eq(db.exists("s1"), false)
+  @test.assert_eq(db.spop_count("s1", 1), [])
+  @test.assert_eq(db.spop_count("missing", 1), [])
+  @test.assert_eq(db.spop_count("s1", 0), [])
+  @test.assert_eq(db.spop_count("s1", -1), [])
+
+  db.set("str", "x")
+  @test.assert_eq(db.hset_all("missing", ["a", "b"], ["1", "2"]), 2)
+  @test.assert_eq(db.hset_all("missing", ["a", "b"], ["9", "9"]), 0)
+  @test.assert_eq(db.hget("missing", "a"), Some("9"))
+  @test.assert_eq(db.hset_all("missing", ["c"], ["3"]), 1)
+  @test.assert_eq(db.hset_all("str", ["a"], ["1"]), -1)
+  @test.assert_eq(db.hset_all("missing", ["a"], []), -1)
+  @test.assert_eq(db.hset_all("missing", [], ["1"]), -1)
+  match db.try_hset_all("str", ["a"], ["1"]) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
 }
