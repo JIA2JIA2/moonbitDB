@@ -366,7 +366,7 @@ moonbitDB/
 | `COMMAND_INFO` | `(commands) -> Array[String]` | 查询命令详情（未收录返回空串） |
 | `OBJECT_REFCOUNT` | `(key) -> Int?` | 对象引用计数（当前恒为 1） |
 | `OBJECT_IDLETIME` | `(key) -> Int?` | 对象空转秒数（有 TTL 时按剩余时间） |
-| `MULTI` | `() -> String` | 开启事务（返回 "OK"） |
+| `MULTI` | `() -> String` | 开启事务（返回 "OK"；差异：仅 17 种操作排队——SET/GETSET/INCR/DECR/HSET/HDEL/LPUSH/RPUSH/LPOP/RPOP/SADD/SREM/ZADD/ZREM/DEL/EXPIRE/PERSIST，其余命令 MULTI 期间直接执行不排队，官方全部入队） |
 | `EXEC` | `() -> String` | 执行事务队列（返回 "OK"） |
 | `DISCARD` | `() -> String` | 清空事务队列（返回 "OK"） |
 | `WATCH` | `(key) -> Unit` | 监视 key（EXEC 前被修改则事务中止；差异：官方 EXEC 冲突返回 nil 回复，本库返回 TransactionAborted 错误） |
