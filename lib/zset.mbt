@@ -414,11 +414,19 @@ fn Database::write_through_remove_zset_members(
 }
 
 fn lower_bound(sorted : Array[(String, Float)], score : Float) -> Int {
+  lower_bound_incl(sorted, score, true)
+}
+
+fn upper_bound(sorted : Array[(String, Float)], score : Float) -> Int {
+  upper_bound_incl(sorted, score, true)
+}
+
+fn lower_bound_incl(sorted : Array[(String, Float)], score : Float, inclusive : Bool) -> Int {
   let mut lo = 0
   let mut hi = sorted.length()
   while lo < hi {
     let mid = (lo + hi) / 2
-    if sorted[mid].1 < score {
+    if sorted[mid].1 < score || (sorted[mid].1 == score && !inclusive) {
       lo = mid + 1
     } else {
       hi = mid
@@ -427,18 +435,55 @@ fn lower_bound(sorted : Array[(String, Float)], score : Float) -> Int {
   lo
 }
 
-fn upper_bound(sorted : Array[(String, Float)], score : Float) -> Int {
+fn upper_bound_incl(sorted : Array[(String, Float)], score : Float, inclusive : Bool) -> Int {
   let mut lo = 0
   let mut hi = sorted.length()
   while lo < hi {
     let mid = (lo + hi) / 2
-    if sorted[mid].1 <= score {
+    if sorted[mid].1 < score || (sorted[mid].1 == score && inclusive) {
       lo = mid + 1
     } else {
       hi = mid
     }
   }
   lo
+}
+
+fn float_inf(positive : Bool) -> Float {
+  let zero : Float = 0.0
+  let one : Float = 1.0
+  if positive {
+    one / zero
+  } else {
+    -(one / zero)
+  }
+}
+
+fn parse_score_bound(bound : String) -> Result[(Float, Bool), RedisError] {
+  if bound.length() == 0 {
+    return Err(RedisError::InvalidArgument)
+  }
+  let mut exclusive = false
+  let mut body = bound
+  if bound[0] == 40 {
+    exclusive = true
+    body = bound[1:bound.length()].to_owned()
+  } else if bound[0] == 91 {
+    body = bound[1:bound.length()].to_owned()
+  }
+  if body.length() == 0 {
+    return Err(RedisError::InvalidArgument)
+  }
+  if body == "-inf" {
+    Ok((float_inf(false), exclusive))
+  } else if body == "+inf" || body == "inf" {
+    Ok((float_inf(true), exclusive))
+  } else {
+    match parse_float(body) {
+      Some(value) => Ok((value, exclusive))
+      None => Err(RedisError::InvalidArgument)
+    }
+  }
 }
 
 pub fn Database::zrangebyscore_with_limit(
@@ -560,6 +605,263 @@ pub fn Database::zrevrangebyscore_with_limit(
     taken = taken + 1
   }
   result
+}
+
+pub fn Database::try_zrangebyscore_by_bound(
+  self : Database,
+  key : String,
+  min_bound : String,
+  max_bound : String,
+  offset : Int,
+  count : Int,
+) -> Result[Array[String], RedisError] {
+  let min_parsed = match parse_score_bound(min_bound) {
+    Ok(p) => p
+    Err(e) => return Err(e)
+  }
+  let max_parsed = match parse_score_bound(max_bound) {
+    Ok(p) => p
+    Err(e) => return Err(e)
+  }
+  if self.check_expired(key) {
+    return Ok([])
+  }
+  match self.data.get(key) {
+    Some(RedisValue::ZSet(_)) => {
+      let sorted = self.get_sorted_zset(key)
+      let lo = lower_bound_incl(sorted, min_parsed.0, !min_parsed.1)
+      let hi = upper_bound_incl(sorted, max_parsed.0, !max_parsed.1)
+      let result = []
+      let total = hi - lo
+      if total <= 0 || offset < 0 {
+        return Ok([])
+      }
+      let mut i = lo
+      if offset > 0 {
+        if offset >= total {
+          return Ok([])
+        }
+        i = lo + offset
+      }
+      let mut taken = 0
+      while i < hi && (count <= 0 || taken < count) {
+        result.push(sorted[i].0)
+        i = i + 1
+        taken = taken + 1
+      }
+      Ok(result)
+    }
+    Some(_) => Err(RedisError::WrongType)
+    None => Ok([])
+  }
+}
+
+pub fn Database::try_zrevrangebyscore_by_bound(
+  self : Database,
+  key : String,
+  max_bound : String,
+  min_bound : String,
+  offset : Int,
+  count : Int,
+) -> Result[Array[String], RedisError] {
+  let min_parsed = match parse_score_bound(min_bound) {
+    Ok(p) => p
+    Err(e) => return Err(e)
+  }
+  let max_parsed = match parse_score_bound(max_bound) {
+    Ok(p) => p
+    Err(e) => return Err(e)
+  }
+  if self.check_expired(key) {
+    return Ok([])
+  }
+  match self.data.get(key) {
+    Some(RedisValue::ZSet(_)) => {
+      let sorted = self.get_sorted_zset(key)
+      let lo = lower_bound_incl(sorted, min_parsed.0, !min_parsed.1)
+      let hi = upper_bound_incl(sorted, max_parsed.0, !max_parsed.1)
+      let result = []
+      let total = hi - lo
+      if total <= 0 || offset < 0 {
+        return Ok([])
+      }
+      let mut i = hi - 1
+      if offset > 0 {
+        if offset >= total {
+          return Ok([])
+        }
+        i = hi - 1 - offset
+      }
+      let mut taken = 0
+      while i >= lo && (count <= 0 || taken < count) {
+        result.push(sorted[i].0)
+        i = i - 1
+        taken = taken + 1
+      }
+      Ok(result)
+    }
+    Some(_) => Err(RedisError::WrongType)
+    None => Ok([])
+  }
+}
+
+pub fn Database::try_zcount_by_bound(
+  self : Database,
+  key : String,
+  min_bound : String,
+  max_bound : String,
+) -> Result[Int, RedisError] {
+  let min_parsed = match parse_score_bound(min_bound) {
+    Ok(p) => p
+    Err(e) => return Err(e)
+  }
+  let max_parsed = match parse_score_bound(max_bound) {
+    Ok(p) => p
+    Err(e) => return Err(e)
+  }
+  if self.check_expired(key) {
+    return Ok(0)
+  }
+  match self.data.get(key) {
+    Some(RedisValue::ZSet(_)) => {
+      let sorted = self.get_sorted_zset(key)
+      let lo = lower_bound_incl(sorted, min_parsed.0, !min_parsed.1)
+      let hi = upper_bound_incl(sorted, max_parsed.0, !max_parsed.1)
+      if hi > lo {
+        Ok(hi - lo)
+      } else {
+        Ok(0)
+      }
+    }
+    Some(_) => Err(RedisError::WrongType)
+    None => Ok(0)
+  }
+}
+
+pub fn Database::try_zremrangebyscore_by_bound(
+  self : Database,
+  key : String,
+  min_bound : String,
+  max_bound : String,
+) -> Result[Int, RedisError] {
+  let min_parsed = match parse_score_bound(min_bound) {
+    Ok(p) => p
+    Err(e) => return Err(e)
+  }
+  let max_parsed = match parse_score_bound(max_bound) {
+    Ok(p) => p
+    Err(e) => return Err(e)
+  }
+  if self.check_expired(key) {
+    return Ok(0)
+  }
+  match self.data.get(key) {
+    Some(RedisValue::ZSet(zset)) => {
+      let sorted = self.get_sorted_zset(key)
+      let lo = lower_bound_incl(sorted, min_parsed.0, !min_parsed.1)
+      let hi = upper_bound_incl(sorted, max_parsed.0, !max_parsed.1)
+      if hi <= lo {
+        return Ok(0)
+      }
+      let to_remove = []
+      for i = lo; i < hi; i = i + 1 {
+        to_remove.push(sorted[i].0)
+      }
+      for m in to_remove {
+        zset.remove(m)
+      }
+      if zset.length() == 0 {
+        self.remove_if_empty(key, 0)
+      } else {
+        self.write_through_remove_zset_members(key, to_remove)
+      }
+      Ok(to_remove.length())
+    }
+    Some(_) => Err(RedisError::WrongType)
+    None => Ok(0)
+  }
+}
+
+pub fn Database::try_zrangestore_byscore(
+  self : Database,
+  destination : String,
+  source : String,
+  min_bound : String,
+  max_bound : String,
+  offset : Int,
+  count : Int,
+) -> Result[Int, RedisError] {
+  let min_parsed = match parse_score_bound(min_bound) {
+    Ok(p) => p
+    Err(e) => return Err(e)
+  }
+  let max_parsed = match parse_score_bound(max_bound) {
+    Ok(p) => p
+    Err(e) => return Err(e)
+  }
+  if self.check_expired(source) {
+    return Ok(0)
+  }
+  match self.data.get(source) {
+    Some(RedisValue::ZSet(_)) => {
+      let sorted = self.get_sorted_zset(source)
+      let lo = lower_bound_incl(sorted, min_parsed.0, !min_parsed.1)
+      let hi = upper_bound_incl(sorted, max_parsed.0, !max_parsed.1)
+      let scores : Map[String, Float] = Map([], capacity=hi - lo)
+      let mut taken = 0
+      let mut skipped = 0
+      for i = lo; i < hi; i = i + 1 {
+        if offset > 0 && skipped < offset {
+          skipped = skipped + 1
+          continue
+        }
+        if count > 0 && taken >= count {
+          break
+        }
+        scores.set(sorted[i].0, sorted[i].1)
+        taken = taken + 1
+      }
+      self.put(destination, RedisValue::ZSet(scores))
+      self.expires.remove(destination)
+      Ok(scores.length())
+    }
+    Some(_) => Err(RedisError::WrongType)
+    None => Ok(0)
+  }
+}
+
+pub fn Database::try_zrangestore_bylex(
+  self : Database,
+  destination : String,
+  source : String,
+  min_bound : String,
+  max_bound : String,
+) -> Result[Int, RedisError] {
+  if !lex_bound_valid(min_bound) || !lex_bound_valid(max_bound) {
+    return Err(RedisError::InvalidArgument)
+  }
+  if self.check_expired(source) {
+    return Ok(0)
+  }
+  match self.data.get(source) {
+    Some(RedisValue::ZSet(_)) => {
+      let members = self.get_sorted_lex(source)
+      let start = lex_lower_index(members, min_bound)
+      let end = lex_upper_index(members, max_bound)
+      let scores : Map[String, Float] = Map([], capacity=end - start)
+      for i = start; i < end; i = i + 1 {
+        match self.zscore(source, members[i]) {
+          Some(score) => scores.set(members[i], score)
+          None => ()
+        }
+      }
+      self.put(destination, RedisValue::ZSet(scores))
+      self.expires.remove(destination)
+      Ok(scores.length())
+    }
+    Some(_) => Err(RedisError::WrongType)
+    None => Ok(0)
+  }
 }
 
 pub fn Database::zrevrangebyscore_with_scores(

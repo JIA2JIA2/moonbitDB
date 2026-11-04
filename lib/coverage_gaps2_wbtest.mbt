@@ -279,3 +279,146 @@ test "d2_getex_convenience_spop_hsetall" {
     _ => @test.assert_eq(true, false)
   }
 }
+
+test "d3_score_bounds" {
+  let db = Database::new()
+  db.set("str", "x")
+  db.zadd("z", 1.0, "a") |> ignore
+  db.zadd("z", 2.0, "b") |> ignore
+  db.zadd("z", 3.0, "c") |> ignore
+  db.zadd("z", 4.0, "d") |> ignore
+
+  match db.try_zrangebyscore_by_bound("z", "(1", "(4", 0, 0) {
+    Ok(items) => @test.assert_eq(items, ["b", "c"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrangebyscore_by_bound("z", "1", "4", 0, 0) {
+    Ok(items) => @test.assert_eq(items, ["a", "b", "c", "d"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrangebyscore_by_bound("z", "(1", "3", 0, 0) {
+    Ok(items) => @test.assert_eq(items, ["b", "c"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrangebyscore_by_bound("z", "2", "(4", 0, 0) {
+    Ok(items) => @test.assert_eq(items, ["b", "c"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrangebyscore_by_bound("z", "-inf", "+inf", 0, 0) {
+    Ok(items) => @test.assert_eq(items, ["a", "b", "c", "d"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrangebyscore_by_bound("z", "-inf", "+inf", 1, 2) {
+    Ok(items) => @test.assert_eq(items, ["b", "c"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrangebyscore_by_bound("z", "(1", "bad", 0, 0) {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_zrangebyscore_by_bound("str", "-inf", "+inf", 0, 0) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+
+  match db.try_zrevrangebyscore_by_bound("z", "+inf", "(2", 0, 0) {
+    Ok(items) => @test.assert_eq(items, ["d", "c"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrevrangebyscore_by_bound("z", "(4", "1", 0, 0) {
+    Ok(items) => @test.assert_eq(items, ["c", "b", "a"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+
+  match db.try_zcount_by_bound("z", "(1", "(4") {
+    Ok(count) => @test.assert_eq(count, 2)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zcount_by_bound("z", "-inf", "+inf") {
+    Ok(count) => @test.assert_eq(count, 4)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zcount_by_bound("z", "x", "+inf") {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+
+  db.zadd("z2", 1.0, "x") |> ignore
+  db.zadd("z2", 2.0, "y") |> ignore
+  db.zadd("z2", 3.0, "z") |> ignore
+  match db.try_zremrangebyscore_by_bound("z2", "(1", "(3") {
+    Ok(count) => @test.assert_eq(count, 1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.zcard("z2"), 2)
+  @test.assert_eq(db.zscore("z2", "y"), None)
+  match db.try_zremrangebyscore_by_bound("z2", "-inf", "+inf") {
+    Ok(count) => @test.assert_eq(count, 2)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.exists("z2"), false)
+  match db.try_zremrangebyscore_by_bound("str", "-inf", "+inf") {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+}
+
+test "d3_zrangestore_byscore_bylex" {
+  let db = Database::new()
+  db.set("str", "x")
+  db.zadd("src", 1.0, "a") |> ignore
+  db.zadd("src", 2.0, "b") |> ignore
+  db.zadd("src", 3.0, "c") |> ignore
+  db.zadd("src", 4.0, "d") |> ignore
+
+  match db.try_zrangestore_byscore("dst1", "src", "(1", "(4", 0, 0) {
+    Ok(count) => {
+      @test.assert_eq(count, 2)
+      @test.assert_eq(db.zrange_with_scores("dst1", 0, -1), [("b", 2.0), ("c", 3.0)])
+    }
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrangestore_byscore("dst2", "src", "-inf", "+inf", 1, 2) {
+    Ok(count) => {
+      @test.assert_eq(count, 2)
+      @test.assert_eq(db.zrange_with_scores("dst2", 0, -1), [("b", 2.0), ("c", 3.0)])
+    }
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrangestore_byscore("dst3", "src", "bad", "+inf", 0, 0) {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_zrangestore_byscore("dst3", "str", "-inf", "+inf", 0, 0) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+
+  db.zadd("lexsrc", 0.0, "a") |> ignore
+  db.zadd("lexsrc", 0.0, "b") |> ignore
+  db.zadd("lexsrc", 0.0, "c") |> ignore
+  db.zadd("lexsrc", 0.0, "d") |> ignore
+  match db.try_zrangestore_bylex("ldst1", "lexsrc", "[b", "(d") {
+    Ok(count) => {
+      @test.assert_eq(count, 2)
+      @test.assert_eq(db.zrange("ldst1", 0, -1), ["b", "c"])
+    }
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrangestore_bylex("ldst2", "lexsrc", "-", "+") {
+    Ok(count) => @test.assert_eq(count, 4)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrangestore_bylex("ldst3", "lexsrc", "bad", "+") {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_zrangestore_bylex("ldst3", "str", "-", "+") {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_zrangestore_bylex("ldst4", "missing", "-", "+") {
+    Ok(count) => @test.assert_eq(count, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+}

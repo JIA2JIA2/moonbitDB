@@ -603,6 +603,12 @@ match db.try_incrby("name", 1) {
 | `zrevrangebyscore_with_limit` | `(self : Database, key : String, max_score : Float, min_score : Float, offset : Int, count : Int) -> Array[String]` | 分数区间降序分页 |
 | `try_zrangebylex_with_limit` | `(self : Database, key : String, min_bound : String, max_bound : String, offset : Int, count : Int) -> Result[Array[String], RedisError]` | 字典序升序分页（精确错误版） |
 | `try_zrevrangebylex_with_limit` | `(self : Database, key : String, max_bound : String, min_bound : String, offset : Int, count : Int) -> Result[Array[String], RedisError]` | 字典序降序分页（精确错误版） |
+| `try_zrangebyscore_by_bound` | `(self : Database, key : String, min_bound : String, max_bound : String, offset : Int, count : Int) -> Result[Array[String], RedisError]` | 分数区间查询，支持 `[`/`(` 边界与 `-inf`/`+inf` |
+| `try_zrevrangebyscore_by_bound` | `(self : Database, key : String, max_bound : String, min_bound : String, offset : Int, count : Int) -> Result[Array[String], RedisError]` | 分数区间降序查询（同上边界语义） |
+| `try_zcount_by_bound` | `(self : Database, key : String, min_bound : String, max_bound : String) -> Result[Int, RedisError]` | 边界版分数区间计数 |
+| `try_zremrangebyscore_by_bound` | `(self : Database, key : String, min_bound : String, max_bound : String) -> Result[Int, RedisError]` | 边界版按分数区间删除 |
+| `try_zrangestore_byscore` | `(self : Database, destination : String, source : String, min_bound : String, max_bound : String, offset : Int, count : Int) -> Result[Int, RedisError]` | ZRANGESTORE BYSCORE（含 LIMIT） |
+| `try_zrangestore_bylex` | `(self : Database, destination : String, source : String, min_bound : String, max_bound : String) -> Result[Int, RedisError]` | ZRANGESTORE BYLEX |
 | `zcount` | `(self : Database, key : String, min_score : Float, max_score : Float) -> Int` | 统计分数范围内成员数 |
 | `zrevrange` | `(self : Database, key : String, start : Int, end : Int) -> Array[String]` | 按排名降序获取范围 |
 | `zrevrangebyscore` | `(self : Database, key : String, max_score : Float, min_score : Float) -> Array[String]` | 按分数降序范围获取 |
