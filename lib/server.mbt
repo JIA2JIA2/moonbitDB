@@ -425,6 +425,44 @@ pub fn Database::restore(self : Database, key : String, ttl_ms : Int64, value : 
   true
 }
 
+pub fn Database::try_restore(
+  self : Database,
+  key : String,
+  ttl_ms : Int64,
+  value : String,
+  replace : Bool,
+  absttl : Bool,
+) -> Result[Bool, RedisError] {
+  self.check_expired(key) |> ignore
+  if !replace && self.data.contains(key) {
+    return Err(RedisError::BusyKey)
+  }
+  let expire_time : Int64? = if ttl_ms > 0 {
+    if absttl {
+      Some(ttl_ms)
+    } else {
+      match checked_add_i64(self.current_time, ttl_ms) {
+        Some(t) => Some(t)
+        None => return Err(RedisError::InvalidArgument)
+      }
+    }
+  } else {
+    None
+  }
+  self.put(key, RedisValue::String(value))
+  match expire_time {
+    Some(t) => {
+      if t <= self.current_time {
+        self.delete_key(key)
+      } else {
+        self.set_expire(key, t)
+      }
+    }
+    None => ()
+  }
+  Ok(true)
+}
+
 pub fn Database::try_bitcount_range(self : Database, key : String, start : Int, end : Int) -> Result[Int, RedisError] {
   if self.check_expired(key) {
     return Ok(0)

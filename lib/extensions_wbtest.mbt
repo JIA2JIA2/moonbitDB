@@ -1520,3 +1520,38 @@ test "g2_bitfield_overflow_modes" {
     Err(_) => @test.assert_eq(true, false)
   }
 }
+
+
+test "h1_restore_options" {
+  let db = Database::new()
+  db.set("r1", "old")
+  match db.try_restore("r1", 1000L, "data", false, false) {
+    Err(RedisError::BusyKey) => @test.assert_eq(RedisError::message(RedisError::BusyKey), "BUSYKEY Target key name already exists.")
+    _ => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.get("r1"), Some("old"))
+  match db.try_restore("r1", 1000L, "data", true, false) {
+    Ok(v) => @test.assert_eq(v, true)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.get("r1"), Some("data"))
+  @test.assert_eq(db.pttl("r1") > 0, true)
+  match db.try_restore("r2", 0L, "no-ttl", true, false) {
+    Ok(_) => @test.assert_eq(true, true)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.ttl("r2"), -1)
+  match db.try_restore("r3", 5000L, "abs", false, true) {
+    Ok(_) => @test.assert_eq(true, true)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.pttl("r3") > 0, true)
+  match db.try_restore("r4", 0L, "past-abs", false, true) {
+    Ok(_) => @test.assert_eq(true, true)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.exists("r4"), true)
+  @test.assert_eq(db.ttl("r4"), -1)
+  @test.assert_eq(db.restore("brand-new", 1000L, "v"), true)
+  @test.assert_eq(db.get("brand-new"), Some("v"))
+}

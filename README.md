@@ -377,7 +377,7 @@ moonbitDB/
 | `SLOWLOG` | `(subcommand) -> Array[String]` | 慢查询日志（LEN 返回 ["0"]、RESET 返回 ["OK"]、GET 空数组） |
 | `SELECT` | `(index) -> String` | 选择数据库（始终返回 "OK"） |
 | `MOVE` | `(key, db_index) -> Bool` | 移动 key 到其他数据库（仅支持 db 0） |
-| `DUMP` | `(key) -> String?` | 序列化字符串值（仅 String 类型） |
+| `DUMP` | `(key) -> String?` | 返回字符串值原样（简化语义，非 RDB 序列化；仅 String 类型） |
 | `RESTORE` | `(key, ttl_ms, value) -> Bool` | 反序列化恢复 key（ttl_ms>0 时设置过期） |
 | `MONITOR` | `() -> String` | 进入监控模式（返回 "OK"） |
 | `OBJECT_FREQ` | `(key) -> Int?` | 对象访问频率（当前为 0） |
