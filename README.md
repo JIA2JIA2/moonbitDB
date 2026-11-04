@@ -880,7 +880,7 @@ moon run examples/cli_repl --target native
 
 参考 [examples/cli_repl/main.mbt](examples/cli_repl/main.mbt)
 
-支持解析和执行 74 个命令，包括 SET/GET/HSET/LPUSH/SADD/ZADD/SCAN/COPY/SORT 等常用命令。
+支持解析和执行 162 个命令（167 条命令中除 SELECT/CLIENT_SETNAME 等纯 API 项外的全部），含完整位图/集合运算/ZSet 全系/事务/SORT BY-GET 支持。
 
 ## 许可证
 

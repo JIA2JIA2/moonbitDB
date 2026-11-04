@@ -542,15 +542,20 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
     }
     "HELP" => {
       [
-        "  SET/GET/DEL/EXISTS | KEYS/SCAN | TYPE | APPEND/STRLEN",
-        "  GETRANGE/SETRANGE | INCR/DECR/INCRBY/DECRBY | EXPIRE/TTL",
-        "  HSET/HSETNX/HGET/HGETALL/HLEN | HINCRBY",
-        "  LPUSH/RPUSH/LPOP/RPOP/LRANGE | LINSERT/LMOVE",
-        "  SADD/SMEMBERS/SREM/SCARD/SISMEMBER | SMOVE/SPOP",
-        "  ZADD/ZRANGE/ZRANGEBYLEX/ZRANK/ZINCRBY | ZPOPMIN/ZUNIONSTORE",
-        "  GETDEL/GETEX/SETNX/SETEX | SORT | MULTI/EXEC",
-        "  MSET/MGET/MDEL | COPY/TOUCH/UNLINK | DBSIZE/FLUSHDB/PING/INFO",
-        "  AUTH/CLIENT/CONFIG/SLOWLOG | SELECT/MOVE/DUMP/RESTORE/MONITOR",
+        "  String: SET/GET/APPEND/STRLEN/GETRANGE/SETRANGE/SUBSTR | INCR 族 | SETNX/SETEX/PSETEX",
+        "  String: GETDEL/GETSET/GETEX | 位图: GETBIT/SETBIT/BITPOS/BITCOUNT/BITOP/BITFIELD",
+        "  Hash: HSET/HMSET/HMGET/HGETALL/HKEYS/HVALS/HEXISTS/HSTRLEN/HINCRBY/HINCRBYFLOAT/HSCAN",
+        "  List: LPUSH/RPUSH/LPOP/RPOP/LRANGE/LINDEX/LSET/LREM/LINSERT/LTRIM/LPOS/LPUSHX/RPUSHX",
+        "  List: RPOPLPUSH/LMOVE/LMPOP",
+        "  Set: SADD/SREM/SMEMBERS/SISMEMBER/SMISMEMBER/SCARD/SRANDMEMBER | SINTER/SUNION/SDIFF",
+        "  Set: *STORE/SINTERCARD/SMOVE/SPOP/SSCAN",
+        "  ZSet: ZADD/ZRANGE(+修饰符)/ZREVRANGE/ZRANGEBYSCORE/ZRANK/ZREVRANK/ZSCORE/ZMSCORE",
+        "  ZSet: ZINCRBY/ZCOUNT/ZLEXCOUNT/ZRANGEBYLEX/ZREVRANGEBYLEX/ZREMRANGE*/ZPOPMIN/ZPOPMAX",
+        "  ZSet: ZUNION/ZINTER/ZDIFF(+STORE)/ZINTERCARD/ZRANGESTORE/ZSCAN/ZRANDMEMBER/ZMPOP",
+        "  Key: EXPIRE 族/EXPIRETIME/TTL/PTTL/PERSIST/RENAME/RANDOMKEY/COPY/TOUCH/UNLINK/TYPE",
+        "  服务器: INFO/DBSIZE/FLUSHDB/FLUSHALL/PING/ECHO/TIME/WAIT/SHUTDOWN/LOLWUT/SAVE/BGSAVE",
+        "  服务器: OBJECT_*/MEMORY_USAGE/COMMAND 族/AUTH/CLIENT/CONFIG/SLOWLOG/SELECT/MOVE",
+        "  服务器: DUMP/RESTORE/MONITOR/SORT(+BY-GET)/MULTI/EXEC/DISCARD/WATCH/UNWATCH/RESET",
         "  ADVANCE ms | HELP | QUIT"
       ]
     }
@@ -743,6 +748,627 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       else { db.watch(parts[1]); ["OK"] }
     }
     "UNWATCH" => { db.unwatch(); ["OK"] }
+    "ECHO" => {
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
+      else { [parts[1]] }
+    }
+    "GETSET" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        match db.getset(parts[1], parts[2]) {
+          Some(v) => ["\"\{v}\""]
+          None => ["(nil)"]
+        }
+      }
+    }
+    "PSETEX" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else {
+        match parse_int(parts[2]) {
+          Some(ms) => {
+            if db.psetex(parts[1], ms.to_int64(), parts[3]) {
+              ["OK"]
+            } else {
+              ["(error) invalid expire time"]
+            }
+          }
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "SUBSTR" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else {
+        match (parse_int(parts[2]), parse_int(parts[3])) {
+          (Some(sv), Some(ev)) => ["\"\{db.getrange(parts[1], sv, ev)}\""]
+          _ => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "MSETNX" => {
+      if parts.length() < 3 || (parts.length() - 1) % 2 != 0 { ["ERR wrong number of arguments"] }
+      else {
+        let keys = []
+        let values = []
+        for i = 1; i < parts.length(); i = i + 2 {
+          keys.push(parts[i])
+          values.push(parts[i + 1])
+        }
+        ["(integer) \{if db.msetnx(keys, values) { 1 } else { 0 }}"]
+      }
+    }
+    "PTTL" => {
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
+      else { ["(integer) \{db.pttl(parts[1]).to_string()}"] }
+    }
+    "EXPIREAT" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        match parse_int(parts[2]) {
+          Some(sec) => ["(integer) \{if db.expireat(parts[1], sec.to_int64()) { 1 } else { 0 }}"]
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "PEXPIRE" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        match parse_int(parts[2]) {
+          Some(ms) => ["(integer) \{if db.pexpire(parts[1], ms.to_int64()) { 1 } else { 0 }}"]
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "PEXPIREAT" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        match parse_int(parts[2]) {
+          Some(ms) => ["(integer) \{if db.pexpireat(parts[1], ms.to_int64()) { 1 } else { 0 }}"]
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "EXPIRETIME" => {
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
+      else { ["(integer) \{db.expiretime(parts[1]).to_string()}"] }
+    }
+    "PEXPIRETIME" => {
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
+      else { ["(integer) \{db.pexpiretime(parts[1]).to_string()}"] }
+    }
+    "RENAME" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        if db.rename(parts[1], parts[2]) { ["OK"] } else { ["ERR no such key"] }
+      }
+    }
+    "RENAMENX" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else { ["(integer) \{if db.renamenx(parts[1], parts[2]) { 1 } else { 0 }}"] }
+    }
+    "RANDOMKEY" => {
+      match db.randomkey() {
+        Some(k) => ["\"\{k}\""]
+        None => ["(nil)"]
+      }
+    }
+    "FLUSHALL" => { [@lib.Database::flushall(db)] }
+    "HKEYS" => {
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
+      else {
+        let items = db.hkeys(parts[1])
+        let result = []
+        for i = 0; i < items.length(); i = i + 1 {
+          result.push("  \{i + 1}) \"\{items[i]}\"")
+        }
+        result
+      }
+    }
+    "HVALS" => {
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
+      else {
+        let items = db.hvals(parts[1])
+        let result = []
+        for i = 0; i < items.length(); i = i + 1 {
+          result.push("  \{i + 1}) \"\{items[i]}\"")
+        }
+        result
+      }
+    }
+    "HEXISTS" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else { ["(integer) \{if db.hexists(parts[1], parts[2]) { 1 } else { 0 }}"] }
+    }
+    "HMGET" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        let fields = []
+        for i = 2; i < parts.length(); i = i + 1 {
+          fields.push(parts[i])
+        }
+        let values = db.hmget(parts[1], fields)
+        let result = []
+        for i = 0; i < values.length(); i = i + 1 {
+          match values[i] {
+            Some(v) => result.push("  \{i + 1}) \"\{v}\"")
+            None => result.push("  \{i + 1}) (nil)")
+          }
+        }
+        result
+      }
+    }
+    "HSTRLEN" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else { ["(integer) \{db.hstrlen(parts[1], parts[2])}"] }
+    }
+    "HMSET" => {
+      if parts.length() < 3 || (parts.length() - 1) % 2 != 0 { ["ERR wrong number of arguments"] }
+      else {
+        let fields = []
+        let values = []
+        for i = 1; i < parts.length(); i = i + 2 {
+          fields.push(parts[i])
+          values.push(parts[i + 1])
+        }
+        if db.hmset(parts[1], fields, values) {
+          ["OK"]
+        } else {
+          ["(error) WRONGTYPE"]
+        }
+      }
+    }
+    "HINCRBYFLOAT" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else {
+        match parse_float(parts[3]) {
+          Some(inc) => {
+            match db.hincrbyfloat(parts[1], parts[2], inc) {
+              Some(v) => ["\"\{v}\""]
+              None => ["(nil)"]
+            }
+          }
+          None => ["ERR value is not a valid float"]
+        }
+      }
+    }
+    "HSCAN" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        match parse_int(parts[2]) {
+          Some(cursor) => {
+            let r = db.hscan_with_match(parts[1], cursor, 10, None)
+            let result = []
+            for i = 0; i < r.1.length(); i = i + 1 {
+              let pair = r.1[i]
+              result.push("  \{i + 1}) \"\{pair.0}\" => \"\{pair.1}\"")
+            }
+            result.push("  (next cursor: \{r.0})")
+            result
+          }
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "LINDEX" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        match parse_int(parts[2]) {
+          Some(idx) => {
+            match db.lindex(parts[1], idx) {
+              Some(v) => ["\"\{v}\""]
+              None => ["(nil)"]
+            }
+          }
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "LSET" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else {
+        match parse_int(parts[2]) {
+          Some(idx) => {
+            if db.lset(parts[1], idx, parts[3]) { ["OK"] } else { ["ERR index out of range"] }
+          }
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "LPOS" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        match db.lpos(parts[1], parts[2]) {
+          Some(idx) => ["(integer) \{idx}"]
+          None => ["(nil)"]
+        }
+      }
+    }
+    "LPUSHX" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else { ["(integer) \{db.lpushx(parts[1], parts[2])}"] }
+    }
+    "RPUSHX" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else { ["(integer) \{db.rpushx(parts[1], parts[2])}"] }
+    }
+    "RPOPLPUSH" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        match db.rpoplpush(parts[1], parts[2]) {
+          Some(v) => ["\"\{v}\""]
+          None => ["(nil)"]
+        }
+      }
+    }
+    "LTRIM" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else {
+        match (parse_int(parts[2]), parse_int(parts[3])) {
+          (Some(sv), Some(ev)) => {
+            if db.ltrim(parts[1], sv, ev) { ["OK"] } else { ["(error) WRONGTYPE"] }
+          }
+          _ => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "LMPOP" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else {
+        let keys = []
+        let mut left = true
+        let mut count = 1
+        for i = 1; i < parts.length(); i = i + 1 {
+          if parts[i] == "LEFT" { left = true }
+          else if parts[i] == "RIGHT" { left = false }
+          else if parts[i] == "COUNT" && i + 1 < parts.length() {
+            match parse_int(parts[i + 1]) {
+              Some(c) => { count = c }
+              None => ()
+            }
+            break
+          } else {
+            keys.push(parts[i])
+          }
+        }
+        match db.lmpop(keys, left, count) {
+          Some((k, vals)) => {
+            let result = ["\"\{k}\""]
+            for i = 0; i < vals.length(); i = i + 1 {
+              result.push("  \{i + 1}) \"\{vals[i]}\"")
+            }
+            result
+          }
+          None => ["(nil)"]
+        }
+      }
+    }
+    "SINTERCARD" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else { ["(integer) \{db.sintercard([parts[1], parts[2]], 0)}"] }
+    }
+    "SINTERSTORE" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else { ["(integer) \{db.sinterstore(parts[1], [parts[2], parts[3]])}"] }
+    }
+    "SUNIONSTORE" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else { ["(integer) \{db.sunionstore(parts[1], [parts[2], parts[3]])}"] }
+    }
+    "SDIFFSTORE" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else { ["(integer) \{db.sdiffstore(parts[1], [parts[2], parts[3]])}"] }
+    }
+    "SSCAN" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        match parse_int(parts[2]) {
+          Some(cursor) => {
+            let r = db.sscan(parts[1], cursor, 10)
+            let result = []
+            for i = 0; i < r.1.length(); i = i + 1 {
+              result.push("  \{i + 1}) \"\{r.1[i]}\"")
+            }
+            result.push("  (next cursor: \{r.0})")
+            result
+          }
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "ZREVRANK" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        match db.zrevrank(parts[1], parts[2]) {
+          Some(r) => ["(integer) \{r}"]
+          None => ["(nil)"]
+        }
+      }
+    }
+    "ZRANGEBYSCORE" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else {
+        match (parse_float(parts[2]), parse_float(parts[3])) {
+          (Some(lo), Some(hi)) => {
+            let items = db.zrangebyscore(parts[1], lo, hi)
+            let result = []
+            for i = 0; i < items.length(); i = i + 1 {
+              result.push("  \{i + 1}) \"\{items[i]}\"")
+            }
+            result
+          }
+          _ => ["ERR value is not a valid float"]
+        }
+      }
+    }
+    "ZRANDMEMBER" => {
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
+      else {
+        if parts.length() >= 3 {
+          match parse_int(parts[2]) {
+            Some(n) => {
+              let items = db.zrandmember_count(parts[1], n)
+              let result = []
+              for i = 0; i < items.length(); i = i + 1 {
+                result.push("  \{i + 1}) \"\{items[i]}\"")
+              }
+              result
+            }
+            None => ["ERR value is not an integer"]
+          }
+        } else {
+          match db.zrandmember(parts[1]) {
+            Some(m) => ["\"\{m}\""]
+            None => ["(nil)"]
+          }
+        }
+      }
+    }
+    "ZUNION" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        let items = db.zunion([parts[1], parts[2]])
+        let result = []
+        for i = 0; i < items.length(); i = i + 1 {
+          result.push("  \{i + 1}) \"\{items[i].0}\" \{items[i].1}")
+        }
+        result
+      }
+    }
+    "ZINTER" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        let items = db.zinter([parts[1], parts[2]])
+        let result = []
+        for i = 0; i < items.length(); i = i + 1 {
+          result.push("  \{i + 1}) \"\{items[i].0}\" \{items[i].1}")
+        }
+        result
+      }
+    }
+    "ZDIFF" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        let items = db.zdiff([parts[1], parts[2]])
+        let result = []
+        for i = 0; i < items.length(); i = i + 1 {
+          result.push("  \{i + 1}) \"\{items[i]}\"")
+        }
+        result
+      }
+    }
+    "ZINTERSTORE" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else { ["(integer) \{db.zinterstore(parts[1], [parts[2], parts[3]])}"] }
+    }
+    "ZDIFFSTORE" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else { ["(integer) \{db.zdiffstore(parts[1], [parts[2], parts[3]])}"] }
+    }
+    "ZRANGESTORE" => {
+      if parts.length() < 5 { ["ERR wrong number of arguments"] }
+      else {
+        match (parse_int(parts[3]), parse_int(parts[4])) {
+          (Some(sv), Some(ev)) => ["(integer) \{db.zrangestore(parts[1], parts[2], sv, ev)}"]
+          _ => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "ZSCAN" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        match parse_int(parts[2]) {
+          Some(cursor) => {
+            let r = db.zscan(parts[1], cursor, 10)
+            let result = []
+            for i = 0; i < r.1.length(); i = i + 1 {
+              result.push("  \{i + 1}) \"\{r.1[i].0}\" \{r.1[i].1}")
+            }
+            result.push("  (next cursor: \{r.0})")
+            result
+          }
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "ZREMRANGEBYRANK" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else {
+        match (parse_int(parts[2]), parse_int(parts[3])) {
+          (Some(sv), Some(ev)) => ["(integer) \{db.zremrangebyrank(parts[1], sv, ev)}"]
+          _ => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "ZREMRANGEBYSCORE" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else {
+        match (parse_float(parts[2]), parse_float(parts[3])) {
+          (Some(lo), Some(hi)) => ["(integer) \{db.zremrangebyscore(parts[1], lo, hi)}"]
+          _ => ["ERR value is not a valid float"]
+        }
+      }
+    }
+    "ZREVRANGEBYLEX" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else {
+        let items = db.zrevrangebylex(parts[1], parts[2], parts[3])
+        let result = []
+        for i = 0; i < items.length(); i = i + 1 {
+          result.push("  \{i + 1}) \"\{items[i]}\"")
+        }
+        result
+      }
+    }
+    "ZLEXCOUNT" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else { ["(integer) \{db.zlexcount(parts[1], parts[2], parts[3])}"] }
+    }
+    "ZREMRANGEBYLEX" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else { ["(integer) \{db.zremrangebylex(parts[1], parts[2], parts[3])}"] }
+    }
+    "ZMPOP" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else {
+        let keys = []
+        let mut min = true
+        let mut count = 1
+        for i = 1; i < parts.length(); i = i + 1 {
+          if parts[i] == "MIN" { min = true }
+          else if parts[i] == "MAX" { min = false }
+          else if parts[i] == "COUNT" && i + 1 < parts.length() {
+            match parse_int(parts[i + 1]) {
+              Some(c) => { count = c }
+              None => ()
+            }
+            break
+          } else {
+            keys.push(parts[i])
+          }
+        }
+        match db.zmpop(keys, min, count) {
+          Some((k, vals)) => {
+            let result = ["\"\{k}\""]
+            for i = 0; i < vals.length(); i = i + 1 {
+              result.push("  \{i + 1}) \"\{vals[i].0}\" \{vals[i].1}")
+            }
+            result
+          }
+          None => ["(nil)"]
+        }
+      }
+    }
+    "OBJECT_ENCODING" => {
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
+      else {
+        match db.object_encoding(parts[1]) {
+          Some(enc) => ["\"\{enc}\""]
+          None => ["(nil)"]
+        }
+      }
+    }
+    "OBJECT_REFCOUNT" => {
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
+      else {
+        match db.object_refcount(parts[1]) {
+          Some(n) => ["(integer) \{n}"]
+          None => ["(nil)"]
+        }
+      }
+    }
+    "OBJECT_IDLETIME" => {
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
+      else {
+        match db.object_idletime(parts[1]) {
+          Some(n) => ["(integer) \{n}"]
+          None => ["(nil)"]
+        }
+      }
+    }
+    "OBJECT_FREQ" => {
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
+      else {
+        match db.object_freq(parts[1]) {
+          Some(n) => ["(integer) \{n}"]
+          None => ["(nil)"]
+        }
+      }
+    }
+    "MEMORY_USAGE" => {
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
+      else {
+        match db.memory_usage(parts[1]) {
+          Some(b) => ["(integer) \{b}"]
+          None => ["(nil)"]
+        }
+      }
+    }
+    "BITFIELD" => {
+      if parts.length() < 5 { ["ERR wrong number of arguments"] }
+      else {
+        let op = parts[2].to_upper()
+        match parse_int(parts[4]) {
+          Some(offset) => {
+            if op == "GET" {
+              let signed = parts[3].has_prefix("i")
+              match db.try_bitfield_get(parts[1], offset, 8, signed) {
+                Ok(v) => ["(integer) \{v}"]
+                Err(e) => [@lib.RedisError::message(e)]
+              }
+            } else if op == "SET" && parts.length() >= 6 {
+              match parse_int(parts[5]) {
+                Some(v) => {
+                  match db.try_bitfield_set(parts[1], offset, 8, false, v) {
+                    Ok(old) => ["(integer) \{old}"]
+                    Err(e) => [@lib.RedisError::message(e)]
+                  }
+                }
+                None => ["ERR value is not an integer"]
+              }
+            } else if op == "INCRBY" && parts.length() >= 6 {
+              match parse_int(parts[5]) {
+                Some(v) => {
+                  match db.try_bitfield_incrby(parts[1], offset, 8, false, v) {
+                    Ok(nv) => ["(integer) \{nv}"]
+                    Err(e) => [@lib.RedisError::message(e)]
+                  }
+                }
+                None => ["ERR value is not an integer"]
+              }
+            } else {
+              ["ERR syntax error"]
+            }
+          }
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "RESTORE" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else {
+        match parse_int(parts[2]) {
+          Some(ttl) => {
+            let replace = parts.contains("REPLACE")
+            match db.try_restore(parts[1], ttl.to_int64(), parts[3], replace, false) {
+              Ok(_) => ["OK"]
+              Err(e) => [@lib.RedisError::message(e)]
+            }
+          }
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "WAIT" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else { ["(integer) 0"] }
+    }
+    "SHUTDOWN" => { [db.shutdown()] }
+    "CONFIG_RESETSTAT" => { [db.config_resetstat()] }
+    "LOLWUT" => { [db.lolwut()] }
+    "COMMAND_COUNT" => { ["(integer) \{db.command_count()}"] }
+    "SAVE" => { [db.save()] }
+    "BGSAVE" => { [db.bgsave()] }
+    "LASTSAVE" => { ["(integer) \{db.lastsave().to_string()}"] }
     "GETDEL" => {
       if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else {
@@ -917,27 +1543,7 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
         }
       }
     }
-    "RESTORE" => {
-      if parts.length() < 4 { ["ERR wrong number of arguments"] }
-      else {
-        match parse_int(parts[2]) {
-          Some(ttl) => {
-            ["(integer) \{@lib.Database::restore(db, parts[1], ttl.to_int64(), parts[3])}"]
-          }
-          None => ["ERR value is not an integer"]
-        }
-      }
-    }
     "MONITOR" => { [@lib.Database::monitor(db)] }
-    "OBJECT_FREQ" => {
-      if parts.length() < 2 { ["ERR wrong number of arguments"] }
-      else {
-        match @lib.Database::object_freq(db, parts[1]) {
-          Some(freq) => ["(integer) \{freq}"]
-          None => ["(nil)"]
-        }
-      }
-    }
     _ => ["ERR unknown command '\{command}'"]
   }
 }
