@@ -416,11 +416,31 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       if parts.length() < 4 { ["ERR wrong number"] }
       else {
         let items = db.zrangebylex(parts[1], parts[2], parts[3])
-        let result = []
-        for i = 0; i < items.length(); i = i + 1 {
-          result.push("  \{i + 1}) \"\{items[i]}\"")
+        if parts.length() >= 7 && parts[4] == "LIMIT" {
+          match (parse_int(parts[5]), parse_int(parts[6])) {
+            (Some(off), Some(cnt)) => {
+              if off < 0 {
+                ["ERR offset is out of range"]
+              } else {
+                let apply_off = if off > items.length() { items.length() } else { off }
+                let apply_cnt = if cnt <= 0 { items.length() - apply_off } else { cnt }
+                let apply_end = if apply_off + apply_cnt > items.length() { items.length() } else { apply_off + apply_cnt }
+                let result = []
+                for i = apply_off; i < apply_end; i = i + 1 {
+                  result.push("  \{i - apply_off + 1}) \"\{items[i]}\"")
+                }
+                result
+              }
+            }
+            _ => ["ERR value is not an integer"]
+          }
+        } else {
+          let result = []
+          for i = 0; i < items.length(); i = i + 1 {
+            result.push("  \{i + 1}) \"\{items[i]}\"")
+          }
+          result
         }
-        result
       }
     }
     "ZCARD" => {

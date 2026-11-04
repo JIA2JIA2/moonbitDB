@@ -895,6 +895,43 @@ pub fn Database::zrangebylex(self : Database, key : String, min_bound : String, 
   }
 }
 
+pub fn Database::try_zrangebylex_with_limit(
+  self : Database,
+  key : String,
+  min_bound : String,
+  max_bound : String,
+  offset : Int,
+  count : Int,
+) -> Result[Array[String], RedisError] {
+  if !lex_bound_valid(min_bound) || !lex_bound_valid(max_bound) {
+    return Ok([])
+  }
+  if self.check_expired(key) {
+    return Ok([])
+  }
+  match self.data.get(key) {
+    Some(RedisValue::ZSet(_)) => {
+      let members = self.get_sorted_lex(key)
+      let start = lex_lower_index(members, min_bound)
+      let end = lex_upper_index(members, max_bound)
+      let total = end - start
+      if offset < 0 {
+        return Ok([])
+      }
+      let apply_offset = if offset > total { total } else { offset }
+      let apply_count = if count <= 0 { total - apply_offset } else { count }
+      let apply_end = if apply_offset + apply_count > total { total } else { apply_offset + apply_count }
+      let result : Array[String] = []
+      for i = apply_offset; i < apply_end; i = i + 1 {
+        result.push(members[start + i])
+      }
+      Ok(result)
+    }
+    Some(_) => Err(RedisError::WrongType)
+    None => Ok([])
+  }
+}
+
 pub fn Database::zrevrangebylex(
   self : Database,
   key : String,
