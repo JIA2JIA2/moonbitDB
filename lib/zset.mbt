@@ -437,6 +437,22 @@ pub fn Database::zrangebyscore(self : Database, key : String, min_score : Float,
   self.zrangebyscore_with_limit(key, min_score, max_score, 0, 0)
 }
 
+pub fn Database::zrangebyscore_with_scores(
+  self : Database,
+  key : String,
+  min_score : Float,
+  max_score : Float,
+) -> Array[(String, Float)] {
+  let sorted = self.get_sorted_zset(key)
+  let lo = lower_bound(sorted, min_score)
+  let hi = upper_bound(sorted, max_score)
+  let result : Array[(String, Float)] = []
+  for i = lo; i < hi; i = i + 1 {
+    result.push(sorted[i])
+  }
+  result
+}
+
 pub fn Database::zcount(self : Database, key : String, min_score : Float, max_score : Float) -> Int {
   let sorted = self.get_sorted_zset(key)
   let lo = lower_bound(sorted, min_score)
@@ -471,6 +487,22 @@ pub fn Database::zrevrangebyscore(self : Database, key : String, max_score : Flo
   let result = []
   for i = hi - 1; i >= lo; i = i - 1 {
     result.push(sorted[i].0)
+  }
+  result
+}
+
+pub fn Database::zrevrangebyscore_with_scores(
+  self : Database,
+  key : String,
+  max_score : Float,
+  min_score : Float,
+) -> Array[(String, Float)] {
+  let sorted = self.get_sorted_zset(key)
+  let lo = lower_bound(sorted, min_score)
+  let hi = upper_bound(sorted, max_score)
+  let result : Array[(String, Float)] = []
+  for i = hi - 1; i >= lo; i = i - 1 {
+    result.push(sorted[i])
   }
   result
 }
