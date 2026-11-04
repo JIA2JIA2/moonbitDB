@@ -447,51 +447,36 @@ fn Database::get_sorted_lex(self : Database, key : String) -> Array[String] {
   }
 }
 
-fn find_insert_position(
-  items : Array[(String, Float)],
-  score : Float,
-  member_val : String,
-) -> Int {
-  let mut left = 0
-  let mut right = items.length()
-  while left < right {
-    let mid = (left + right) / 2
-    let mid_item = items.get(mid).unwrap()
-    if mid_item.1 < score || (mid_item.1 == score && mid_item.0.lexical_compare(member_val) < 0) {
-      left = mid + 1
-    } else {
-      right = mid
-    }
-  }
-  left
-}
-
 fn update_sorted_items(
   items : Array[(String, Float)],
   member_val : String,
   new_score : Float?,
 ) -> Array[(String, Float)] {
-  let base : Array[(String, Float)] = []
+  let result : Array[(String, Float)] = []
+  let mut inserted = match new_score {
+    Some(_) => false
+    None => true
+  }
+  let insert_score = match new_score {
+    Some(s) => s
+    None => 0.0
+  }
   for item in items {
-    if item.0 != member_val {
-      base.push(item)
+    if item.0 == member_val {
+      continue
     }
-  }
-  match new_score {
-    Some(score) => {
-      let pos = find_insert_position(base, score, member_val)
-      let result : Array[(String, Float)] = []
-      for i = 0; i < pos; i = i + 1 {
-        result.push(base.get(i).unwrap())
+    if !inserted {
+      if item.1 > insert_score || (item.1 == insert_score && item.0.lexical_compare(member_val) >= 0) {
+        result.push((member_val, insert_score))
+        inserted = true
       }
-      result.push((member_val, score))
-      for i = pos; i < base.length(); i = i + 1 {
-        result.push(base.get(i).unwrap())
-      }
-      result
     }
-    None => base
+    result.push(item)
   }
+  if !inserted {
+    result.push((member_val, insert_score))
+  }
+  result
 }
 
 fn remove_sorted_members(
@@ -518,21 +503,28 @@ fn remove_lex_members(items : Array[String], removed : Map[String, Bool]) -> Arr
 }
 
 fn add_lex_member(items : Array[String], member_val : String) -> Array[String] {
-  for item in items {
-    if item == member_val {
+  let mut lo = 0
+  let mut hi = items.length()
+  while lo < hi {
+    let mid = (lo + hi) / 2
+    let cmp = member_val.lexical_compare(items[mid])
+    if cmp == 0 {
       return items
+    } else if cmp < 0 {
+      hi = mid
+    } else {
+      lo = mid + 1
     }
   }
+  let pos = lo
   let result : Array[String] = []
-  let mut inserted = false
-  for item in items {
-    if !inserted && member_val.lexical_compare(item) <= 0 {
+  for i = 0; i < items.length(); i = i + 1 {
+    if i == pos {
       result.push(member_val)
-      inserted = true
     }
-    result.push(item)
+    result.push(items[i])
   }
-  if !inserted {
+  if pos >= items.length() {
     result.push(member_val)
   }
   result
@@ -1979,8 +1971,51 @@ pub fn Database::try_zintercard(
   if !self.zsets_valid(keys) {
     return Err(RedisError::WrongType)
   }
-  let count = self.zinter(keys).length()
-  Ok(if limit > 0 && count > limit { limit } else { count })
+  if keys.length() == 0 {
+    return Ok(0)
+  }
+  let mut base_key = keys[0]
+  let mut base_len = -1
+  for k in keys {
+    self.check_expired(k) |> ignore
+    let n = match self.data.get(k) {
+      Some(RedisValue::ZSet(z)) => z.length()
+      _ => 0
+    }
+    if base_len < 0 || n < base_len {
+      base_key = k
+      base_len = n
+    }
+  }
+  let mut count = 0
+  match self.data.get(base_key) {
+    Some(RedisValue::ZSet(z)) => {
+      for member_val, _ in z {
+        let mut in_all = true
+        for k in keys {
+          if k == base_key {
+            continue
+          }
+          let contained = match self.data.get(k) {
+            Some(RedisValue::ZSet(other)) => other.contains(member_val)
+            _ => false
+          }
+          if !contained {
+            in_all = false
+            break
+          }
+        }
+        if in_all {
+          count = count + 1
+          if limit > 0 && count >= limit {
+            return Ok(count)
+          }
+        }
+      }
+    }
+    _ => ()
+  }
+  Ok(count)
 }
 
 pub fn Database::zintercard(self : Database, keys : Array[String], limit : Int) -> Int {
