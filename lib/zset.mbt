@@ -2,9 +2,6 @@ pub fn Database::try_zadd(self : Database, key : String, score : Float, member_v
   if score != score {
     return Err(RedisError::InvalidArgument)
   }
-  if score > 1.7976931348623157e308 || score < -1.7976931348623157e308 {
-    return Err(RedisError::InvalidArgument)
-  }
   self.check_expired(key) |> ignore
   let zset = match self.data.get(key) {
     Some(RedisValue::ZSet(z)) => z
@@ -911,14 +908,7 @@ pub fn Database::try_zremrangebyscore_by_bound(
       for i = lo; i < hi; i = i + 1 {
         to_remove.push(sorted[i].0)
       }
-      for m in to_remove {
-        zset.remove(m)
-      }
-      if zset.length() == 0 {
-        self.remove_if_empty(key, 0)
-      } else {
-        self.write_through_remove_zset_members(key, to_remove)
-      }
+      ignore(self.remove_zset_collected(key, zset, to_remove))
       Ok(to_remove.length())
     }
     Some(_) => Err(RedisError::WrongType)
@@ -1097,6 +1087,25 @@ pub fn Database::zincrby(self : Database, key : String, increment : Float, membe
   }
 }
 
+fn Database::remove_zset_collected(
+  self : Database,
+  key : String,
+  zset : Map[String, Float],
+  members : Array[String],
+) -> Int {
+  for m in members {
+    zset.remove(m)
+  }
+  if members.length() > 0 {
+    if zset.length() == 0 {
+      self.remove_if_empty(key, 0)
+    } else {
+      self.write_through_remove_zset_members(key, members)
+    }
+  }
+  members.length()
+}
+
 pub fn Database::zremrangebyrank(self : Database, key : String, start : Int, end : Int) -> Int {
   if self.check_expired(key) {
     0
@@ -1111,16 +1120,8 @@ pub fn Database::zremrangebyrank(self : Database, key : String, start : Int, end
         let removed_members : Array[String] = []
         for i = s; i <= end_idx && i < len; i = i + 1 {
           removed_members.push(sorted[i].0)
-          zset.remove(sorted[i].0)
         }
-        if removed_members.length() > 0 {
-          if zset.length() == 0 {
-            self.remove_if_empty(key, 0)
-          } else {
-            self.write_through_remove_zset_members(key, removed_members)
-          }
-        }
-        removed_members.length()
+        self.remove_zset_collected(key, zset, removed_members)
       }
       _ => 0
     }
@@ -1143,17 +1144,7 @@ pub fn Database::zremrangebyscore(self : Database, key : String, min_score : Flo
           for i = lo; i < hi; i = i + 1 {
             to_remove.push(sorted[i].0)
           }
-          for m in to_remove {
-            zset.remove(m)
-          }
-          if to_remove.length() > 0 {
-            if zset.length() == 0 {
-              self.remove_if_empty(key, 0)
-            } else {
-              self.write_through_remove_zset_members(key, to_remove)
-            }
-          }
-          to_remove.length()
+          self.remove_zset_collected(key, zset, to_remove)
         }
       }
       _ => 0
@@ -1161,55 +1152,31 @@ pub fn Database::zremrangebyscore(self : Database, key : String, min_score : Flo
   }
 }
 
-pub fn Database::zpopmin(self : Database, key : String) -> (String, Float)? {
+fn Database::zpop_extreme(self : Database, key : String, from_min : Bool) -> (String, Float)? {
   if self.check_expired(key) {
-    None
-  } else {
-    match self.data.get(key) {
-      Some(RedisValue::ZSet(zset)) => {
-        let sorted = self.get_sorted_zset(key)
-        if sorted.length() == 0 {
-          None
-        } else {
-          let min_item = sorted[0]
-          zset.remove(min_item.0)
-          if zset.length() == 0 {
-            self.remove_if_empty(key, 0)
-          } else {
-            self.write_through_remove_zset_members(key, [min_item.0])
-          }
-          Some(min_item)
-        }
+    return None
+  }
+  match self.data.get(key) {
+    Some(RedisValue::ZSet(zset)) => {
+      let sorted = self.get_sorted_zset(key)
+      let len = sorted.length()
+      if len == 0 {
+        return None
       }
-      _ => None
+      let item = if from_min { sorted[0] } else { sorted[len - 1] }
+      ignore(self.remove_zset_collected(key, zset, [item.0]))
+      Some(item)
     }
+    _ => None
   }
 }
 
+pub fn Database::zpopmin(self : Database, key : String) -> (String, Float)? {
+  self.zpop_extreme(key, true)
+}
+
 pub fn Database::zpopmax(self : Database, key : String) -> (String, Float)? {
-  if self.check_expired(key) {
-    None
-  } else {
-    match self.data.get(key) {
-      Some(RedisValue::ZSet(zset)) => {
-        let sorted = self.get_sorted_zset(key)
-        let len = sorted.length()
-        if len == 0 {
-          None
-        } else {
-          let max_item = sorted[len - 1]
-          zset.remove(max_item.0)
-          if zset.length() == 0 {
-            self.remove_if_empty(key, 0)
-          } else {
-            self.write_through_remove_zset_members(key, [max_item.0])
-          }
-          Some(max_item)
-        }
-      }
-      _ => None
-    }
-  }
+  self.zpop_extreme(key, false)
 }
 
 pub fn Database::zmscore(self : Database, key : String, members : Array[String]) -> Array[Float?] {
@@ -1712,7 +1679,7 @@ pub fn Database::zscan_with_match(
         }
       }
       let len = items.length()
-      let limit = if count <= 0 { 10 } else { count }
+      let limit = if count <= 0 { DEFAULT_SCAN_COUNT } else { count }
       let start = if cursor < 0 { 0 } else { cursor }
       if start >= len {
         return (0, [])

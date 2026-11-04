@@ -27,6 +27,10 @@ pub enum TransactionOp {
 }
 
 const MAX_CACHE_SIZE : Int = 100
+const DEFAULT_SCAN_COUNT : Int = 10
+const EMBSTR_MAX_SIZE : Int = 44
+const HASHTABLE_MAX_ENTRIES : Int = 512
+const LISTPACK_MAX_ENTRIES : Int = 128
 
 pub struct Database {
   mut data : Map[String, RedisValue]

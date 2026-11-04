@@ -171,11 +171,11 @@ pub fn Database::object_encoding(self : Database, key : String) -> String? {
     None
   } else {
     match self.data.get(key) {
-      Some(RedisValue::String(s)) => if s.length() > 44 { Some("raw") } else { Some("embstr") }
-      Some(RedisValue::Hash(h)) => if h.length() > 512 { Some("hashtable") } else { Some("listpack") }
-      Some(RedisValue::List(d)) => if d.length() > 128 { Some("quicklist") } else { Some("listpack") }
-      Some(RedisValue::Set(s)) => if s.length() > 128 { Some("hashtable") } else { Some("listpack") }
-      Some(RedisValue::ZSet(z)) => if z.length() > 128 { Some("skiplist") } else { Some("listpack") }
+      Some(RedisValue::String(s)) => if s.length() > EMBSTR_MAX_SIZE { Some("raw") } else { Some("embstr") }
+      Some(RedisValue::Hash(h)) => if h.length() > HASHTABLE_MAX_ENTRIES { Some("hashtable") } else { Some("listpack") }
+      Some(RedisValue::List(d)) => if d.length() > LISTPACK_MAX_ENTRIES { Some("quicklist") } else { Some("listpack") }
+      Some(RedisValue::Set(s)) => if s.length() > LISTPACK_MAX_ENTRIES { Some("hashtable") } else { Some("listpack") }
+      Some(RedisValue::ZSet(z)) => if z.length() > LISTPACK_MAX_ENTRIES { Some("skiplist") } else { Some("listpack") }
       None => None
     }
   }

@@ -320,9 +320,6 @@ pub fn Database::try_hincrbyfloat(
   if new_value != new_value {
     return Err(RedisError::Overflow)
   }
-  if new_value > 1.7976931348623157e308 || new_value < -1.7976931348623157e308 {
-    return Err(RedisError::Overflow)
-  }
   hash.set(field, format_float(new_value))
   self.put(key, RedisValue::Hash(hash))
   Ok(new_value)
@@ -394,7 +391,7 @@ pub fn Database::hscan_with_match(
         }
       }
       let len = fields.length()
-      let limit = if count <= 0 { 10 } else { count }
+      let limit = if count <= 0 { DEFAULT_SCAN_COUNT } else { count }
       let start = if cursor < 0 { 0 } else { cursor }
       if start >= len {
         self.hscan_snapshots.remove(key)
