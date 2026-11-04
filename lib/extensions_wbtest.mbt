@@ -1779,3 +1779,49 @@ test "k4_try_variants" {
     Err(_) => @test.assert_eq(true, false)
   }
 }
+
+
+test "m3_deque_front_branches_and_rebalance" {
+  let d = Deque::new()
+  d.push_back("x")
+  d.push_front("f")
+  d.push_back("y")
+  @test.assert_eq(d.remove_at(0), true)
+  @test.assert_eq(d.to_array(), ["x", "y"])
+  @test.assert_eq(d.insert_at(0, "head"), true)
+  @test.assert_eq(d.get_at(0), Some("head"))
+  @test.assert_eq(d.remove_at(-1), false)
+  @test.assert_eq(d.insert_at(-1, "v"), false)
+
+  let d2 = Deque::new()
+  d2.push_back("b1")
+  d2.push_back("b2")
+  d2.push_back("b3")
+  @test.assert_eq(d2.pop_front(), Some("b1"))
+  @test.assert_eq(d2.pop_front(), Some("b2"))
+  @test.assert_eq(d2.pop_front(), Some("b3"))
+  @test.assert_eq(d2.pop_front(), None)
+
+  let d3 = Deque::new()
+  d3.push_front("f1")
+  d3.push_front("f2")
+  @test.assert_eq(d3.pop_back(), Some("f1"))
+  @test.assert_eq(d3.pop_back(), Some("f2"))
+  @test.assert_eq(d3.pop_back(), None)
+}
+
+
+test "m3_deque_front_multi" {
+  let d4 = Deque::new()
+  d4.push_front("a")
+  d4.push_front("b")
+  d4.push_front("c")
+  d4.push_back("z")
+  @test.assert_eq(d4.remove_at(1), true)
+  @test.assert_eq(d4.to_array(), ["c", "a", "z"])
+  @test.assert_eq(d4.insert_at(1, "mid"), true)
+  @test.assert_eq(d4.to_array(), ["c", "mid", "a", "z"])
+  @test.assert_eq(d4.get_at(1), Some("mid"))
+  @test.assert_eq(d4.set_at(1, "M"), true)
+  @test.assert_eq(d4.to_array(), ["c", "M", "a", "z"])
+}
