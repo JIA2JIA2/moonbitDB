@@ -84,7 +84,8 @@ pub fn Database::command() -> Array[String] {
     "LMPOP", "ZMPOP",
     "PING", "ECHO", "INFO", "TIME", "COMMAND", "OBJECT_ENCODING",
     "AUTH", "CLIENT", "CONFIG", "SLOWLOG",
-    "SELECT", "MOVE", "DUMP", "RESTORE", "MONITOR"
+    "SELECT", "MOVE", "DUMP", "RESTORE", "MONITOR",
+    "OBJECT_FREQ"
   ]
 }
 
@@ -149,6 +150,16 @@ pub fn Database::object_idletime(self : Database, key : String) -> Int? {
       }
       None => Some(0)
     }
+  }
+}
+
+pub fn Database::object_freq(self : Database, key : String) -> Int? {
+  if self.check_expired(key) {
+    None
+  } else if self.data.contains(key) {
+    Some(0)
+  } else {
+    None
   }
 }
 
@@ -240,3 +251,29 @@ pub fn Database::restore(self : Database, key : String, ttl_ms : Int64, value : 
   }
   true
 }
+
+pub fn Database::bitcount(self : Database, key : String) -> Int {
+  if self.check_expired(key) {
+    0
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::String(s)) => {
+        let mut count = 0
+        for i = 0; i < s.length(); i = i + 1 {
+          let c = s[i]
+          let mut b = 0
+          while b < 8 {
+            if (c.to_int() & (1 << b)) != 0 {
+              count = count + 1
+            }
+            b = b + 1
+          }
+        }
+        count
+      }
+      _ => 0
+    }
+  }
+}
+
+
