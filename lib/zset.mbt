@@ -2,6 +2,9 @@ pub fn Database::try_zadd(self : Database, key : String, score : Float, member_v
   if score != score {
     return Err(RedisError::InvalidArgument)
   }
+  if score > 1.7976931348623157e308 || score < -1.7976931348623157e308 {
+    return Err(RedisError::InvalidArgument)
+  }
   self.check_expired(key) |> ignore
   let zset = match self.data.get(key) {
     Some(RedisValue::ZSet(z)) => z

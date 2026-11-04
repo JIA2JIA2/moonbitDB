@@ -469,6 +469,41 @@ pub fn Database::incrby(self : Database, key : String, increment : Int64) -> Int
   }
 }
 
+pub fn Database::try_incrbyfloat(
+  self : Database,
+  key : String,
+  increment : Float,
+) -> Result[Float, RedisError] {
+  if self.check_expired(key) {
+    return Err(RedisError::NotFound)
+  }
+  match self.data.get(key) {
+    Some(RedisValue::String(s)) => {
+      match parse_float(s) {
+        Some(current) => {
+          let new_value = current + increment
+          if new_value != new_value {
+            Err(RedisError::Overflow)
+          } else {
+            self.put(key, RedisValue::String(format_float(new_value)))
+            Ok(new_value)
+          }
+        }
+        None => Err(RedisError::NotInteger)
+      }
+    }
+    Some(_) => Err(RedisError::WrongType)
+    None => Err(RedisError::NotFound)
+  }
+}
+
+pub fn Database::incrbyfloat(self : Database, key : String, increment : Float) -> Float? {
+  match self.try_incrbyfloat(key, increment) {
+    Ok(value) => Some(value)
+    Err(_) => None
+  }
+}
+
 pub fn Database::try_decrby(self : Database, key : String, decrement : Int64) -> Result[Int64, RedisError] {
   let min_value : Int64 = -9223372036854775807L - 1L
   if decrement == min_value {
