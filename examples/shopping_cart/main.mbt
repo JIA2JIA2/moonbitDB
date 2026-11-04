@@ -206,7 +206,7 @@ fn main {
 
   println("\n🔄 阶段9：缓存预热 & 批量操作")
   println("----------------------------------------")
-  db.flushdb()
+  db.flushdb() |> ignore
   let hot_keys = ["hot:1", "hot:2", "hot:3", "hot:4", "hot:5"]
   let hot_vals = ["value1", "value2", "value3", "value4", "value5"]
   db.mset(hot_keys, hot_vals) |> ignore

@@ -110,10 +110,14 @@ fn Database::maybe_compact_expire_heap(self : Database) -> Unit {
   }
 }
 
-fn Database::delete_key(self : Database, key : String) -> Unit {
+fn Database::mark_dirty(self : Database, key : String) -> Unit {
   if self.watched_keys.contains(key) {
     self.watched_dirty.set(key, true)
   }
+}
+
+fn Database::delete_key(self : Database, key : String) -> Unit {
+  self.mark_dirty(key)
   self.data.remove(key)
   self.expires.remove(key)
   self.invalidate_zset_cache(key)
@@ -125,9 +129,7 @@ fn Database::delete_key(self : Database, key : String) -> Unit {
 }
 
 fn Database::put(self : Database, key : String, value : RedisValue) -> Unit {
-  if self.watched_keys.contains(key) {
-    self.watched_dirty.set(key, true)
-  }
+  self.mark_dirty(key)
   self.invalidate_zset_cache(key)
   self.scan_snapshot = None
   self.hscan_snapshots.remove(key)
@@ -212,6 +214,7 @@ fn Database::rebuild_expire_heap(self : Database) -> Unit {
 }
 
 fn Database::set_expire(self : Database, key : String, expire_time : Int64) -> Unit {
+  self.mark_dirty(key)
   self.expires.set(key, expire_time)
   self.expire_heap_push(key, expire_time)
   self.maybe_compact_expire_heap()

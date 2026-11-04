@@ -4,6 +4,9 @@ pub fn Database::dbsize(self : Database) -> Int {
 }
 
 pub fn Database::flushdb(self : Database) -> String {
+  for key, _dirty in self.watched_keys {
+    self.mark_dirty(key)
+  }
   self.data = Map([], capacity=1000)
   self.expires = Map([], capacity=1000)
   self.zset_sorted_cache = Map([], capacity=100)
@@ -162,7 +165,7 @@ pub fn Database::command() -> Array[String] {
     "AUTH", "CLIENT", "CONFIG", "SLOWLOG",
     "SELECT", "MOVE", "DUMP", "RESTORE", "MONITOR",
     "OBJECT_FREQ",
-    "SAVE", "BGSAVE", "LASTSAVE", "RESET"
+    "SAVE", "BGSAVE", "LASTSAVE", "RESET", "SORT"
   ]
 }
 
@@ -443,6 +446,131 @@ pub fn Database::reset(self : Database) -> String {
   self.unwatch()
   ignore(self.clear_transaction())
   "RESET"
+}
+
+pub fn Database::try_sort(
+  self : Database,
+  key : String,
+  alpha : Bool,
+  desc : Bool,
+  offset : Int,
+  count : Int,
+  store : String?,
+) -> Result[Array[String], RedisError] {
+  if offset < 0 {
+    return Err(RedisError::InvalidArgument)
+  }
+  if self.check_expired(key) {
+    return match store {
+      Some(dest) => {
+        self.delete_key(dest)
+        Ok([])
+      }
+      None => Ok([])
+    }
+  }
+  let items : Array[String] = match self.data.get(key) {
+    Some(RedisValue::List(d)) => d.to_array()
+    Some(RedisValue::Set(s)) => {
+      let a : Array[String] = []
+      for m, _ in s {
+        a.push(m)
+      }
+      a
+    }
+    Some(RedisValue::ZSet(z)) => {
+      let a : Array[String] = []
+      for m, _ in z {
+        a.push(m)
+      }
+      a
+    }
+    Some(_) => return Err(RedisError::WrongType)
+    None => []
+  }
+  let sorted : Array[String] = if alpha {
+    for i = 1; i < items.length(); i = i + 1 {
+      let item = items[i]
+      let mut j = i - 1
+      while j >= 0 {
+        if items[j].lexical_compare(item) <= 0 {
+          break
+        }
+        items[j + 1] = items[j]
+        j = j - 1
+      }
+      items[j + 1] = item
+    }
+    items
+  } else {
+    let pairs : Array[(String, Float)] = []
+    for item in items {
+      match parse_float(item) {
+        Some(v) => pairs.push((item, v))
+        None => return Err(RedisError::NotInteger)
+      }
+    }
+    let sorted_pairs = sort_by_score(pairs)
+    let out : Array[String] = []
+    for p in sorted_pairs {
+      out.push(p.0)
+    }
+    out
+  }
+  if desc {
+    let left = 0
+    let right = sorted.length() - 1
+    let mut l = left
+    let mut r = right
+    while l < r {
+      let tmp = sorted[l]
+      sorted[l] = sorted[r]
+      sorted[r] = tmp
+      l = l + 1
+      r = r - 1
+    }
+  }
+  let limited : Array[String] = if count <= 0 {
+    sorted
+  } else {
+    let out : Array[String] = []
+    let mut i = offset
+    while i < sorted.length() && out.length() < count {
+      out.push(sorted[i])
+      i = i + 1
+    }
+    out
+  }
+  match store {
+    Some(dest) => {
+      if limited.length() == 0 {
+        self.delete_key(dest)
+      } else {
+        let deque = Deque::new()
+        for item in limited {
+          deque.push_back(item)
+        }
+        self.put(dest, RedisValue::List(deque))
+      }
+      Ok(limited)
+    }
+    None => Ok(limited)
+  }
+}
+
+pub fn Database::sort(
+  self : Database,
+  key : String,
+  alpha : Bool,
+  desc : Bool,
+  offset : Int,
+  count : Int,
+  store : String?,
+) -> Array[String] {
+  match self.try_sort(key, alpha, desc, offset, count, store) {
+    Ok(items) => items
+    Err(_) => []
+  }
 }
 
 

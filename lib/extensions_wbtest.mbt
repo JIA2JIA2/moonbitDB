@@ -1040,3 +1040,163 @@ test "e5_zset_boundary_gaps" {
   @test.assert_eq(db.exists("live"), false)
   @test.assert_eq(db.zdiff(["nope1", "nope2"]).length(), 0)
 }
+
+test "e6_sort_command" {
+  let db = Database::new()
+  db.rpush_all("nums", ["3", "1", "2"]) |> ignore
+
+  match db.try_sort("nums", false, false, 0, 0, None) {
+    Ok(items) => @test.assert_eq(items, ["1", "2", "3"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_sort("nums", false, true, 0, 0, None) {
+    Ok(items) => @test.assert_eq(items, ["3", "2", "1"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_sort("nums", false, false, 1, 2, None) {
+    Ok(items) => @test.assert_eq(items, ["2", "3"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_sort("nums", false, false, 0, 1, None) {
+    Ok(items) => @test.assert_eq(items, ["1"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_sort("nums", false, false, 0, -1, None) {
+    Ok(items) => @test.assert_eq(items, ["1", "2", "3"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+
+  db.rpush_all("strs", ["10", "9", "2"]) |> ignore
+  match db.try_sort("strs", false, false, 0, 0, None) {
+    Ok(items) => @test.assert_eq(items, ["2", "9", "10"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_sort("strs", true, false, 0, 0, None) {
+    Ok(items) => @test.assert_eq(items, ["10", "2", "9"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+
+  db.sadd_all("st", ["b", "a", "c"]) |> ignore
+  match db.try_sort("st", true, false, 0, 0, None) {
+    Ok(items) => @test.assert_eq(items, ["a", "b", "c"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  db.zadd("zs", 1.0, "z2") |> ignore
+  db.zadd("zs", 2.0, "z1") |> ignore
+  match db.try_sort("zs", true, false, 0, 0, None) {
+    Ok(items) => @test.assert_eq(items, ["z1", "z2"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+
+  match db.try_sort("nums", false, false, 0, 0, Some("dest1")) {
+    Ok(items) => @test.assert_eq(items, ["1", "2", "3"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.lrange("dest1", 0, -1), ["1", "2", "3"])
+  @test.assert_eq(db.type_of("dest1"), "list")
+
+  match db.try_sort("nums", false, false, 0, 0, Some("dest1")) {
+    Ok(items) => @test.assert_eq(items, ["1", "2", "3"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.llen("dest1"), 3)
+
+  db.rpush_all("bad", ["x", "1"]) |> ignore
+  match db.try_sort("bad", false, false, 0, 0, None) {
+    Err(RedisError::NotInteger) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  db.hset("hh", "f", "v") |> ignore
+  match db.try_sort("hh", false, false, 0, 0, None) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_sort("missing", false, false, 0, 0, None) {
+    Ok(items) => @test.assert_eq(items.length(), 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_sort("missing", false, false, 0, 0, Some("dest2")) {
+    Ok(items) => @test.assert_eq(items.length(), 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.exists("dest2"), false)
+  match db.try_sort("nums", false, false, -1, 1, None) {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.sort("nums", false, true, 0, 0, None), ["3", "2", "1"])
+}
+
+test "f1_watch_dirty_paths" {
+  let db = Database::new()
+
+  db.zadd("wz", 1.0, "a") |> ignore
+  db.watch("wz")
+  db.zadd("wz", 2.0, "b") |> ignore
+  ignore(db.multi())
+  ignore(db.set("wz", "x"))
+  match db.try_exec() {
+    Err(RedisError::TransactionAborted) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+
+  db.watch("wz")
+  db.zincrby("wz", 1.0, "a") |> ignore
+  ignore(db.multi())
+  ignore(db.set("wz", "x"))
+  match db.try_exec() {
+    Err(RedisError::TransactionAborted) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+
+  db.set("wr", "old")
+  db.watch("wr")
+  db.rename("wr", "wr2") |> ignore
+  ignore(db.multi())
+  ignore(db.set("wr2", "x"))
+  match db.try_exec() {
+    Err(RedisError::TransactionAborted) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+
+  db.set("wf", "v")
+  db.watch("wf")
+  ignore(db.flushdb())
+  ignore(db.multi())
+  ignore(db.set("wf", "x"))
+  match db.try_exec() {
+    Err(RedisError::TransactionAborted) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+
+  db.set("wt", "v")
+  db.watch("wt")
+  db.expire("wt", 100) |> ignore
+  ignore(db.multi())
+  ignore(db.set("wt", "x"))
+  match db.try_exec() {
+    Err(RedisError::TransactionAborted) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+
+  db.set("wp", "v")
+  db.pexpire("wp", 5000L) |> ignore
+  db.watch("wp")
+  ignore(db.getex("wp", None))
+  ignore(db.multi())
+  ignore(db.set("wp", "x"))
+  match db.try_exec() {
+    Err(RedisError::TransactionAborted) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+
+  db.set("ok1", "v")
+  db.watch("ok1")
+  db.set("other", "v") |> ignore
+  ignore(db.multi())
+  ignore(db.set("ok1", "x"))
+  match db.try_exec() {
+    Ok(_) => @test.assert_eq(true, true)
+    Err(_) => @test.assert_eq(true, false)
+  }
+}

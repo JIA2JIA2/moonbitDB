@@ -555,7 +555,7 @@ pub fn Database::sscan_with_match(
         }
       }
       let len = members.length()
-      let limit = if count <= 0 { 10 } else { count }
+      let limit = if count <= 0 { DEFAULT_SCAN_COUNT } else { count }
       let start = if cursor < 0 { 0 } else { cursor }
       if start >= len {
         self.sscan_snapshots.remove(key)

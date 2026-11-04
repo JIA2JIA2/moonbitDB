@@ -394,6 +394,7 @@ pub fn Database::rename(self : Database, old_key : String, new_key : String) -> 
         return true
       }
       self.put(new_key, value)
+      self.mark_dirty(old_key)
       self.data.remove(old_key)
       self.invalidate_zset_cache(old_key)
       self.hscan_snapshots.remove(old_key)

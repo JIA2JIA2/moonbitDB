@@ -10,6 +10,7 @@ pub fn Database::try_zadd(self : Database, key : String, score : Float, member_v
   }
   let existed = zset.contains(member_val)
   zset.set(member_val, score)
+  self.mark_dirty(key)
   self.data.set(key, RedisValue::ZSet(zset))
   self.zset_rank_cache.remove(key)
   if !existed {
@@ -87,6 +88,7 @@ pub fn Database::try_zadd_with_options(
     }
   }
   if added + changed > 0 {
+    self.mark_dirty(key)
     self.data.set(key, RedisValue::ZSet(zset))
     self.zset_rank_cache.remove(key)
     if added > 0 {
@@ -138,6 +140,7 @@ pub fn Database::try_zadd_incr(
         return Ok(None)
       }
       zset.set(member_val, new_score)
+      self.mark_dirty(key)
       self.data.set(key, RedisValue::ZSet(zset))
       self.zset_rank_cache.remove(key)
       match self.zset_sorted_cache.get(key) {
@@ -151,6 +154,7 @@ pub fn Database::try_zadd_incr(
         return Ok(None)
       }
       zset.set(member_val, increment)
+      self.mark_dirty(key)
       self.data.set(key, RedisValue::ZSet(zset))
       self.zset_rank_cache.remove(key)
       match self.zset_lex_cache.get(key) {
@@ -1065,6 +1069,7 @@ pub fn Database::try_zincrby(self : Database, key : String, increment : Float, m
   }
   let new_score = current_score + increment
   zset.set(member_val, new_score)
+  self.mark_dirty(key)
   self.data.set(key, RedisValue::ZSet(zset))
   self.zset_rank_cache.remove(key)
   if !existed {

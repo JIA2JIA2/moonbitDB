@@ -312,6 +312,7 @@ pub fn Database::try_getex_persist(
   match self.try_get(key) {
     Err(error) => Err(error)
     Ok(value) => {
+      self.mark_dirty(key)
       self.expires.remove(key)
       self.maybe_compact_expire_heap()
       Ok(value)
