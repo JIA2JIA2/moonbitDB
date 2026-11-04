@@ -231,6 +231,14 @@ fn main {
   println("  总 Key 数: \{db.dbsize()}")
 
   println("\n========================================")
+  ignore(db.set("order:lock:1001", "worker-1"))
+  let lock = db.try_getdel("order:lock:1001")
+  let lock_text = match lock {
+    Ok(Some(v)) => v
+    _ => "(nil)"
+  }
+  println("  GETDEL order:lock:1001（一次性取走锁）= \{lock_text}")
+
   println("  ✅ 购物车 & 缓存系统示例完成！")
   println("========================================")
 }

@@ -554,6 +554,195 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
         "  ADVANCE ms | HELP | QUIT"
       ]
     }
+    "GETBIT" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        match parse_int(parts[2]) {
+          Some(off) => ["(integer) \{db.getbit(parts[1], off)}"]
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "SETBIT" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else {
+        match (parse_int(parts[2]), parse_int(parts[3])) {
+          (Some(off), Some(v)) => ["(integer) \{db.setbit(parts[1], off, v)}"]
+          _ => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "BITPOS" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        match parse_int(parts[2]) {
+          Some(bit) => ["(integer) \{db.bitpos(parts[1], bit)}"]
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "BITCOUNT" => {
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
+      else { ["(integer) \{db.bitcount(parts[1])}"] }
+    }
+    "BITOP" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else {
+        let src_keys = []
+        for i = 3; i < parts.length(); i = i + 1 {
+          src_keys.push(parts[i])
+        }
+        ["(integer) \{db.bitop(parts[1], parts[2], src_keys)}"]
+      }
+    }
+    "SINTER" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        let items = db.sinter([parts[1], parts[2]])
+        let result = []
+        for i = 0; i < items.length(); i = i + 1 {
+          result.push("  \{i + 1}) \"\{items[i]}\"")
+        }
+        result
+      }
+    }
+    "SUNION" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        let items = db.sunion([parts[1], parts[2]])
+        let result = []
+        for i = 0; i < items.length(); i = i + 1 {
+          result.push("  \{i + 1}) \"\{items[i]}\"")
+        }
+        result
+      }
+    }
+    "SDIFF" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        let items = db.sdiff([parts[1], parts[2]])
+        let result = []
+        for i = 0; i < items.length(); i = i + 1 {
+          result.push("  \{i + 1}) \"\{items[i]}\"")
+        }
+        result
+      }
+    }
+    "SMISMEMBER" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        let members = []
+        for i = 2; i < parts.length(); i = i + 1 {
+          members.push(parts[i])
+        }
+        let flags = db.smismember(parts[1], members)
+        let result = []
+        for i = 0; i < flags.length(); i = i + 1 {
+          result.push("  \{i + 1}) \{flags[i]}")
+        }
+        result
+      }
+    }
+    "SRANDMEMBER" => {
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
+      else {
+        if parts.length() >= 3 {
+          match parse_int(parts[2]) {
+            Some(n) => {
+              let items = db.srandmember_count(parts[1], n)
+              let result = []
+              for i = 0; i < items.length(); i = i + 1 {
+                result.push("  \{i + 1}) \"\{items[i]}\"")
+              }
+              result
+            }
+            None => ["ERR value is not an integer"]
+          }
+        } else {
+          match db.srandmember(parts[1]) {
+            Some(v) => ["\"\{v}\""]
+            None => ["(nil)"]
+          }
+        }
+      }
+    }
+    "ZREM" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        let mut removed = 0
+        for i = 2; i < parts.length(); i = i + 1 {
+          if db.zrem(parts[1], parts[i]) {
+            removed = removed + 1
+          }
+        }
+        ["(integer) \{removed}"]
+      }
+    }
+    "ZCOUNT" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else {
+        match (parse_float(parts[2]), parse_float(parts[3])) {
+          (Some(lo), Some(hi)) => ["(integer) \{db.zcount(parts[1], lo, hi)}"]
+          _ => ["ERR value is not a valid float"]
+        }
+      }
+    }
+    "ZREVRANGE" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else {
+        match (parse_int(parts[2]), parse_int(parts[3])) {
+          (Some(sv), Some(ev)) => {
+            let with_scores = parts.length() > 4 && parts[4] == "WITHSCORES"
+            let items = db.zrevrange_with_scores(parts[1], sv, ev)
+            let result = []
+            for i = 0; i < items.length(); i = i + 1 {
+              if with_scores {
+                result.push("  \{i + 1}) \"\{items[i].0}\" \{items[i].1}")
+              } else {
+                result.push("  \{i + 1}) \"\{items[i].0}\"")
+              }
+            }
+            result
+          }
+          _ => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "ZPOPMAX" => {
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
+      else {
+        match db.zpopmax(parts[1]) {
+          Some((m, s)) => ["1) \"\{m}\"", "2) \"\{s}\""]
+          None => ["(empty array)"]
+        }
+      }
+    }
+    "ZMSCORE" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        let members = []
+        for i = 2; i < parts.length(); i = i + 1 {
+          members.push(parts[i])
+        }
+        let scores = db.zmscore(parts[1], members)
+        let result = []
+        for i = 0; i < scores.length(); i = i + 1 {
+          match scores[i] {
+            Some(v) => result.push("  \{i + 1}) \{v}")
+            None => result.push("  \{i + 1}) (nil)")
+          }
+        }
+        result
+      }
+    }
+    "MULTI" => { [db.multi()] }
+    "EXEC" => { [db.exec()] }
+    "DISCARD" => { [db.discard()] }
+    "WATCH" => {
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
+      else { db.watch(parts[1]); ["OK"] }
+    }
+    "UNWATCH" => { db.unwatch(); ["OK"] }
     "GETDEL" => {
       if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else {

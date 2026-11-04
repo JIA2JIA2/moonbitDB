@@ -205,7 +205,38 @@ fn main() -> Unit {
   let all_keys = db.keys()
   println("  KEYS * (\{all_keys.length()} 个): [\{all_keys.join(", ")}]")
   println("  支持命令数 = \{@lib.Database::command().length()}")
-  
+
+  println("\n📌 9. 现代语法与新命令")
+  println("----------------------------------------")
+  ignore(db.rpush("demo:list", "3"))
+  ignore(db.rpush("demo:list", "1"))
+  ignore(db.rpush("demo:list", "2"))
+  let sorted_items = db.sort("demo:list", false, false, 0, 0, None)
+  println("  SORT = [\{sorted_items.join(", ")}]")
+  ignore(db.try_bitfield_set("demo:bits", 0, 8, false, 200))
+  let bit_val = match db.try_bitfield_incrby_mode("demo:bits", 0, 8, false, 100, Some("SAT")) {
+    Ok(Some(v)) => "\{v}"
+    Ok(None) => "FAIL"
+    Err(e) => @lib.RedisError::message(e)
+  }
+  println("  BITFIELD INCRBY u8 SAT = \{bit_val}")
+  ignore(db.sadd("demo:set", "m1"))
+  ignore(db.sadd("demo:set", "m2"))
+  println("  SPOP_COUNT(1) = [\{db.spop_count("demo:set", 1).join(", ")}]")
+  db.set("demo:gdel", "take-me")
+  let gdel = db.try_getdel("demo:gdel")
+  let gdel_text = match gdel {
+    Ok(Some(v)) => v
+    _ => "(nil)"
+  }
+  println("  GETDEL = \{gdel_text}")
+  println("  EXPIRETIME(session:opt) = \{db.expiretime("session:opt").to_string()}")
+  let mem_text = match db.memory_usage("demo:gdel") {
+    Some(b) => "\{b}B"
+    None => "(nil)"
+  }
+  println("  MEMORY_USAGE(demo:gdel) = \{mem_text}")
+
   println("\n========================================")
   println("  ✅ 演示完成！")
   println("========================================")

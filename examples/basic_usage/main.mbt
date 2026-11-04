@@ -176,5 +176,29 @@ fn main {
   let (zscan_cursor, zscan_batch) = db.zscan("leaderboard", 0, 2)
   println("ZSCAN leaderboard 0 2: cursor=\{zscan_cursor}, members=\{zscan_batch.length()}")
 
+  println("\n--- GETEX / BITFIELD / GETDEL ---")
+  ignore(db.set("session:token", "abc123"))
+  let token = db.getex("session:token", Some(60000L))
+  let token_text = match token {
+    Some(v) => v
+    None => "(nil)"
+  }
+  println("GETEX token: \{token_text}")
+  ignore(db.try_bitfield_set("stats:flags", 0, 8, false, 200))
+  let bit_incr = db.try_bitfield_incrby_mode("stats:flags", 0, 8, false, 100, Some("SAT"))
+  let bit_text = match bit_incr {
+    Ok(Some(v)) => "\{v}"
+    _ => "FAIL"
+  }
+  println("BITFIELD INCRBY SAT: \{bit_text}")
+  ignore(db.set("cache:tmp", "stale-data"))
+  let deleted = db.try_getdel("cache:tmp")
+  let del_text = match deleted {
+    Ok(Some(v)) => v
+    _ => "(nil)"
+  }
+  println("GETDEL cache:tmp: \{del_text}")
+  println("EXPIRETIME session:token: \{db.expiretime("session:token").to_string()}")
+
   println("\n✅ 基本使用示例运行完成！")
 }
