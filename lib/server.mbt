@@ -78,6 +78,23 @@ pub fn Database::memory_usage(self : Database, key : String) -> Int? {
   }
 }
 
+pub fn Database::wait(_self : Database, _numreplicas : Int, _timeout : Int) -> Int {
+  0
+}
+
+pub fn Database::shutdown(_self : Database) -> String {
+  "OK"
+}
+
+pub fn Database::config_resetstat(self : Database) -> String {
+  self.config_overrides = Map([], capacity=10)
+  "OK"
+}
+
+pub fn Database::lolwut(_self : Database) -> String {
+  "moonbitDB ver. 0.1.4 (MoonBit flavor)\n"
+}
+
 fn Database::info_memory_section(self : Database) -> Array[String] {
   let mut value_bytes : Int = 0
   for key, value in self.data {
@@ -187,7 +204,7 @@ pub fn Database::command() -> Array[String] {
     "AUTH", "CLIENT", "CONFIG", "SLOWLOG",
     "SELECT", "MOVE", "DUMP", "RESTORE", "MONITOR",
     "OBJECT_FREQ",
-    "SAVE", "BGSAVE", "LASTSAVE", "RESET", "SORT", "MEMORY_USAGE"
+    "SAVE", "BGSAVE", "LASTSAVE", "RESET", "SORT", "MEMORY_USAGE", "WAIT", "SHUTDOWN", "CONFIG_RESETSTAT", "LOLWUT"
   ]
 }
 

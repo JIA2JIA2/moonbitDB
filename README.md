@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**201 个测试用例，全部通过**。
+当前测试覆盖：**204 个测试用例，全部通过**。
 
 ### 运行基准与覆盖率
 
@@ -173,7 +173,7 @@ moonbitDB/
 
 ## 支持的命令
 
-共支持 **163 个命令**，覆盖 Redis 核心功能。
+共支持 **167 个命令**，覆盖 Redis 核心功能。
 
 > **类型安全约定**：对已存在但类型不匹配的 key，写操作**不会覆盖**原数据。失败返回值约定如下：`HSET`/`LPUSH`/`RPUSH`/`APPEND`/`SETRANGE`/`LPUSHX`/`RPUSHX` 返回 `-1`，`SADD`/`ZADD`/`HSETNX`/`HMSET` 返回 `false`，`INCR`/`DECR`/`INCRBY`/`DECRBY`/`HINCRBY` 返回 `None`，`SINTERSTORE`/`SUNIONSTORE`/`SDIFFSTORE` 返回 `-1`。时间相关 API 使用 `Int64` 毫秒，可安全表示真实 Unix 时间戳与超过 24 天的 TTL。
 
@@ -387,6 +387,10 @@ moonbitDB/
 | `LASTSAVE` | `() -> Int64` | 最近保存时间戳（秒） |
 | `RESET` | `() -> String` | 重置连接状态（清 WATCH 与事务队列，返回 "RESET"） |
 | `MEMORY_USAGE` | `(key) -> Int?` | 单 key 内存估算（字节，含 key 与 value） |
+| `WAIT` | `(numreplicas, timeout) -> Int` | 等待副本确认（无复制架构恒返回 0） |
+| `SHUTDOWN` | `() -> String` | 关闭服务（嵌入式模式占位，返回 "OK"） |
+| `CONFIG_RESETSTAT` | `() -> String` | 重置统计与配置覆盖（返回 "OK"） |
+| `LOLWUT` | `() -> String` | 版本彩蛋输出 |
 | `SORT` | `(key, ALPHA?, DESC?, LIMIT offset count?, STORE dest?) -> Array[String]` | 对 List/Set/ZSet 排序（数值默认，非数字报 NotInteger；STORE 覆盖 dest 为 List） |
 
 ## 完整公共 API 文档
@@ -889,7 +893,7 @@ moon run examples/cli_repl --target native
 | Set | 17 | SADD, SMEMBERS, SREM, SCARD, SISMEMBER, SMISMEMBER, SINTER, SINTERCARD, SINTERSTORE, SUNION, SUNIONSTORE, SDIFF, SDIFFSTORE, SMOVE, SPOP, SRANDMEMBER, SSCAN |
 | Sorted Set | 32 | ZADD, ZRANGE, ZCARD, ZSCORE, ZREM, ZRANGEBYSCORE, ZRANGEBYLEX, ZREVRANGEBYLEX, ZLEXCOUNT, ZCOUNT, ZREVRANGE, ZREVRANGEBYSCORE, ZRANK, ZREVRANK, ZINCRBY, ZREMRANGEBYRANK, ZREMRANGEBYSCORE, ZREMRANGEBYLEX, ZPOPMIN, ZPOPMAX, ZMSCORE, ZRANDMEMBER, ZUNION, ZUNIONSTORE, ZINTER, ZINTERSTORE, ZINTERCARD, ZDIFF, ZDIFFSTORE, ZRANGESTORE, ZSCAN, ZMPOP |
 | 批量操作 | 6 | MSET, MSETNX, MGET, MDEL, HMSET, HMGET |
-| 服务器 | 34 | DBSIZE, FLUSHDB, FLUSHALL, PING, ECHO, INFO, TIME, COMMAND, COMMAND_INFO, COMMAND_COUNT, OBJECT_ENCODING, OBJECT_REFCOUNT, OBJECT_IDLETIME, MULTI, EXEC, DISCARD, WATCH, UNWATCH, AUTH, CLIENT, CONFIG, SLOWLOG, SELECT, MOVE, DUMP, RESTORE, MONITOR, OBJECT_FREQ, SAVE, BGSAVE, LASTSAVE, RESET, SORT, MEMORY_USAGE |
+| 服务器 | 38 | DBSIZE, FLUSHDB, FLUSHALL, PING, ECHO, INFO, TIME, COMMAND, COMMAND_INFO, COMMAND_COUNT, OBJECT_ENCODING, OBJECT_REFCOUNT, OBJECT_IDLETIME, MULTI, EXEC, DISCARD, WATCH, UNWATCH, AUTH, CLIENT, CONFIG, SLOWLOG, SELECT, MOVE, DUMP, RESTORE, MONITOR, OBJECT_FREQ, SAVE, BGSAVE, LASTSAVE, RESET, SORT, MEMORY_USAGE, WAIT, SHUTDOWN, CONFIG_RESETSTAT, LOLWUT |
 
 **Key 过期机制**：
 - EXPIRE / PEXPIRE / EXPIREAT / PEXPIREAT — 设置过期时间（秒/毫秒、相对/绝对时间戳）

@@ -1555,3 +1555,16 @@ test "h1_restore_options" {
   @test.assert_eq(db.restore("brand-new", 1000L, "v"), true)
   @test.assert_eq(db.get("brand-new"), Some("v"))
 }
+
+
+test "h2_placeholder_commands" {
+  let db = Database::new()
+  @test.assert_eq(db.wait(1, 100), 0)
+  @test.assert_eq(db.shutdown(), "OK")
+  ignore(db.config_set("maxmemory", "100mb"))
+  @test.assert_eq(db.config_get("maxmemory"), ["maxmemory", "100mb"])
+  @test.assert_eq(db.config_resetstat(), "OK")
+  @test.assert_eq(db.config_get("maxmemory"), ["maxmemory", "0"])
+  let lwut = db.lolwut()
+  @test.assert_eq(lwut.contains("moonbitDB ver. 0.1.4"), true)
+}

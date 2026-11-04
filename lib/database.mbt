@@ -52,7 +52,7 @@ pub struct Database {
   mut watched_dirty : Map[String, Bool]
   mut start_time : Int64
   mut client_name : String
-  config_overrides : Map[String, String]
+  mut config_overrides : Map[String, String]
 }
 
 pub fn Database::new() -> Database {
