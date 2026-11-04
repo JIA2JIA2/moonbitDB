@@ -13,13 +13,14 @@ pub fn match_pattern_helper(pattern : String, str : String, p_idx : Int, s_idx :
   let mut star = -1
   let mut star_s = 0
   while s < s_len {
-    if p < p_len && (pattern[p] == '?' || pattern[p] == str[s]) {
-      p = p + 1
-      s = s + 1
-    } else if p < p_len && pattern[p] == '*' {
+    let elem = parse_pattern_element(pattern, p, str[s])
+    if elem.2 {
       star = p
       p = p + 1
       star_s = s
+    } else if elem.1 {
+      p = p + elem.0
+      s = s + 1
     } else if star != -1 {
       p = star + 1
       star_s = star_s + 1
@@ -32,6 +33,62 @@ pub fn match_pattern_helper(pattern : String, str : String, p_idx : Int, s_idx :
     p = p + 1
   }
   p == p_len
+}
+
+fn parse_pattern_element(pattern : String, p : Int, ch : UInt16) -> (Int, Bool, Bool) {
+  let p_len = pattern.length()
+  if p >= p_len {
+    return (0, false, false)
+  }
+  let pc = pattern[p]
+  if pc == 42 {
+    return (1, false, true)
+  }
+  if pc == 63 {
+    return (1, true, false)
+  }
+  if pc == 92 && p + 1 < p_len {
+    return (2, pattern[p + 1] == ch, false)
+  }
+  if pc == 91 {
+    let mut j = p + 1
+    let mut negated = false
+    if j < p_len && pattern[j] == 94 {
+      negated = true
+      j = j + 1
+    }
+    let mut matched = false
+    let mut closed = false
+    while j < p_len {
+      if pattern[j] == 93 {
+        closed = true
+        break
+      }
+      let c_start = pattern[j]
+      if c_start == 92 && j + 1 < p_len && pattern[j + 1] != 93 {
+        if ch == pattern[j + 1] {
+          matched = true
+        }
+        j = j + 2
+      } else if j + 2 < p_len && pattern[j + 1] == 45 && pattern[j + 2] != 93 {
+        if ch >= c_start && ch <= pattern[j + 2] {
+          matched = true
+        }
+        j = j + 3
+      } else {
+        if ch == c_start {
+          matched = true
+        }
+        j = j + 1
+      }
+    }
+    if !closed {
+      return (1, pc == ch, false)
+    }
+    let ok = if negated { !matched } else { matched }
+    return (j + 1 - p, ok, false)
+  }
+  (1, pc == ch, false)
 }
 
 pub fn uint16_to_digit(c : UInt16) -> Int? {

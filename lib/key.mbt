@@ -310,7 +310,7 @@ fn Database::sorted_keys_snapshot(self : Database) -> Array[String] {
 
 fn literal_prefix(pattern : String) -> String {
   let mut index = 0
-  while index < pattern.length() && pattern[index] != '*' && pattern[index] != '?' {
+  while index < pattern.length() && pattern[index] != '*' && pattern[index] != '?' && pattern[index] != '[' && pattern[index] != '\\' {
     index = index + 1
   }
   pattern[0:index].to_owned()

@@ -1661,3 +1661,38 @@ test "h4_sort_by_get" {
     Err(_) => @test.assert_eq(true, false)
   }
 }
+
+
+test "k1_glob_classes_and_escape" {
+  @test.assert_eq(match_pattern("a*c", "abc"), true)
+  @test.assert_eq(match_pattern("a?c", "abc"), true)
+  @test.assert_eq(match_pattern("a?c", "ab"), false)
+  @test.assert_eq(match_pattern("[abc]", "b"), true)
+  @test.assert_eq(match_pattern("[abc]", "d"), false)
+  @test.assert_eq(match_pattern("[a-z]*", "hello"), true)
+  @test.assert_eq(match_pattern("[a-z]*", "Hello"), false)
+  @test.assert_eq(match_pattern("[^a-z]*", "Hello"), true)
+  @test.assert_eq(match_pattern("[^a-z]*", "hello"), false)
+  @test.assert_eq(match_pattern("\\*", "*"), true)
+  @test.assert_eq(match_pattern("\\*", "a"), false)
+  @test.assert_eq(match_pattern("\\*b", "*b"), true)
+  @test.assert_eq(match_pattern("h?llo", "hello"), true)
+  @test.assert_eq(match_pattern("h\\[a]llo", "h[a]llo"), true)
+  @test.assert_eq(match_pattern("h[a]llo", "h[a]llo"), false)
+  @test.assert_eq(match_pattern("h[a]llo", "hallo"), true)
+  @test.assert_eq(match_pattern("*", "anything"), true)
+  @test.assert_eq(match_pattern("[", "["), true)
+  @test.assert_eq(match_pattern("", ""), true)
+  @test.assert_eq(match_pattern("*", ""), true)
+
+  let db = Database::new()
+  ignore(db.sadd_all("g1", ["one", "two", "three"]) )
+  @test.assert_eq(db.sscan_with_match("g1", 0, 10, Some("t?o")).1.length(), 1)
+  @test.assert_eq(db.sscan_with_match("g1", 0, 10, Some("t*")).1.length(), 2)
+  @test.assert_eq(db.sscan_with_match("g1", 0, 10, Some("[ot]*")).1.length(), 3)
+  db.hmset("g2", ["one", "two"], ["1", "2"]) |> ignore
+  @test.assert_eq(db.hscan_with_match("g2", 0, 10, Some("t?o")).1.length(), 1)
+  db.zadd("g3", 1.0, "one") |> ignore
+  db.zadd("g3", 2.0, "two") |> ignore
+  @test.assert_eq(db.zscan_with_match("g3", 0, 10, Some("t*o")).1.length(), 1)
+}

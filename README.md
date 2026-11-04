@@ -214,7 +214,7 @@ moonbitDB/
 | 命令 | 签名 | 说明 |
 |------|------|------|
 | `KEYS` | `() -> Array[String]` | 列出所有 key |
-| `KEYS_PATTERN` | `(pattern) -> Array[String]` | 模式匹配 key（支持 `*` `?`） |
+| `KEYS_PATTERN` | `(pattern) -> Array[String]` | 模式匹配 key（支持 `*` `?`、`[abc]`/`[a-z]`/`[^...]` 字符类与 `\*` 转义；SCAN 家族同语法） |
 | `SCAN` | `(cursor, count) -> (Int, Array[String])` | 游标遍历 key，返回下一游标（0 表示结束；差异：跨调用期间未写入时可能返回快照中已过期的 key） |
 | `TYPE` | `(key) -> String` | 返回值类型（string/hash/list/set/zset/none） |
 | `EXPIRE` | `(key, seconds) -> Bool` | 设置过期时间（秒） |

@@ -351,19 +351,7 @@ pub fn Database::hsetnx(self : Database, key : String, field : String, value : S
 fn pattern_match(text : String, pattern : String?) -> Bool {
   match pattern {
     None => true
-    Some(p) => {
-      if p == "*" {
-        true
-      } else if p.has_prefix("*") {
-        let suffix = p[1:p.length()]
-        text.has_suffix(suffix)
-      } else if p.has_suffix("*") {
-        let prefix = p[0:p.length() - 1]
-        text.has_prefix(prefix)
-      } else {
-        text == p
-      }
-    }
+    Some(p) => match_pattern(p, text)
   }
 }
 
