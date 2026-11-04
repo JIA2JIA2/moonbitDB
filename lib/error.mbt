@@ -6,6 +6,7 @@ pub enum RedisError {
   OutOfRange
   IndexOutOfRange
   SyntaxError
+  WrongArgumentCount(String)
   Overflow
   TransactionAborted
 }
@@ -19,6 +20,7 @@ pub fn RedisError::message(self : RedisError) -> String {
     RedisError::OutOfRange => "ERR value is out of range, must be positive"
     RedisError::IndexOutOfRange => "ERR index out of range"
     RedisError::SyntaxError => "ERR syntax error"
+    RedisError::WrongArgumentCount(cmd) => "ERR wrong number of arguments for '\{cmd}' command"
     RedisError::Overflow => "ERR increment or decrement would overflow"
     RedisError::TransactionAborted => "TransactionAborted Transaction aborted because the watched keys were modified"
   }

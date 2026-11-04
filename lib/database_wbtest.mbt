@@ -2618,7 +2618,7 @@ test "mset_hmset_length_validation" {
   let db = Database::new()
   @test.assert_eq(
     match db.try_mset(["a", "b"], ["1"]) {
-      Err(RedisError::InvalidArgument) => true
+      Err(RedisError::WrongArgumentCount(_)) => true
       _ => false
     },
     true,
@@ -2627,7 +2627,7 @@ test "mset_hmset_length_validation" {
   @test.assert_eq(db.exists("b"), false)
   @test.assert_eq(
     match db.try_mset([], []) {
-      Err(RedisError::InvalidArgument) => true
+      Err(RedisError::WrongArgumentCount(_)) => true
       _ => false
     },
     true,
@@ -2638,7 +2638,7 @@ test "mset_hmset_length_validation" {
 
   @test.assert_eq(
     match db.try_hmset("h", ["f1", "f2"], ["v1"]) {
-      Err(RedisError::InvalidArgument) => true
+      Err(RedisError::WrongArgumentCount(_)) => true
       _ => false
     },
     true,
@@ -3396,7 +3396,7 @@ test "try_api_r3_commands" {
   )
   @test.assert_eq(
     match db.try_msetnx(["a"], []) {
-      Err(RedisError::InvalidArgument) => true
+      Err(RedisError::WrongArgumentCount(_)) => true
       _ => false
     },
     true,
@@ -3774,7 +3774,7 @@ test "expire_and_scan_error_paths_more" {
   )
   @test.assert_eq(
     match db.try_msetnx(["a", "b"], ["1"]) {
-      Err(RedisError::InvalidArgument) => true
+      Err(RedisError::WrongArgumentCount(_)) => true
       _ => false
     },
     true,

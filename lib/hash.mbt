@@ -5,7 +5,7 @@ pub fn Database::try_hmset(
   values : Array[String],
 ) -> Result[Unit, RedisError] {
   if fields.length() == 0 || fields.length() != values.length() {
-    return Err(RedisError::InvalidArgument)
+    return Err(RedisError::WrongArgumentCount("hmset"))
   }
   self.check_expired(key) |> ignore
   let hash = match self.data.get(key) {
@@ -90,7 +90,7 @@ pub fn Database::try_hset_all(
   values : Array[String],
 ) -> Result[Int, RedisError] {
   if fields.length() == 0 || fields.length() != values.length() {
-    return Err(RedisError::InvalidArgument)
+    return Err(RedisError::WrongArgumentCount("hset"))
   }
   self.check_expired(key) |> ignore
   let hash = match self.data.get(key) {

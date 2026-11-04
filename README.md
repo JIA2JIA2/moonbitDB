@@ -368,7 +368,7 @@ moonbitDB/
 | `MULTI` | `() -> String` | 开启事务（返回 "OK"） |
 | `EXEC` | `() -> String` | 执行事务队列（返回 "OK"） |
 | `DISCARD` | `() -> String` | 清空事务队列（返回 "OK"） |
-| `WATCH` | `(key) -> Unit` | 监视 key（EXEC 前被修改则事务中止） |
+| `WATCH` | `(key) -> Unit` | 监视 key（EXEC 前被修改则事务中止；差异：官方 EXEC 冲突返回 nil 回复，本库返回 TransactionAborted 错误） |
 | `UNWATCH` | `() -> Unit` | 取消所有监视 |
 | `AUTH` | `(password) -> String` | 认证（始终返回 "OK"） |
 | `CLIENT` | `(subcommand) -> String` | 客户端信息（INFO/LIST 连接描述、ID 返回 "1"、GETNAME 返回空） |
@@ -404,6 +404,7 @@ moonbitDB/
 | `RedisError` | `OutOfRange` | 数值超出允许范围（如 LPOS COUNT < -1） |
 | `RedisError` | `IndexOutOfRange` | 索引越界（如 LSET 越界，"ERR index out of range"） |
 | `RedisError` | `SyntaxError` | 选项组合互斥（如 SET NX+XX，"ERR syntax error"） |
+| `RedisError` | `WrongArgumentCount(cmd)` | 参数个数错误（"ERR wrong number of arguments for '\{cmd}' command"） |
 | `RedisError` | `Overflow` | 整数自增/自减溢出 |
 | `RedisError` | `TransactionAborted` | WATCH 监视的 key 被修改，事务中止 |
 

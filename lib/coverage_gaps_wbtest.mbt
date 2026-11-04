@@ -85,7 +85,7 @@ test "coverage_hash_gaps" {
   }
 
   match db.try_hmset("bad", ["a"], []) {
-    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    Err(RedisError::WrongArgumentCount(_)) => @test.assert_eq(true, true)
     _ => @test.assert_eq(true, false)
   }
   match db.try_hmset("str", ["a"], ["b"]) {

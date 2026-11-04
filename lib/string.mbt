@@ -101,7 +101,7 @@ pub fn Database::try_mset(
   values : Array[String],
 ) -> Result[Unit, RedisError] {
   if keys.length() == 0 || keys.length() != values.length() {
-    return Err(RedisError::InvalidArgument)
+    return Err(RedisError::WrongArgumentCount("mset"))
   }
   for i = 0; i < keys.length(); i = i + 1 {
     self.put(keys[i], RedisValue::String(values[i]))
@@ -631,7 +631,7 @@ pub fn Database::try_msetnx(
   values : Array[String],
 ) -> Result[Bool, RedisError] {
   if keys.length() == 0 || keys.length() != values.length() {
-    return Err(RedisError::InvalidArgument)
+    return Err(RedisError::WrongArgumentCount("msetnx"))
   }
   for key in keys {
     if self.check_expired(key) || self.data.contains(key) {

@@ -114,7 +114,7 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       else { db.set(parts[1], parts[2]); ["OK"] }
     }
     "GET" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else {
         match db.get(parts[1]) {
           Some(v) => ["\"\{v}\""]
@@ -123,11 +123,11 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "DEL" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else { if db.del(parts[1]) { ["(integer) 1"] } else { ["(integer) 0"] } }
     }
     "EXISTS" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else { if db.exists(parts[1]) { ["(integer) 1"] } else { ["(integer) 0"] } }
     }
     "KEYS" => {
@@ -139,7 +139,7 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       result
     }
     "SCAN" => {
-      if parts.length() < 3 { ["ERR wrong number"] }
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
       else {
         match (parse_int(parts[1]), parse_int(parts[2])) {
           (Some(cursor), Some(count)) => {
@@ -155,19 +155,19 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "TYPE" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else { [db.type_of(parts[1])] }
     }
     "APPEND" => {
-      if parts.length() < 3 { ["ERR wrong number"] }
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
       else { ["(integer) \{db.append(parts[1], parts[2])}"] }
     }
     "STRLEN" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else { ["(integer) \{db.strlen(parts[1])}"] }
     }
     "GETRANGE" => {
-      if parts.length() < 4 { ["ERR wrong number"] }
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
       else {
         match (parse_int(parts[2]), parse_int(parts[3])) {
           (Some(start), Some(end)) => ["\"\{db.getrange(parts[1], start, end)}\""]
@@ -176,7 +176,7 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "SETRANGE" => {
-      if parts.length() < 4 { ["ERR wrong number"] }
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
       else {
         match parse_int(parts[2]) {
           Some(offset) => ["(integer) \{db.setrange(parts[1], offset, parts[3])}"]
@@ -185,7 +185,7 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "INCR" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else {
         match db.incr(parts[1]) {
           Some(v) => ["(integer) \{v}"]
@@ -194,7 +194,7 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "DECR" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else {
         match db.decr(parts[1]) {
           Some(v) => ["(integer) \{v}"]
@@ -203,7 +203,7 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "INCRBY" => {
-      if parts.length() < 3 { ["ERR wrong number"] }
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
       else {
         match parse_int(parts[2]) {
           Some(delta) =>
@@ -216,7 +216,7 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "DECRBY" => {
-      if parts.length() < 3 { ["ERR wrong number"] }
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
       else {
         match parse_int(parts[2]) {
           Some(delta) =>
@@ -229,7 +229,7 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "EXPIRE" => {
-      if parts.length() < 3 { ["ERR wrong number"] }
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
       else {
         match parse_int(parts[2]) {
           Some(s) => if db.expire(parts[1], s) { ["(integer) 1"] } else { ["(integer) 0"] }
@@ -238,19 +238,19 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "TTL" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else { ["(integer) \{db.ttl(parts[1])}"] }
     }
     "PERSIST" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else { if db.persist(parts[1]) { ["(integer) 1"] } else { ["(integer) 0"] } }
     }
     "COPY" => {
-      if parts.length() < 3 { ["ERR wrong number"] }
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
       else { if db.copy(parts[1], parts[2]) { ["(integer) 1"] } else { ["(integer) 0"] } }
     }
     "TOUCH" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else {
         let keys = []
         for i = 1; i < parts.length(); i = i + 1 {
@@ -260,21 +260,21 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "UNLINK" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else { if db.unlink(parts[1]) { ["(integer) 1"] } else { ["(integer) 0"] } }
     }
     "HSET" => {
-      if parts.length() < 4 { ["ERR wrong number"] }
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
       else { db.hset(parts[1], parts[2], parts[3]) |> ignore; ["OK"] }
     }
     "HSETNX" => {
-      if parts.length() < 4 { ["ERR wrong number"] }
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
       else {
         if db.hsetnx(parts[1], parts[2], parts[3]) { ["(integer) 1"] } else { ["(integer) 0"] }
       }
     }
     "HGET" => {
-      if parts.length() < 3 { ["ERR wrong number"] }
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
       else {
         match db.hget(parts[1], parts[2]) {
           Some(v) => ["\"\{v}\""]
@@ -283,11 +283,11 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "HDEL" => {
-      if parts.length() < 3 { ["ERR wrong number"] }
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
       else { if db.hdel(parts[1], parts[2]) { ["(integer) 1"] } else { ["(integer) 0"] } }
     }
     "HGETALL" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else {
         let all = db.hgetall(parts[1])
         let result = []
@@ -301,19 +301,19 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "HLEN" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else { ["(integer) \{db.hlen(parts[1])}"] }
     }
     "LPUSH" => {
-      if parts.length() < 3 { ["ERR wrong number"] }
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
       else { ["(integer) \{db.lpush(parts[1], parts[2])}"] }
     }
     "RPUSH" => {
-      if parts.length() < 3 { ["ERR wrong number"] }
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
       else { ["(integer) \{db.rpush(parts[1], parts[2])}"] }
     }
     "LPOP" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else {
         match db.lpop(parts[1]) {
           Some(v) => ["\"\{v}\""]
@@ -322,7 +322,7 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "RPOP" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else {
         match db.rpop(parts[1]) {
           Some(v) => ["\"\{v}\""]
@@ -331,11 +331,11 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "LLEN" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else { ["(integer) \{db.llen(parts[1])}"] }
     }
     "LRANGE" => {
-      if parts.length() < 4 { ["ERR wrong number"] }
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
       else {
         match (parse_int(parts[2]), parse_int(parts[3])) {
           (Some(sv), Some(ev)) => {
@@ -351,11 +351,11 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "SADD" => {
-      if parts.length() < 3 { ["ERR wrong number"] }
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
       else { if db.sadd(parts[1], parts[2]) { ["(integer) 1"] } else { ["(integer) 0"] } }
     }
     "SMEMBERS" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else {
         let members = db.smembers(parts[1])
         let result = []
@@ -366,19 +366,19 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "SREM" => {
-      if parts.length() < 3 { ["ERR wrong number"] }
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
       else { if db.srem(parts[1], parts[2]) { ["(integer) 1"] } else { ["(integer) 0"] } }
     }
     "SCARD" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else { ["(integer) \{db.scard(parts[1])}"] }
     }
     "SISMEMBER" => {
-      if parts.length() < 3 { ["ERR wrong number"] }
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
       else { if db.sismember(parts[1], parts[2]) { ["(integer) 1"] } else { ["(integer) 0"] } }
     }
     "ZADD" => {
-      if parts.length() < 4 { ["ERR wrong number"] }
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
       else {
         match parse_float(parts[2]) {
           Some(s) => if db.zadd(parts[1], s, parts[3]) { ["(integer) 1"] } else { ["(integer) 0"] }
@@ -387,7 +387,7 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "ZRANGE" => {
-      if parts.length() < 4 { ["ERR wrong number"] }
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
       else {
         match (parse_int(parts[2]), parse_int(parts[3])) {
           (Some(sv), Some(ev)) => {
@@ -413,7 +413,7 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "ZRANGEBYLEX" => {
-      if parts.length() < 4 { ["ERR wrong number"] }
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
       else {
         let items = db.zrangebylex(parts[1], parts[2], parts[3])
         if parts.length() >= 7 && parts[4] == "LIMIT" {
@@ -444,11 +444,11 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "ZCARD" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else { ["(integer) \{db.zcard(parts[1])}"] }
     }
     "ZSCORE" => {
-      if parts.length() < 3 { ["ERR wrong number"] }
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
       else {
         match db.zscore(parts[1], parts[2]) {
           Some(v) => ["\"\{v}\""]
@@ -457,7 +457,7 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "ZRANK" => {
-      if parts.length() < 3 { ["ERR wrong number"] }
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
       else {
         match db.zrank(parts[1], parts[2]) {
           Some(v) => ["(integer) \{v}"]
@@ -466,7 +466,7 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "ZINCRBY" => {
-      if parts.length() < 4 { ["ERR wrong number"] }
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
       else {
         match parse_float(parts[2]) {
           Some(inc) => {
@@ -532,7 +532,7 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       ["  seconds: \{s}", "  microseconds: \{us}"]
     }
     "ADVANCE" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else {
         match parse_int(parts[1]) {
           Some(m) => { db.advance_time(m.to_int64()); ["OK (advanced \{m}ms)"] }
@@ -554,29 +554,29 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       ]
     }
     "AUTH" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else { [@lib.Database::auth(db, parts[1])] }
     }
     "CLIENT" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else { [@lib.Database::client_list(db, parts[1])] }
     }
     "CONFIG" => {
-      if parts.length() < 3 { ["ERR wrong number"] }
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
       else {
         let pair = @lib.Database::config_get(db, parts[2])
         ["  \{pair[0]} = \"\{pair[1]}\""]
       }
     }
     "SLOWLOG" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else {
         let entries = @lib.Database::slowlog(db, parts[1])
         if entries.length() == 0 { ["(empty)"] } else { entries }
       }
     }
     "SELECT" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else {
         match parse_int(parts[1]) {
           Some(idx) => [@lib.Database::select(db, idx)]
@@ -585,7 +585,7 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "MOVE" => {
-      if parts.length() < 3 { ["ERR wrong number"] }
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
       else {
         match parse_int(parts[2]) {
           Some(idx) => { ["(integer) \{@lib.Database::move_key(db, parts[1], idx)}"] }
@@ -594,7 +594,7 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "DUMP" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else {
         match @lib.Database::dump(db, parts[1]) {
           Some(v) => ["\"\{v}\""]
@@ -603,7 +603,7 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       }
     }
     "RESTORE" => {
-      if parts.length() < 4 { ["ERR wrong number"] }
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
       else {
         match parse_int(parts[2]) {
           Some(ttl) => {
@@ -615,7 +615,7 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
     }
     "MONITOR" => { [@lib.Database::monitor(db)] }
     "OBJECT_FREQ" => {
-      if parts.length() < 2 { ["ERR wrong number"] }
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
       else {
         match @lib.Database::object_freq(db, parts[1]) {
           Some(freq) => ["(integer) \{freq}"]
