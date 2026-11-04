@@ -20,6 +20,16 @@
 - 新增 BITFIELD 位段读写（try_bitfield_get/set/incrby，宽 1-32 位 WRAP 溢出；差异：code unit 内 LSB-first 位序）
 - 新增 GETDEL WRONGTYPE 修复（try_getdel，此前类型错误被吞且不删除）
 - 新增 RedisError::WrongArgumentCount(cmd)（"ERR wrong number of arguments for 'x' command"）
+- 新增统一 ZRANGE 6.2 修饰符（try_zrange_modifiers：BYSCORE/BYLEX/REV/LIMIT/WITHSCORES 分发）与
+  EXISTS 多 key（exists_many）、UNLINK 多 key（unlink_many）、MEMORY_USAGE、try_lpop_count/try_rpop_count
+- 新增 try_bitfield_incrby_mode（WRAP/SAT/FAIL 三态溢出控制）
+- 新增 try_restore（REPLACE/BUSYKey/ABSTTL）；WAIT/SHUTDOWN/CONFIG RESETSTAT/LOLWUT 占位命令
+- 新增 SORT 完整版（try_sort_advanced：BY hash_*->field 权重、GET #/pattern->field 展开、nosort）
+- 新增吞错点 try_ 版：try_setnx/try_setex/try_psetex/try_linsert/try_lrem/try_ltrim/try_smove/
+  try_zremrangebyrank/try_rename（顺带修复 setex/psetex 缺类型检查）
+- 新增 glob 字符类与转义：[abc]/[a-z]/[^...]/\*（KEYS_PATTERN 与 SCAN 家族同语法）；
+  修复 hscan/sscan/zscan 弱版匹配器（连 ? 都不支持）
+- 新增 SETEX/GETDEL/GETEX/EXPIRETIME 等示例到 demo 与 examples
 - 新增 expireat_with_options/pexpireat_with_options（NX/XX/GT/LT）、try_lset
 - 新增 HSCAN/SSCAN/ZSCAN MATCH 模式匹配（zscan 改独立快照，迭代期间写入不再重复/漏读）
 - 新增 INFO section（server/memory/keyspace/stats 四节，info_section API）
@@ -36,8 +46,11 @@
 - getset 统一走 try_set_get 路径，类型错误不再静默
 - set_with_options 补 EX+EXAT/PX+PXAT 互斥校验；互斥错误改 SyntaxError
 - info 的 uptime_in_ms 改为真实运行时长（新增 start_time 基准）
-- RedisError 新增 OutOfRange/IndexOutOfRange/SyntaxError/TransactionAborted 变体
+- RedisError 新增 OutOfRange/IndexOutOfRange/SyntaxError/BusyKey/TransactionAborted 变体
 - flushdb/flushall 返回 "OK"；命令表补齐 DISCARD/EXEC/LMPOP/MULTI/ZMPOP 与 Z1/A1/A3 的 10 条命令
+- 事务回放 GetSet/Incr/Decr 对类型错 key 静默覆盖（对齐非事务路径跳过不写）
+- ZRANGESTORE 三变体空结果/source 缺失时删除 destination（对齐 Redis dbDelete 语义）
+- INCRBYFLOAT 对不存在 key 按 0 处理并创建（此前返回 NotFound）
 
 ### Performance
 
@@ -47,12 +60,16 @@
 - ZSet 删除/弹出逻辑去重（remove_zset_collected/zpop_extreme）
 - ZSet 缓存 LRU 淘汰，防止内存泄漏；SINTER 最小集合优化
 - 清除 try_zadd/try_hincrbyfloat 的 Infinity 死分支（Float32 下恒 false）
+- 基准基线扩展 12 → 20 项（sort by/bitfield/setbit/zrangestore/zunionstore/exists_many/lpos_options 等 18 轮新增功能纳入回归护栏）
 - zrange 1000: 13.46µs；zrank 1000: 169.71ns
 
 ### Engineering
 
-- 命令数 104 → 160（String 23、Hash 13、List 17、Set 14、Sorted Set 32、Key 19、服务器 32）
-- 测试数 149 → 192；lib 覆盖率 88.75%
+- 命令数 104 → 167（String 24、Hash 13、List 17、Set 14、Sorted Set 32、Key 19、服务器 38）
+- 测试数 149 → 208；lib 覆盖率 88.06%；zset.mbt 三拆（CRUD/range 系/store 系）
+- SCAN 家族匹配器统一（修复 hscan/sscan/zscan 弱版）；glob 支持 [abc]/[a-z]/[^...]/\* 转义
+- 吞错点 top 10 补 try_ 版（try_setnx/setex/psetex/linsert/lrem/ltrim/smove/zremrangebyrank/rename）
+- cli_repl 支持命令 65 → 94；README 新增"与 Redis 的已知差异"专节与"后续路线图"节
 - 魔术数字常量化（DEFAULT_SCAN_COUNT/EMBSTR_MAX_SIZE/HASHTABLE_MAX_ENTRIES/LISTPACK_MAX_ENTRIES）
 - RedisError 9 变体对齐 Redis 错误文本；README/API 表/check_docs.py 全程同步
 
