@@ -83,7 +83,8 @@ pub fn Database::command() -> Array[String] {
     "MULTI", "EXEC", "DISCARD",
     "LMPOP", "ZMPOP",
     "PING", "ECHO", "INFO", "TIME", "COMMAND", "OBJECT_ENCODING",
-    "AUTH", "CLIENT", "CONFIG", "SLOWLOG"
+    "AUTH", "CLIENT", "CONFIG", "SLOWLOG",
+    "SELECT", "MOVE", "DUMP", "RESTORE", "MONITOR"
   ]
 }
 
@@ -202,4 +203,40 @@ pub fn Database::command_info(_ : Database, commands : Array[String]) -> Array[S
     }
   }
   result
+}
+
+pub fn Database::select(_ : Database, _index : Int) -> String {
+  "OK"
+}
+
+pub fn Database::move_key(self : Database, key : String, db_index : Int) -> Bool {
+  if self.check_expired(key) {
+    false
+  } else if db_index == 0 {
+    self.data.contains(key)
+  } else {
+    false
+  }
+}
+
+pub fn Database::dump(self : Database, key : String) -> String? {
+  if self.check_expired(key) {
+    None
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::String(s)) => Some(s)
+      _ => None
+    }
+  }
+}
+
+pub fn Database::restore(self : Database, key : String, ttl_ms : Int64, value : String) -> Bool {
+  self.put(key, RedisValue::String(value))
+  if ttl_ms > 0 {
+    match checked_add_i64(self.current_time, ttl_ms) {
+      Some(expire_time) => self.set_expire(key, expire_time)
+      None => ()
+    }
+  }
+  true
 }
