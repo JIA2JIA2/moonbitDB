@@ -7,6 +7,7 @@ pub fn Database::set(self : Database, key : String, value : String) -> Unit {
   }
 }
 
+/// SETNX 精确错误版：仅当不存在时设置（类型错 WRONGTYPE）
 pub fn Database::try_setnx(self : Database, key : String, value : String) -> Result[Bool, RedisError] {
   self.check_expired(key) |> ignore
   match self.data.get(key) {
@@ -19,6 +20,7 @@ pub fn Database::try_setnx(self : Database, key : String, value : String) -> Res
   }
 }
 
+/// SETNX 便捷版
 pub fn Database::setnx(self : Database, key : String, value : String) -> Bool {
   if self.in_transaction {
     self.transaction_queue.push(TransactionOp::SetNx(key, value))
@@ -30,6 +32,7 @@ pub fn Database::setnx(self : Database, key : String, value : String) -> Bool {
   }
 }
 
+/// SETEX 精确错误版：秒级过期设置（<=0 InvalidArgument、类型错 WRONGTYPE）
 pub fn Database::try_setex(self : Database, key : String, seconds : Int, value : String) -> Result[Bool, RedisError] {
   if seconds <= 0 {
     return Err(RedisError::InvalidArgument)
@@ -49,6 +52,7 @@ pub fn Database::try_setex(self : Database, key : String, seconds : Int, value :
   }
 }
 
+/// SETEX 便捷版
 pub fn Database::setex(self : Database, key : String, seconds : Int, value : String) -> Bool {
   match self.try_setex(key, seconds, value) {
     Ok(done) => done
@@ -56,6 +60,7 @@ pub fn Database::setex(self : Database, key : String, seconds : Int, value : Str
   }
 }
 
+/// PSETEX 精确错误版：毫秒级过期设置
 pub fn Database::try_psetex(self : Database, key : String, milliseconds : Int64, value : String) -> Result[Bool, RedisError] {
   if milliseconds <= 0 {
     return Err(RedisError::InvalidArgument)
@@ -75,6 +80,7 @@ pub fn Database::try_psetex(self : Database, key : String, milliseconds : Int64,
   }
 }
 
+/// PSETEX 便捷版
 pub fn Database::psetex(self : Database, key : String, milliseconds : Int64, value : String) -> Bool {
   match self.try_psetex(key, milliseconds, value) {
     Ok(done) => done
@@ -82,6 +88,7 @@ pub fn Database::psetex(self : Database, key : String, milliseconds : Int64, val
   }
 }
 
+/// GETDEL 精确错误版：取值并删除（类型错 WRONGTYPE 不删除）
 pub fn Database::try_getdel(self : Database, key : String) -> Result[String?, RedisError] {
   if self.check_expired(key) {
     return Ok(None)
@@ -96,6 +103,7 @@ pub fn Database::try_getdel(self : Database, key : String) -> Result[String?, Re
   }
 }
 
+/// GETDEL 便捷版：取值并删除 key
 pub fn Database::getdel(self : Database, key : String) -> String? {
   if self.in_transaction {
     self.transaction_queue.push(TransactionOp::GetDel(key))
@@ -513,6 +521,7 @@ pub fn Database::getbit(self : Database, key : String, offset : Int) -> Int {
   }
 }
 
+/// SETBIT 精确错误版：写位返回原位值
 pub fn Database::try_setbit(self : Database, key : String, offset : Int, value : Int) -> Result[Int, RedisError] {
   if offset < 0 {
     return Err(RedisError::InvalidArgument)
@@ -597,6 +606,7 @@ fn bitfield_write_units(s : String, offset : Int, width : Int, raw : Int) -> Str
   out
 }
 
+/// BITFIELD GET 精确错误版：位段读取（宽 1-32）
 pub fn Database::try_bitfield_get(
   self : Database,
   key : String,
@@ -617,6 +627,7 @@ pub fn Database::try_bitfield_get(
   }
 }
 
+/// BITFIELD SET 精确错误版：位段写入返回旧值
 pub fn Database::try_bitfield_set(
   self : Database,
   key : String,
@@ -647,6 +658,7 @@ pub fn Database::try_bitfield_set(
   }
 }
 
+/// BITFIELD INCRBY 精确错误版（WRAP 默认）
 pub fn Database::try_bitfield_incrby(
   self : Database,
   key : String,
@@ -675,6 +687,7 @@ pub fn Database::try_bitfield_incrby(
   Ok(bitfield_read_units(new_s, offset, width, signed))
 }
 
+/// BITFIELD INCRBY 完整版：WRAP/SAT/FAIL 溢出控制
 pub fn Database::try_bitfield_incrby_mode(
   self : Database,
   key : String,
@@ -739,6 +752,7 @@ pub fn Database::try_bitfield_incrby_mode(
   Ok(Some(bitfield_read_units(new_s, offset, width, signed)))
 }
 
+/// BITPOS 精确错误版：查找指定位
 pub fn Database::try_bitpos(self : Database, key : String, bit : Int, start : Int, end : Int) -> Result[Int, RedisError] {
   if bit != 0 && bit != 1 {
     return Err(RedisError::InvalidArgument)
@@ -771,6 +785,7 @@ pub fn Database::try_bitpos(self : Database, key : String, bit : Int, start : In
   }
 }
 
+/// BITPOS 便捷版
 pub fn Database::bitpos(self : Database, key : String, bit : Int) -> Int {
   match self.try_bitpos(key, bit, 0, -1) {
     Ok(pos) => pos
@@ -778,6 +793,7 @@ pub fn Database::bitpos(self : Database, key : String, bit : Int) -> Int {
   }
 }
 
+/// BITOP 精确错误版：AND/OR/XOR/NOT（dest 类型检查）
 pub fn Database::try_bitop(
   self : Database,
   op : String,
@@ -851,6 +867,7 @@ pub fn Database::try_bitop(
   Ok(max_len)
 }
 
+/// BITOP 便捷版
 pub fn Database::bitop(self : Database, op : String, dest : String, src_keys : Array[String]) -> Int {
   match self.try_bitop(op, dest, src_keys) {
     Ok(len) => len
@@ -953,6 +970,7 @@ pub fn Database::incrby(self : Database, key : String, increment : Int64) -> Int
   }
 }
 
+/// INCRBYFLOAT 精确错误版：浮点自增（不存在按 0 创建，NaN 拒绝）
 pub fn Database::try_incrbyfloat(
   self : Database,
   key : String,
@@ -989,6 +1007,7 @@ pub fn Database::try_incrbyfloat(
   }
 }
 
+/// INCRBYFLOAT 便捷版
 pub fn Database::incrbyfloat(self : Database, key : String, increment : Float) -> Float? {
   match self.try_incrbyfloat(key, increment) {
     Ok(value) => Some(value)
@@ -1062,6 +1081,7 @@ fn null_padding(count : Int) -> String {
 
 const MAX_STRING_SIZE : Int64 = 536870912L
 
+/// SETRANGE 精确错误版：偏移覆盖写入（NUL 填充，上限 512MB）
 pub fn Database::try_setrange(self : Database, key : String, offset : Int, value : String) -> Result[Int, RedisError] {
   if offset < 0 {
     return Err(RedisError::InvalidArgument)

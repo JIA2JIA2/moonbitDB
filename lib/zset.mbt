@@ -1,3 +1,4 @@
+/// ZADD 精确错误版：添加/更新成员（NaN 拒绝）
 pub fn Database::try_zadd(self : Database, key : String, score : Float, member_val : String) -> Result[Bool, RedisError] {
   if score != score {
     return Err(RedisError::InvalidArgument)
@@ -25,6 +26,7 @@ pub fn Database::try_zadd(self : Database, key : String, score : Float, member_v
   }
   Ok(!existed)
 }
+/// ZADD 便捷版：添加/更新成员（事务中排队）
 pub fn Database::zadd(self : Database, key : String, score : Float, member_val : String) -> Bool {
   if self.in_transaction {
     self.transaction_queue.push(TransactionOp::ZAdd(key, score, member_val))
@@ -36,6 +38,7 @@ pub fn Database::zadd(self : Database, key : String, score : Float, member_val :
     }
   }
 }
+/// ZADD NX/XX/CH/GT/LT 完整版（返回新增或变更数）
 pub fn Database::try_zadd_with_options(
   self : Database,
   key : String,
@@ -102,6 +105,7 @@ pub fn Database::try_zadd_with_options(
   }
   Ok(if ch { added + changed } else { added })
 }
+/// ZADD INCR 模式（GT/LT 过滤，None 表示未更新）
 pub fn Database::try_zadd_incr(
   self : Database,
   key : String,
@@ -254,6 +258,7 @@ pub fn merge(left : Array[(String, Float)], right : Array[(String, Float)]) -> A
   }
   result
 }
+/// ZCARD：成员基数（过期返回 0）
 pub fn Database::zcard(self : Database, key : String) -> Int {
   if self.check_expired(key) {
     0
@@ -264,6 +269,7 @@ pub fn Database::zcard(self : Database, key : String) -> Int {
     }
   }
 }
+/// ZSCORE 精确错误版：取成员分数
 pub fn Database::try_zscore(self : Database, key : String, member_val : String) -> Result[Float, RedisError] {
   if self.check_expired(key) {
     Err(RedisError::NotFound)
@@ -279,12 +285,14 @@ pub fn Database::try_zscore(self : Database, key : String, member_val : String) 
     }
   }
 }
+/// ZSCORE 便捷版：取成员分数
 pub fn Database::zscore(self : Database, key : String, member_val : String) -> Float? {
   match self.try_zscore(key, member_val) {
     Ok(score) => Some(score)
     Err(_) => None
   }
 }
+/// ZREM 便捷版：移除成员（事务中排队）
 pub fn Database::zrem(self : Database, key : String, member_val : String) -> Bool {
   if self.in_transaction {
     self.transaction_queue.push(TransactionOp::ZRem(key, member_val))
@@ -513,12 +521,15 @@ fn Database::zpop_extreme(self : Database, key : String, from_min : Bool) -> (St
     _ => None
   }
 }
+/// ZPOPMIN：弹出最低分成员
 pub fn Database::zpopmin(self : Database, key : String) -> (String, Float)? {
   self.zpop_extreme(key, true)
 }
+/// ZPOPMAX：弹出最高分成员
 pub fn Database::zpopmax(self : Database, key : String) -> (String, Float)? {
   self.zpop_extreme(key, false)
 }
+/// ZPOPMIN count：弹出多个最低分成员
 pub fn Database::zpopmin_count(
   self : Database,
   key : String,
@@ -552,6 +563,7 @@ pub fn Database::zpopmin_count(
     _ => []
   }
 }
+/// ZPOPMAX count：弹出多个最高分成员
 pub fn Database::zpopmax_count(
   self : Database,
   key : String,

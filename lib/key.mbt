@@ -155,6 +155,7 @@ pub fn Database::pexpire_with_options(
   }
 }
 
+/// EXPIREAT NX/XX/GT/LT：绝对秒时间戳版
 pub fn Database::expireat_with_options(
   self : Database,
   key : String,
@@ -172,6 +173,7 @@ pub fn Database::expireat_with_options(
   self.set_expire_with_options(key, unix_seconds * 1000, nx, xx, gt, lt)
 }
 
+/// PEXPIREAT NX/XX/GT/LT：毫秒版
 pub fn Database::pexpireat_with_options(
   self : Database,
   key : String,
@@ -184,6 +186,7 @@ pub fn Database::pexpireat_with_options(
   self.set_expire_with_options(key, unix_milliseconds, nx, xx, gt, lt)
 }
 
+/// EXPIRETIME：绝对过期秒时间戳（-1 永久/-2 不存在）
 pub fn Database::expiretime(self : Database, key : String) -> Int64 {
   if self.check_expired(key) {
     return -2
@@ -197,6 +200,7 @@ pub fn Database::expiretime(self : Database, key : String) -> Int64 {
   }
 }
 
+/// PEXPIRETIME：绝对过期毫秒时间戳
 pub fn Database::pexpiretime(self : Database, key : String) -> Int64 {
   if self.check_expired(key) {
     return -2
@@ -275,6 +279,7 @@ pub fn Database::del(self : Database, key : String) -> Bool {
   }
 }
 
+/// EXISTS：单 key 存在检查（触发过期清理）
 pub fn Database::exists(self : Database, key : String) -> Bool {
   if self.check_expired(key) {
     false
@@ -384,6 +389,7 @@ pub fn Database::randomkey(self : Database) -> String? {
   chosen
 }
 
+/// RENAME 精确错误版：源不存在返回 NotFound
 pub fn Database::try_rename(self : Database, old_key : String, new_key : String) -> Result[Bool, RedisError] {
   self.check_expired(old_key) |> ignore
   if !self.data.contains(old_key) {
@@ -393,6 +399,7 @@ pub fn Database::try_rename(self : Database, old_key : String, new_key : String)
   Ok(true)
 }
 
+/// RENAME 便捷版
 pub fn Database::rename(self : Database, old_key : String, new_key : String) -> Bool {
   if self.check_expired(old_key) {
     return false
@@ -422,6 +429,7 @@ pub fn Database::rename(self : Database, old_key : String, new_key : String) -> 
   }
 }
 
+/// RENAMENX：仅当目标不存在时重命名
 pub fn Database::renamenx(self : Database, old_key : String, new_key : String) -> Bool {
   if self.check_expired(old_key) {
     return false
@@ -511,6 +519,7 @@ fn clone_redis_value(value : RedisValue) -> RedisValue {
   }
 }
 
+/// COPY REPLACE 语义：replace=false 时目标存在拒绝
 pub fn Database::copy_with_replace(
   self : Database,
   source : String,
@@ -543,6 +552,7 @@ pub fn Database::copy(self : Database, source : String, destination : String) ->
   self.copy_with_replace(source, destination, false)
 }
 
+/// EXISTS k1 k2 多 key 语义：返回存在个数
 pub fn Database::exists_many(self : Database, keys : Array[String]) -> Int {
   let mut count = 0
   for k in keys {
@@ -554,6 +564,7 @@ pub fn Database::exists_many(self : Database, keys : Array[String]) -> Int {
   count
 }
 
+/// UNLINK 多 key：批量删除，返回删除个数
 pub fn Database::unlink_many(self : Database, keys : Array[String]) -> Int {
   let mut count = 0
   for k in keys {
