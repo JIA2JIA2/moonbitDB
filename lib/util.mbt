@@ -13,13 +13,36 @@ pub fn match_pattern_helper(pattern : String, str : String, p_idx : Int, s_idx :
   let mut star = -1
   let mut star_s = 0
   while s < s_len {
-    let elem = parse_pattern_element(pattern, p, str[s])
-    if elem.2 {
+    if p >= p_len {
+      if star != -1 {
+        p = star + 1
+        star_s = star_s + 1
+        s = star_s
+        continue
+      }
+      return false
+    }
+    let pc = pattern[p]
+    let mut elem_len = 1
+    let mut is_match = false
+    let mut is_star = false
+    if pc == 42 {
+      is_star = true
+    } else if pc == 63 {
+      is_match = true
+    } else if pc == 91 || pc == 92 {
+      let elem = parse_pattern_element(pattern, p, str[s])
+      elem_len = elem.0
+      is_match = elem.1
+    } else {
+      is_match = str[s] == pc
+    }
+    if is_star {
       star = p
       p = p + 1
       star_s = s
-    } else if elem.1 {
-      p = p + elem.0
+    } else if is_match {
+      p = p + elem_len
       s = s + 1
     } else if star != -1 {
       p = star + 1
