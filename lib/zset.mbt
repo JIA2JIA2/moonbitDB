@@ -584,23 +584,28 @@ pub fn Database::zremrangebyscore(self : Database, key : String, min_score : Flo
   } else {
     match self.data.get(key) {
       Some(RedisValue::ZSet(zset)) => {
-        let to_remove = []
-        for m, s in zset {
-          if s >= min_score && s <= max_score {
-            to_remove.push(m)
+        let sorted = self.get_sorted_zset(key)
+        let lo = lower_bound(sorted, min_score)
+        let hi = upper_bound(sorted, max_score)
+        if hi <= lo {
+          0
+        } else {
+          let to_remove = []
+          for i = lo; i < hi; i = i + 1 {
+            to_remove.push(sorted[i].0)
           }
-        }
-        for m in to_remove {
-          zset.remove(m)
-        }
-        if to_remove.length() > 0 {
-          if zset.length() == 0 {
-            self.remove_if_empty(key, 0)
-          } else {
-            self.write_through_remove_zset_members(key, to_remove)
+          for m in to_remove {
+            zset.remove(m)
           }
+          if to_remove.length() > 0 {
+            if zset.length() == 0 {
+              self.remove_if_empty(key, 0)
+            } else {
+              self.write_through_remove_zset_members(key, to_remove)
+            }
+          }
+          to_remove.length()
         }
-        to_remove.length()
       }
       _ => 0
     }
