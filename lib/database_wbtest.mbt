@@ -1084,13 +1084,13 @@ test "dbsize_flushdb_operations" {
   db.del("key1") |> ignore
   @test.assert_eq(db.dbsize(), 2)
   
-  db.flushdb()
+  db.flushdb() |> ignore
   @test.assert_eq(db.dbsize(), 0)
   @test.assert_eq(db.exists("key2"), false)
   @test.assert_eq(db.exists("key3"), false)
   
   db.set("a", "1") |> ignore
-  db.flushall()
+  db.flushall() |> ignore
   @test.assert_eq(db.dbsize(), 0)
 }
 
@@ -1683,7 +1683,7 @@ test "server_extended_edge_cases" {
   let _ = db.randomkey()
   @test.assert_eq(all_keys.length() > 0, true)
   
-  db.flushdb()
+  db.flushdb() |> ignore
   @test.assert_eq(db.dbsize(), 0)
   @test.assert_eq(db.randomkey() is None, true)
 }
@@ -2405,7 +2405,7 @@ test "expire_heap_stress" {
   db.advance_time(101000)
   @test.assert_eq(db.exists("renamed2"), false)
 
-  db.flushdb()
+  db.flushdb() |> ignore
   @test.assert_eq(db.expire_heap.length(), 0)
 }
 
@@ -3077,14 +3077,14 @@ test "set_options_and_getex" {
 
   @test.assert_eq(
     match db.set_with_options("x", "v", true, true, false, None, None, None, None, false) {
-      Err(RedisError::InvalidArgument) => true
+      Err(RedisError::SyntaxError) => true
       _ => false
     },
     true,
   )
   @test.assert_eq(
     match db.set_with_options("x", "v", false, false, false, Some(10), Some(10L), None, None, false) {
-      Err(RedisError::InvalidArgument) => true
+      Err(RedisError::SyntaxError) => true
       _ => false
     },
     true,
@@ -3898,7 +3898,7 @@ test "coverage_edge_cases" {
   )
   @test.assert_eq(
     match db.set_with_options("keep2", "v", false, false, false, Some(10), None, None, None, true) {
-      Err(RedisError::InvalidArgument) => true
+      Err(RedisError::SyntaxError) => true
       _ => false
     },
     true,

@@ -463,21 +463,21 @@ test "coverage_string_exat_pxat" {
   @test.assert_eq(db.exists("p2"), false)
   @test.assert_eq(
     match db.set_with_options("x1", "v", false, false, false, Some(10), None, Some(1000), None, false) {
-      Err(RedisError::InvalidArgument) => true
+      Err(RedisError::SyntaxError) => true
       _ => false
     },
     true,
   )
   @test.assert_eq(
     match db.set_with_options("x2", "v", false, false, false, None, Some(10L), Some(1000), None, false) {
-      Err(RedisError::InvalidArgument) => true
+      Err(RedisError::SyntaxError) => true
       _ => false
     },
     true,
   )
   @test.assert_eq(
     match db.set_with_options("x3", "v", false, false, false, None, None, Some(1000), Some(2000), false) {
-      Err(RedisError::InvalidArgument) => true
+      Err(RedisError::SyntaxError) => true
       _ => false
     },
     true,

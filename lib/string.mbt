@@ -176,7 +176,7 @@ pub fn Database::set_with_options(
   keep_ttl : Bool,
 ) -> Result[String?, RedisError] {
   if nx && xx {
-    return Err(RedisError::InvalidArgument)
+    return Err(RedisError::SyntaxError)
   }
   let has_ex = match ex_seconds {
     Some(_) => true
@@ -196,25 +196,25 @@ pub fn Database::set_with_options(
   }
   let has_expiry = has_ex || has_px || has_exat || has_pxat
   if has_ex && has_px {
-    return Err(RedisError::InvalidArgument)
+    return Err(RedisError::SyntaxError)
   }
   if has_ex && has_exat {
-    return Err(RedisError::InvalidArgument)
+    return Err(RedisError::SyntaxError)
   }
   if has_ex && has_pxat {
-    return Err(RedisError::InvalidArgument)
+    return Err(RedisError::SyntaxError)
   }
   if has_px && has_exat {
-    return Err(RedisError::InvalidArgument)
+    return Err(RedisError::SyntaxError)
   }
   if has_px && has_pxat {
-    return Err(RedisError::InvalidArgument)
+    return Err(RedisError::SyntaxError)
   }
   if has_exat && has_pxat {
-    return Err(RedisError::InvalidArgument)
+    return Err(RedisError::SyntaxError)
   }
   if keep_ttl && has_expiry {
-    return Err(RedisError::InvalidArgument)
+    return Err(RedisError::SyntaxError)
   }
   self.check_expired(key) |> ignore
   let exists = self.data.contains(key)

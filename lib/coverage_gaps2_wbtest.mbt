@@ -174,11 +174,11 @@ test "d1_try_lset_and_consistency" {
   }
   db.rpush_all("l1", ["a", "b", "c"]) |> ignore
   match db.try_lset("l1", 99, "v") {
-    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    Err(RedisError::IndexOutOfRange) => @test.assert_eq(true, true)
     _ => @test.assert_eq(true, false)
   }
   match db.try_lset("l1", -99, "v") {
-    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    Err(RedisError::IndexOutOfRange) => @test.assert_eq(true, true)
     _ => @test.assert_eq(true, false)
   }
   match db.try_lset("l1", 1, "B") {
@@ -921,4 +921,83 @@ test "e2_lpos_options_and_misc" {
     Ok(_) => @test.assert_eq(true, true)
     Err(_) => @test.assert_eq(true, false)
   }
+}
+
+test "e3_parse_float_scientific" {
+  @test.assert_eq(parse_float("1e5"), Some(100000.0))
+  @test.assert_eq(parse_float("1E5"), Some(100000.0))
+  @test.assert_eq(parse_float("1.5e2"), Some(150.0))
+  match parse_float("2e-3") {
+    Some(v) => @test.assert_eq(v > 0.0019 && v < 0.0021, true)
+    None => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(parse_float("1e+2"), Some(100.0))
+  @test.assert_eq(parse_float("-1e2"), Some(-100.0))
+  @test.assert_eq(parse_float("1e"), None)
+  @test.assert_eq(parse_float("e5"), None)
+  @test.assert_eq(parse_float("1e5.5"), None)
+  @test.assert_eq(parse_float("1e2e3"), None)
+  @test.assert_eq(parse_float("1e999"), None)
+  @test.assert_eq(parse_float("2.5"), Some(2.5))
+  @test.assert_eq(parse_float("abc"), None)
+
+  let db = Database::new()
+  db.set("f1", "1e5")
+  match db.try_incrbyfloat("f1", 1.0) {
+    Ok(v) => @test.assert_eq(v, 100001.0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+}
+
+test "e3_zscan_snapshot_stability" {
+  let db = Database::new()
+  db.zadd("zs", 1.0, "a") |> ignore
+  db.zadd("zs", 2.0, "b") |> ignore
+  db.zadd("zs", 3.0, "c") |> ignore
+  db.zadd("zs", 4.0, "d") |> ignore
+
+  let (cursor1, page1) = db.zscan("zs", 0, 2)
+  @test.assert_eq(page1.length(), 2)
+  db.zadd("zs", 5.0, "e") |> ignore
+  db.zrem("zs", "a") |> ignore
+  let (cursor2, page2) = db.zscan("zs", cursor1, 2)
+  @test.assert_eq(page2.length(), 2)
+  @test.assert_eq(cursor2, 0)
+  let seen = page1
+  seen.append(page2)
+  @test.assert_eq(seen.length(), 4)
+  let mut unique = true
+  for i = 0; i < seen.length(); i = i + 1 {
+    for j = i + 1; j < seen.length(); j = j + 1 {
+      if seen[i].0 == seen[j].0 {
+        unique = false
+      }
+    }
+  }
+  @test.assert_eq(unique, true)
+}
+
+test "e3_error_variants_and_flush" {
+  let db = Database::new()
+  db.rpush_all("l1", ["a", "b"]) |> ignore
+  match db.try_lset("l1", 99, "x") {
+    Err(RedisError::IndexOutOfRange) => @test.assert_eq(RedisError::message(RedisError::IndexOutOfRange), "ERR index out of range")
+    _ => @test.assert_eq(true, false)
+  }
+  db.rpush_all("l2", ["a", "b", "a"]) |> ignore
+  match db.try_lpos_options("l2", "a", 1, -2, 0) {
+    Err(RedisError::OutOfRange) => @test.assert_eq(RedisError::message(RedisError::OutOfRange), "ERR value is out of range, must be positive")
+    _ => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(
+    match db.set_with_options("sx", "v", true, true, false, None, None, None, None, false) {
+      Err(RedisError::SyntaxError) => RedisError::message(RedisError::SyntaxError) == "ERR syntax error"
+      _ => false
+    },
+    true,
+  )
+  db.set("fd", "v")
+  @test.assert_eq(db.flushdb(), "OK")
+  @test.assert_eq(db.exists("fd"), false)
+  @test.assert_eq(db.flushall(), "OK")
 }

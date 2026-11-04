@@ -225,7 +225,7 @@ pub fn Database::try_lset(
     Some(RedisValue::List(deque)) => {
       let adjusted_idx = if index < 0 { deque.length() + index } else { index }
       if adjusted_idx < 0 || adjusted_idx >= deque.length() {
-        return Err(RedisError::InvalidArgument)
+        return Err(RedisError::IndexOutOfRange)
       }
       ignore(deque.set_at(adjusted_idx, value))
       self.put(key, RedisValue::List(deque))
@@ -576,7 +576,7 @@ pub fn Database::try_lpos_options(
     return Err(RedisError::InvalidArgument)
   }
   if count < -1 {
-    return Err(RedisError::InvalidArgument)
+    return Err(RedisError::OutOfRange)
   }
   if self.check_expired(key) {
     return Err(RedisError::NotFound)

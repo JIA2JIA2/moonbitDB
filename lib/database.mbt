@@ -40,6 +40,7 @@ pub struct Database {
   mut scan_snapshot : Array[String]?
   mut hscan_snapshots : Map[String, Array[String]]
   mut sscan_snapshots : Map[String, Array[String]]
+  mut zscan_snapshots : Map[String, Array[(String, Float)]]
   mut expire_heap : Array[(String, Int64)]
   mut in_transaction : Bool
   mut transaction_queue : Array[TransactionOp]
@@ -49,7 +50,7 @@ pub struct Database {
 }
 
 pub fn Database::new() -> Database {
-  Database::{ data: Map([], capacity=1000), expires: Map([], capacity=1000), current_time: 0, rand_state: 123456789, zset_sorted_cache: Map([], capacity=100), zset_rank_cache: Map([], capacity=100), zset_lex_cache: Map([], capacity=100), zset_cache_lru: [], scan_snapshot: None, hscan_snapshots: Map([], capacity=10), sscan_snapshots: Map([], capacity=10), expire_heap: [], in_transaction: false, transaction_queue: [], watched_keys: Map([], capacity=10), watched_dirty: Map([], capacity=10), start_time: 0 }
+  Database::{ data: Map([], capacity=1000), expires: Map([], capacity=1000), current_time: 0, rand_state: 123456789, zset_sorted_cache: Map([], capacity=100), zset_rank_cache: Map([], capacity=100), zset_lex_cache: Map([], capacity=100), zset_cache_lru: [], scan_snapshot: None, hscan_snapshots: Map([], capacity=10), sscan_snapshots: Map([], capacity=10), zscan_snapshots: Map([], capacity=10), expire_heap: [], in_transaction: false, transaction_queue: [], watched_keys: Map([], capacity=10), watched_dirty: Map([], capacity=10), start_time: 0 }
 }
 
 pub fn Database::set_time(self : Database, time_ms : Int64) -> Unit {
@@ -115,6 +116,7 @@ fn Database::delete_key(self : Database, key : String) -> Unit {
   self.scan_snapshot = None
   self.hscan_snapshots.remove(key)
   self.sscan_snapshots.remove(key)
+  self.zscan_snapshots.remove(key)
   self.maybe_compact_expire_heap()
 }
 
@@ -126,6 +128,7 @@ fn Database::put(self : Database, key : String, value : RedisValue) -> Unit {
   self.scan_snapshot = None
   self.hscan_snapshots.remove(key)
   self.sscan_snapshots.remove(key)
+  self.zscan_snapshots.remove(key)
   self.data.set(key, value)
 }
 

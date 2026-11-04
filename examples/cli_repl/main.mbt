@@ -516,7 +516,7 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       ["(integer) \{db.mdel(keys)}"]
     }
     "DBSIZE" => { ["(integer) \{db.dbsize()}"] }
-    "FLUSHDB" => { db.flushdb(); ["OK"] }
+    "FLUSHDB" => { [@lib.Database::flushdb(db)] }
     "PING" => { [@lib.Database::ping()] }
     "INFO" => {
       let info = db.info()

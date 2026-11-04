@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**186 个测试用例，全部通过**。
+当前测试覆盖：**192 个测试用例，全部通过**。
 
 ### 运行基准与覆盖率
 
@@ -400,7 +400,11 @@ moonbitDB/
 | `RedisError` | `NotInteger` | 值不是合法整数 |
 | `RedisError` | `NotFound` | key 不存在或已过期 |
 | `RedisError` | `InvalidArgument` | 参数非法（如负 offset、批量参数长度不一致） |
+| `RedisError` | `OutOfRange` | 数值超出允许范围（如 LPOS COUNT < -1） |
+| `RedisError` | `IndexOutOfRange` | 索引越界（如 LSET 越界，"ERR index out of range"） |
+| `RedisError` | `SyntaxError` | 选项组合互斥（如 SET NX+XX，"ERR syntax error"） |
 | `RedisError` | `Overflow` | 整数自增/自减溢出 |
+| `RedisError` | `TransactionAborted` | WATCH 监视的 key 被修改，事务中止 |
 
 > 旧方法保持兼容：`get/incrby/...` 仍返回 `Option`，`hset/lpush/...` 仍返回 `-1`/`false` 哨兵值；读命令的 `try_*`（`try_hget`/`try_lpop`/`try_zscore` 等）可区分 `NotFound` 与 `WrongType`。需要精确错误时调用对应的 `try_*` 方法。`RedisError::message()` 可获取 Redis 风格错误文本。
 
@@ -680,8 +684,8 @@ match db.try_incrby("name", 1) {
 | 方法 | 签名 | 说明 |
 |------|------|------|
 | `dbsize` | `(self : Database) -> Int` | 当前 key 数量 |
-| `flushdb` | `(self : Database) -> Unit` | 清空当前数据库 |
-| `flushall` | `(self : Database) -> Unit` | 清空所有数据 |
+| `flushdb` | `(self : Database) -> String` | 清空当前数据库（返回 "OK"） |
+| `flushall` | `(self : Database) -> String` | 清空所有数据（返回 "OK"） |
 | `ping` | `() -> String` | 返回 "PONG" |
 | `echo` | `(self : Database, message : String) -> String` | 回显消息 |
 | `info` | `(self : Database) -> String` | 服务器信息 |

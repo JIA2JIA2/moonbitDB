@@ -3,7 +3,7 @@ pub fn Database::dbsize(self : Database) -> Int {
   self.data.length()
 }
 
-pub fn Database::flushdb(self : Database) -> Unit {
+pub fn Database::flushdb(self : Database) -> String {
   self.data = Map([], capacity=1000)
   self.expires = Map([], capacity=1000)
   self.zset_sorted_cache = Map([], capacity=100)
@@ -12,10 +12,12 @@ pub fn Database::flushdb(self : Database) -> Unit {
   self.scan_snapshot = None
   self.hscan_snapshots = Map([], capacity=10)
   self.sscan_snapshots = Map([], capacity=10)
+  self.zscan_snapshots = Map([], capacity=10)
   self.expire_heap = []
+  "OK"
 }
 
-pub fn Database::flushall(self : Database) -> Unit {
+pub fn Database::flushall(self : Database) -> String {
   self.flushdb()
 }
 

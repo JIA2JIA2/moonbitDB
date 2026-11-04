@@ -192,23 +192,76 @@ pub fn parse_float(s : String) -> Float? {
   if s.length() == 0 {
     None
   } else {
+    let mut e_pos = -1
+    let mut i = 0
+    while i < s.length() {
+      if s[i] == 101 || s[i] == 69 {
+        if e_pos != -1 {
+          return None
+        }
+        e_pos = i
+      }
+      i = i + 1
+    }
+    let base_str = if e_pos == -1 { s } else { s[0:e_pos].to_owned() }
+    let exp_val : Int = if e_pos == -1 {
+      0
+    } else {
+      let exp_str = s[e_pos + 1:s.length()].to_owned()
+      if exp_str.length() == 0 {
+        return None
+      }
+      let mut neg = false
+      let mut j = 0
+      if exp_str[0] == 45 {
+        neg = true
+        j = 1
+      } else if exp_str[0] == 43 {
+        j = 1
+      }
+      if j >= exp_str.length() {
+        return None
+      }
+      let mut v = 0
+      while j < exp_str.length() {
+        match uint16_to_digit(exp_str[j]) {
+          Some(d) => {
+            v = v * 10 + d
+            j = j + 1
+          }
+          None => return None
+        }
+      }
+      let signed = if neg { -v } else { v }
+      if signed > 60 || signed < -60 {
+        return None
+      }
+      signed
+    }
     let mut result : Float = 0.0
     let mut negative = false
     let mut start = 0
-    if s[0] == 45 {
+    if base_str.length() == 0 {
+      return None
+    }
+    if base_str[0] == 45 {
       negative = true
       start = 1
-    } else if s[0] == 43 {
+    } else if base_str[0] == 43 {
       start = 1
     }
-    if start >= s.length() {
+    if start >= base_str.length() {
       return None
     }
     let mut has_dot = false
     let mut divisor : Float = 1.0
-    for i = start; i < s.length(); i = i + 1 {
-      match uint16_to_digit(s[i]) {
+    let mut base_digits = 0
+    let mut base_valid = true
+    let mut bi = start
+    while bi < base_str.length() && base_valid {
+      match uint16_to_digit(base_str[bi]) {
         Some(digit) => {
+          base_digits = base_digits + 1
           let digit_f = Float::from_int(digit)
           if has_dot {
             divisor = divisor * 10.0
@@ -218,12 +271,30 @@ pub fn parse_float(s : String) -> Float? {
           }
         }
         None => {
-          if s[i] == 46 && !has_dot {
+          if base_str[bi] == 46 && !has_dot {
             has_dot = true
           } else {
-            return None
+            base_valid = false
           }
         }
+      }
+      bi = bi + 1
+    }
+    if !base_valid || base_digits == 0 {
+      return None
+    }
+    if exp_val > 0 {
+      let mut k = 0
+      while k < exp_val {
+        result = result * 10.0
+        k = k + 1
+      }
+    } else if exp_val < 0 {
+      let limit = -exp_val
+      let mut k = 0
+      while k < limit {
+        result = result / 10.0
+        k = k + 1
       }
     }
     if negative {

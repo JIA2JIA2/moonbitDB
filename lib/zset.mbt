@@ -1703,7 +1703,14 @@ pub fn Database::zscan_with_match(
   }
   match self.data.get(key) {
     Some(RedisValue::ZSet(_)) => {
-      let items = self.get_sorted_zset(key)
+      let items = match self.zscan_snapshots.get(key) {
+        Some(snapshot) => snapshot
+        None => {
+          let fresh = self.get_sorted_zset(key)
+          self.zscan_snapshots.set(key, fresh)
+          fresh
+        }
+      }
       let len = items.length()
       let limit = if count <= 0 { 10 } else { count }
       let start = if cursor < 0 { 0 } else { cursor }
