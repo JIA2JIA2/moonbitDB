@@ -1825,3 +1825,27 @@ test "m3_deque_front_multi" {
   @test.assert_eq(d4.set_at(1, "M"), true)
   @test.assert_eq(d4.to_array(), ["c", "M", "a", "z"])
 }
+
+
+test "m7_transaction_queue_expansion" {
+  let db = Database::new()
+  db.set("s", "base")
+  db.hset("h", "f", "10") |> ignore
+  ignore(db.multi())
+  ignore(db.append("s", "-ext"))
+  ignore(db.incrby("counter", 5))
+  ignore(db.decrby("counter", 2))
+  ignore(db.setnx("nx", "set"))
+  ignore(db.setnx("s", "should-not-overwrite"))
+  ignore(db.getdel("gone"))
+  ignore(db.hsetnx("h", "newf", "v"))
+  ignore(db.hsetnx("h", "f", "skip"))
+  ignore(db.hincrby("h", "f", -3))
+  @test.assert_eq(db.exec(), "OK")
+  @test.assert_eq(db.get("s"), Some("base-ext"))
+  @test.assert_eq(db.get("counter"), Some("3"))
+  @test.assert_eq(db.get("nx"), Some("set"))
+  @test.assert_eq(db.exists("gone"), false)
+  @test.assert_eq(db.hget("h", "newf"), Some("v"))
+  @test.assert_eq(db.hget("h", "f"), Some("7"))
+}

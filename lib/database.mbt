@@ -24,6 +24,13 @@ pub enum TransactionOp {
   LPop(String)
   RPop(String)
   GetSet(String, String)
+  Append(String, String)
+  IncrBy(String, Int64)
+  DecrBy(String, Int64)
+  SetNx(String, String)
+  GetDel(String)
+  HSetNx(String, String, String)
+  HIncrBy(String, String, Int64)
 }
 
 const MAX_CACHE_SIZE : Int = 100
@@ -416,6 +423,59 @@ fn Database::run_transaction(self : Database) -> Bool {
             self.expires.remove(key)
           }
           Some(_) => ()
+        }
+      }
+      TransactionOp::Append(key, value) => {
+        ignore(self.try_append(key, value))
+      }
+      TransactionOp::IncrBy(key, n) => {
+        ignore(self.try_incrby(key, n))
+      }
+      TransactionOp::DecrBy(key, n) => {
+        ignore(self.try_decrby(key, n))
+      }
+      TransactionOp::SetNx(key, value) => {
+        ignore(self.try_setnx(key, value))
+      }
+      TransactionOp::GetDel(key) => {
+        ignore(self.try_getdel(key))
+      }
+      TransactionOp::HSetNx(key, field, value) => {
+        match self.data.get(key) {
+          Some(RedisValue::Hash(h)) => {
+            if !h.contains(field) {
+              h.set(field, value)
+              self.put(key, RedisValue::Hash(h))
+            }
+          }
+          None => {
+            let h : Map[String, String] = Map([], capacity=10)
+            h.set(field, value)
+            self.put(key, RedisValue::Hash(h))
+          }
+          Some(_) => ()
+        }
+      }
+      TransactionOp::HIncrBy(key, field, n) => {
+        match self.data.get(key) {
+          Some(RedisValue::Hash(h)) => {
+            let current : Int64 = match h.get(field) {
+              Some(v) => match parse_int64(v) {
+                Some(nv) => nv
+                None => 0
+              }
+              None => 0
+            }
+            match checked_add_i64(current, n) {
+              Some(new_value) => {
+                h.set(field, new_value.to_string())
+                self.put(key, RedisValue::Hash(h))
+              }
+              None => ()
+            }
+          }
+          Some(_) => ()
+          None => ()
         }
       }
     }

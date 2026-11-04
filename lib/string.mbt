@@ -20,6 +20,10 @@ pub fn Database::try_setnx(self : Database, key : String, value : String) -> Res
 }
 
 pub fn Database::setnx(self : Database, key : String, value : String) -> Bool {
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::SetNx(key, value))
+    return true
+  }
   match self.try_setnx(key, value) {
     Ok(set) => set
     Err(_) => false
@@ -93,6 +97,10 @@ pub fn Database::try_getdel(self : Database, key : String) -> Result[String?, Re
 }
 
 pub fn Database::getdel(self : Database, key : String) -> String? {
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::GetDel(key))
+    return None
+  }
   match self.try_getdel(key) {
     Ok(value) => value
     Err(_) => None
@@ -889,6 +897,10 @@ pub fn Database::try_append(self : Database, key : String, value : String) -> Re
 }
 
 pub fn Database::append(self : Database, key : String, value : String) -> Int {
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::Append(key, value))
+    return 0
+  }
   match self.try_append(key, value) {
     Ok(length) => length
     Err(_) => -1
@@ -927,6 +939,10 @@ pub fn Database::try_incrby(self : Database, key : String, increment : Int64) ->
 }
 
 pub fn Database::incrby(self : Database, key : String, increment : Int64) -> Int64? {
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::IncrBy(key, increment))
+    return None
+  }
   match self.try_incrby(key, increment) {
     Ok(value) => Some(value)
     Err(_) => None
@@ -986,6 +1002,10 @@ pub fn Database::try_decrby(self : Database, key : String, decrement : Int64) ->
 }
 
 pub fn Database::decrby(self : Database, key : String, decrement : Int64) -> Int64? {
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::DecrBy(key, decrement))
+    return None
+  }
   match self.try_decrby(key, decrement) {
     Ok(value) => Some(value)
     Err(_) => None

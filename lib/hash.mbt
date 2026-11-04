@@ -291,6 +291,10 @@ pub fn Database::try_hincrby(
 }
 
 pub fn Database::hincrby(self : Database, key : String, field : String, increment : Int64) -> Int64? {
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::HIncrBy(key, field, increment))
+    return None
+  }
   match self.try_hincrby(key, field, increment) {
     Ok(value) => Some(value)
     Err(_) => None
@@ -333,6 +337,10 @@ pub fn Database::hincrbyfloat(self : Database, key : String, field : String, inc
 }
 
 pub fn Database::hsetnx(self : Database, key : String, field : String, value : String) -> Bool {
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::HSetNx(key, field, value))
+    return true
+  }
   self.check_expired(key) |> ignore
   let hash = match self.data.get(key) {
     Some(RedisValue::Hash(h)) => h
