@@ -1,3 +1,4 @@
+/// ZRANGE：按排名区间返回成员（升序）
 pub fn Database::zrange(self : Database, key : String, start : Int, end : Int) -> Array[String] {
   if self.check_expired(key) {
     []
@@ -19,6 +20,7 @@ pub fn Database::zrange(self : Database, key : String, start : Int, end : Int) -
     }
   }
 }
+/// ZRANGE：按排名区间返回成员（with_scores 时返回成员/分数交替数组）
 pub fn Database::try_zrange(
   self : Database,
   key : String,
@@ -114,6 +116,7 @@ fn parse_score_bound(bound : String) -> Result[(Float, Bool), RedisError] {
     }
   }
 }
+/// ZRANGEBYSCORE LIMIT：分数区间分页（负 offset 返回空，对齐 Redis）
 pub fn Database::zrangebyscore_with_limit(
   self : Database,
   key : String,
@@ -144,9 +147,11 @@ pub fn Database::zrangebyscore_with_limit(
   }
   result
 }
+/// ZRANGEBYSCORE：按分数区间返回成员
 pub fn Database::zrangebyscore(self : Database, key : String, min_score : Float, max_score : Float) -> Array[String] {
   self.zrangebyscore_with_limit(key, min_score, max_score, 0, 0)
 }
+/// ZRANGEBYSCORE WITHSCORES：分数区间返回 (成员, 分数)
 pub fn Database::zrangebyscore_with_scores(
   self : Database,
   key : String,
@@ -162,6 +167,7 @@ pub fn Database::zrangebyscore_with_scores(
   }
   result
 }
+/// ZCOUNT：分数区间成员计数
 pub fn Database::zcount(self : Database, key : String, min_score : Float, max_score : Float) -> Int {
   let sorted = self.get_sorted_zset(key)
   let lo = lower_bound(sorted, min_score)
@@ -172,6 +178,7 @@ pub fn Database::zcount(self : Database, key : String, min_score : Float, max_sc
     0
   }
 }
+/// ZREVRANGE：按排名区间降序返回成员
 pub fn Database::zrevrange(self : Database, key : String, start : Int, end : Int) -> Array[String] {
   let sorted = self.get_sorted_zset(key)
   let len = sorted.length()
@@ -187,6 +194,7 @@ pub fn Database::zrevrange(self : Database, key : String, start : Int, end : Int
   }
   result
 }
+/// ZREVRANGEBYSCORE：分数区间降序返回成员（max 在前）
 pub fn Database::zrevrangebyscore(self : Database, key : String, max_score : Float, min_score : Float) -> Array[String] {
   let sorted = self.get_sorted_zset(key)
   let lo = lower_bound(sorted, min_score)
@@ -197,6 +205,7 @@ pub fn Database::zrevrangebyscore(self : Database, key : String, max_score : Flo
   }
   result
 }
+/// ZREVRANGEBYSCORE LIMIT：分数区间降序分页
 pub fn Database::zrevrangebyscore_with_limit(
   self : Database,
   key : String,
@@ -228,6 +237,7 @@ pub fn Database::zrevrangebyscore_with_limit(
   }
   result
 }
+/// ZRANGEBYSCORE 边界版：支持 [a/(a/-inf/+inf 串与 LIMIT
 pub fn Database::try_zrangebyscore_by_bound(
   self : Database,
   key : String,
@@ -276,6 +286,7 @@ pub fn Database::try_zrangebyscore_by_bound(
     None => Ok([])
   }
 }
+/// ZREVRANGEBYSCORE 边界版（REV 方向）
 pub fn Database::try_zrevrangebyscore_by_bound(
   self : Database,
   key : String,
@@ -324,6 +335,7 @@ pub fn Database::try_zrevrangebyscore_by_bound(
     None => Ok([])
   }
 }
+/// ZCOUNT 边界版：分数区间计数
 pub fn Database::try_zcount_by_bound(
   self : Database,
   key : String,
@@ -356,6 +368,7 @@ pub fn Database::try_zcount_by_bound(
     None => Ok(0)
   }
 }
+/// ZREMRANGEBYSCORE 边界版：按分数区间删除
 pub fn Database::try_zremrangebyscore_by_bound(
   self : Database,
   key : String,
@@ -392,6 +405,7 @@ pub fn Database::try_zremrangebyscore_by_bound(
     None => Ok(0)
   }
 }
+/// ZREVRANGEBYSCORE WITHSCORES：分数区间降序返回 (成员, 分数)
 pub fn Database::zrevrangebyscore_with_scores(
   self : Database,
   key : String,
@@ -407,6 +421,7 @@ pub fn Database::zrevrangebyscore_with_scores(
   }
   result
 }
+/// ZRANK：成员升序排名（0 起，不存在为 None）
 pub fn Database::zrank(self : Database, key : String, member_val : String) -> Int? {
   if self.check_expired(key) {
     None
@@ -423,6 +438,7 @@ pub fn Database::zrank(self : Database, key : String, member_val : String) -> In
     }
   }
 }
+/// ZREVRANK：成员降序排名
 pub fn Database::zrevrank(self : Database, key : String, member_val : String) -> Int? {
   if self.check_expired(key) {
     None
@@ -442,6 +458,7 @@ pub fn Database::zrevrank(self : Database, key : String, member_val : String) ->
     }
   }
 }
+/// ZINCRBY 精确错误版：增加成员分数
 pub fn Database::try_zincrby(self : Database, key : String, increment : Float, member_val : String) -> Result[Float, RedisError] {
   self.check_expired(key) |> ignore
   let zset = match self.data.get(key) {
@@ -471,6 +488,7 @@ pub fn Database::try_zincrby(self : Database, key : String, increment : Float, m
   }
   Ok(new_score)
 }
+/// ZINCRBY：增加成员分数（支持负增量）
 pub fn Database::zincrby(self : Database, key : String, increment : Float, member_val : String) -> Float {
   match self.try_zincrby(key, increment, member_val) {
     Ok(score) => score
@@ -606,6 +624,7 @@ fn pairs_to_flat(pairs : Array[(String, Float)], with_scores : Bool) -> Array[St
   }
   out
 }
+/// ZRANGE 6.2 统一语法：BYSCORE/BYLEX/REV/LIMIT/WITHSCORES 分发
 pub fn Database::try_zrange_modifiers(
   self : Database,
   key : String,
@@ -661,6 +680,7 @@ pub fn Database::try_zrange_modifiers(
     }
   }
 }
+/// ZRANGE 6.2 统一语法便捷版
 pub fn Database::zrange_modifiers(
   self : Database,
   key : String,
@@ -677,6 +697,7 @@ pub fn Database::zrange_modifiers(
     Err(_) => []
   }
 }
+/// ZREMRANGEBYSCORE 精确错误版：按排名区间删除
 pub fn Database::try_zremrangebyrank(self : Database, key : String, start : Int, end : Int) -> Result[Int, RedisError] {
   if self.check_expired(key) {
     return Ok(0)
@@ -687,6 +708,7 @@ pub fn Database::try_zremrangebyrank(self : Database, key : String, start : Int,
     None => Ok(0)
   }
 }
+/// ZREMRANGEBYRANK：按排名区间删除，返回删除个数
 pub fn Database::zremrangebyrank(self : Database, key : String, start : Int, end : Int) -> Int {
   if self.check_expired(key) {
     0
@@ -708,6 +730,7 @@ pub fn Database::zremrangebyrank(self : Database, key : String, start : Int, end
     }
   }
 }
+/// ZREMRANGEBYSCORE：按分数区间删除，返回删除个数
 pub fn Database::zremrangebyscore(self : Database, key : String, min_score : Float, max_score : Float) -> Int {
   if self.check_expired(key) {
     0
@@ -731,6 +754,7 @@ pub fn Database::zremrangebyscore(self : Database, key : String, min_score : Flo
     }
   }
 }
+/// ZMSCORE：批量取成员分数（缺失为 None）
 pub fn Database::zmscore(self : Database, key : String, members : Array[String]) -> Array[Float?] {
   if self.check_expired(key) {
     let result = []
@@ -757,6 +781,7 @@ pub fn Database::zmscore(self : Database, key : String, members : Array[String])
     }
   }
 }
+/// ZRANGE WITHSCORES：按排名区间返回 (成员, 分数) 元组
 pub fn Database::zrange_with_scores(self : Database, key : String, start : Int, end : Int) -> Array[(String, Float)] {
   if self.check_expired(key) {
     []
@@ -778,6 +803,7 @@ pub fn Database::zrange_with_scores(self : Database, key : String, start : Int, 
     }
   }
 }
+/// ZREVRANGE WITHSCORES：按排名区间降序返回 (成员, 分数)
 pub fn Database::zrevrange_with_scores(self : Database, key : String, start : Int, end : Int) -> Array[(String, Float)] {
   if self.check_expired(key) {
     []
@@ -866,6 +892,7 @@ fn lex_upper_index(members : Array[String], bound : String) -> Int {
     lo
   }
 }
+/// ZRANGEBYLEX：按字典序区间返回成员
 pub fn Database::zrangebylex(self : Database, key : String, min_bound : String, max_bound : String) -> Array[String] {
   if !lex_bound_valid(min_bound) || !lex_bound_valid(max_bound) {
     return []
@@ -887,6 +914,7 @@ pub fn Database::zrangebylex(self : Database, key : String, min_bound : String, 
     _ => []
   }
 }
+/// ZRANGEBYLEX LIMIT：字典序分页（精确错误版）
 pub fn Database::try_zrangebylex_with_limit(
   self : Database,
   key : String,
@@ -923,6 +951,7 @@ pub fn Database::try_zrangebylex_with_limit(
     None => Ok([])
   }
 }
+/// ZREVRANGEBYLEX：字典序降序返回成员
 pub fn Database::zrevrangebylex(
   self : Database,
   key : String,
@@ -951,6 +980,7 @@ pub fn Database::zrevrangebylex(
     _ => []
   }
 }
+/// ZREVRANGEBYLEX LIMIT：字典序降序分页
 pub fn Database::try_zrevrangebylex_with_limit(
   self : Database,
   key : String,
@@ -990,6 +1020,7 @@ pub fn Database::try_zrevrangebylex_with_limit(
     None => Ok([])
   }
 }
+/// ZLEXCOUNT：字典序区间成员计数
 pub fn Database::zlexcount(
   self : Database,
   key : String,
@@ -1016,6 +1047,7 @@ pub fn Database::zlexcount(
     _ => 0
   }
 }
+/// ZREMRANGEBYLEX：按字典序区间删除
 pub fn Database::zremrangebylex(
   self : Database,
   key : String,

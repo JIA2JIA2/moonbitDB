@@ -1,3 +1,4 @@
+/// ZRANGESTORE BYSCORE：分数区间结果存入 destination（空结果删除 destination）
 pub fn Database::try_zrangestore_byscore(
   self : Database,
   destination : String,
@@ -53,6 +54,7 @@ pub fn Database::try_zrangestore_byscore(
     }
   }
 }
+/// ZRANGESTORE BYLEX：字典序区间结果存入 destination
 pub fn Database::try_zrangestore_bylex(
   self : Database,
   destination : String,
@@ -94,6 +96,7 @@ pub fn Database::try_zrangestore_bylex(
     }
   }
 }
+/// ZRANDMEMBER：随机返回一个成员
 pub fn Database::zrandmember(self : Database, key : String) -> String? {
   if self.check_expired(key) {
     return None
@@ -119,6 +122,7 @@ pub fn Database::zrandmember(self : Database, key : String) -> String? {
     _ => None
   }
 }
+/// ZUNION：多集合并集（分数相加）
 pub fn Database::zunion(self : Database, keys : Array[String]) -> Array[(String, Float)] {
   let scores : Map[String, Float] = Map([], capacity=10)
   for key in keys {
@@ -143,6 +147,7 @@ pub fn Database::zunion(self : Database, keys : Array[String]) -> Array[(String,
   }
   sort_by_score(items)
 }
+/// ZINTER：多集合交集（分数相加）
 pub fn Database::zinter(self : Database, keys : Array[String]) -> Array[(String, Float)] {
   if keys.length() == 0 {
     return []
@@ -192,6 +197,7 @@ pub fn Database::zinter(self : Database, keys : Array[String]) -> Array[(String,
   }
   sort_by_score(items)
 }
+/// ZDIFF WITHSCORES：差集返回 (成员, 分数)
 pub fn Database::zdiff_with_scores(self : Database, keys : Array[String]) -> Array[(String, Float)] {
   if keys.length() == 0 {
     return []
@@ -226,6 +232,7 @@ pub fn Database::zdiff_with_scores(self : Database, keys : Array[String]) -> Arr
   }
   sort_by_score(items)
 }
+/// ZDIFF：首集合相对差集
 pub fn Database::zdiff(self : Database, keys : Array[String]) -> Array[String] {
   let items = self.zdiff_with_scores(keys)
   let result : Array[String] = []
@@ -234,6 +241,7 @@ pub fn Database::zdiff(self : Database, keys : Array[String]) -> Array[String] {
   }
   result
 }
+/// ZSCAN MATCH：游标遍历（独立快照，迭代期间写入不重复/不漏读）
 pub fn Database::zscan_with_match(
   self : Database,
   key : String,
@@ -277,6 +285,7 @@ pub fn Database::zscan_with_match(
     _ => (0, [])
   }
 }
+/// ZSCAN：游标遍历成员与分数
 pub fn Database::zscan(
   self : Database,
   key : String,
@@ -285,6 +294,7 @@ pub fn Database::zscan(
 ) -> (Int, Array[(String, Float)]) {
   self.zscan_with_match(key, cursor, count, None)
 }
+/// ZSCAN 精确错误版
 pub fn Database::try_zscan(
   self : Database,
   key : String,
@@ -301,6 +311,7 @@ pub fn Database::try_zscan(
     }
   }
 }
+/// ZRANDMEMBER 精确错误版
 pub fn Database::try_zrandmember(self : Database, key : String) -> Result[String, RedisError] {
   if self.check_expired(key) {
     Err(RedisError::NotFound)
@@ -320,6 +331,7 @@ pub fn Database::try_zrandmember(self : Database, key : String) -> Result[String
     }
   }
 }
+/// ZUNION 精确错误版
 pub fn Database::try_zunion(self : Database, keys : Array[String]) -> Result[Array[(String, Float)], RedisError] {
   if !self.zsets_valid(keys) {
     Err(RedisError::WrongType)
@@ -327,6 +339,7 @@ pub fn Database::try_zunion(self : Database, keys : Array[String]) -> Result[Arr
     Ok(self.zunion(keys))
   }
 }
+/// ZINTER 精确错误版
 pub fn Database::try_zinter(self : Database, keys : Array[String]) -> Result[Array[(String, Float)], RedisError] {
   if !self.zsets_valid(keys) {
     Err(RedisError::WrongType)
@@ -334,6 +347,7 @@ pub fn Database::try_zinter(self : Database, keys : Array[String]) -> Result[Arr
     Ok(self.zinter(keys))
   }
 }
+/// ZDIFF 精确错误版
 pub fn Database::try_zdiff(self : Database, keys : Array[String]) -> Result[Array[(String, Float)], RedisError] {
   if !self.zsets_valid(keys) {
     Err(RedisError::WrongType)
@@ -341,6 +355,7 @@ pub fn Database::try_zdiff(self : Database, keys : Array[String]) -> Result[Arra
     Ok(self.zdiff_with_scores(keys))
   }
 }
+/// ZUNIONSTORE WEIGHTS/AGGREGATE 完整版
 pub fn Database::try_zunionstore_with_options(
   self : Database,
   destination : String,
@@ -401,6 +416,7 @@ pub fn Database::try_zunionstore_with_options(
   self.expires.remove(destination)
   Ok(scores.length())
 }
+/// ZUNIONSTORE 精确错误版
 pub fn Database::try_zunionstore(
   self : Database,
   destination : String,
@@ -408,12 +424,14 @@ pub fn Database::try_zunionstore(
 ) -> Result[Int, RedisError] {
   self.try_zunionstore_with_options(destination, keys, None, None)
 }
+/// ZUNIONSTORE：并集存入 destination，返回基数
 pub fn Database::zunionstore(self : Database, destination : String, keys : Array[String]) -> Int {
   match self.try_zunionstore(destination, keys) {
     Ok(count) => count
     Err(_) => -1
   }
 }
+/// ZINTERSTORE WEIGHTS/AGGREGATE 完整版
 pub fn Database::try_zinterstore_with_options(
   self : Database,
   destination : String,
@@ -491,6 +509,7 @@ pub fn Database::try_zinterstore_with_options(
   self.expires.remove(destination)
   Ok(scores.length())
 }
+/// ZINTERSTORE 精确错误版
 pub fn Database::try_zinterstore(
   self : Database,
   destination : String,
@@ -498,12 +517,14 @@ pub fn Database::try_zinterstore(
 ) -> Result[Int, RedisError] {
   self.try_zinterstore_with_options(destination, keys, None, None)
 }
+/// ZINTERSTORE：交集存入 destination，返回基数
 pub fn Database::zinterstore(self : Database, destination : String, keys : Array[String]) -> Int {
   match self.try_zinterstore(destination, keys) {
     Ok(count) => count
     Err(_) => -1
   }
 }
+/// ZDIFFSTORE 精确错误版
 pub fn Database::try_zdiffstore(
   self : Database,
   destination : String,
@@ -521,12 +542,14 @@ pub fn Database::try_zdiffstore(
   self.expires.remove(destination)
   Ok(result.length())
 }
+/// ZDIFFSTORE：差集存入 destination，返回基数
 pub fn Database::zdiffstore(self : Database, destination : String, keys : Array[String]) -> Int {
   match self.try_zdiffstore(destination, keys) {
     Ok(count) => count
     Err(_) => -1
   }
 }
+/// ZINTERCARD：交集计数（limit 短路）
 pub fn Database::try_zintercard(
   self : Database,
   keys : Array[String],
@@ -581,6 +604,7 @@ pub fn Database::try_zintercard(
   }
   Ok(count)
 }
+/// ZINTERCARD 便捷版
 pub fn Database::zintercard(self : Database, keys : Array[String], limit : Int) -> Int {
   match self.try_zintercard(keys, limit) {
     Ok(count) => count
@@ -632,6 +656,7 @@ pub fn Database::zrangestore(
     Err(_) => -1
   }
 }
+/// ZRANDMEMBER count：随机返回多个成员（负数可重复）
 pub fn Database::zrandmember_count(self : Database, key : String, count : Int) -> Array[String] {
   if self.check_expired(key) {
     return []
@@ -652,6 +677,7 @@ pub fn Database::zrandmember_count(self : Database, key : String, count : Int) -
 
 
 
+/// ZMPOP 精确错误版：多 key 弹出最值（count<=0 报 InvalidArgument）
 pub fn Database::try_zmpop(
   self : Database,
   keys : Array[String],
@@ -705,6 +731,7 @@ pub fn Database::try_zmpop(
   Ok(None)
 }
 
+/// ZMPOP 便捷版：多 key 弹出最值
 pub fn Database::zmpop(
   self : Database,
   keys : Array[String],
@@ -717,6 +744,7 @@ pub fn Database::zmpop(
   }
 }
 
+/// ZRANDMEMBER count WITHSCORES：随机返回多个 (成员, 分数)
 pub fn Database::zrandmember_with_scores(
   self : Database,
   key : String,
