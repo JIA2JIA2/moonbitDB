@@ -1007,33 +1007,36 @@ pub fn Database::zinter(self : Database, keys : Array[String]) -> Array[(String,
   if keys.length() == 0 {
     return []
   }
-  let first = if self.check_expired(keys[0]) {
-    return []
-  } else {
-    match self.data.get(keys[0]) {
-      Some(RedisValue::ZSet(zset)) => zset
+  let zsets : Array[Map[String, Float]] = []
+  for key in keys {
+    if self.check_expired(key) {
+      return []
+    }
+    match self.data.get(key) {
+      Some(RedisValue::ZSet(zset)) => zsets.push(zset)
       _ => return []
     }
   }
-  let scores : Map[String, Float] = Map([], capacity=10)
-  for member_val, first_score in first {
+  let mut min_idx = 0
+  let mut min_len = zsets[0].length()
+  for i = 1; i < zsets.length(); i = i + 1 {
+    let len = zsets[i].length()
+    if len < min_len {
+      min_idx = i
+      min_len = len
+    }
+  }
+  let scores : Map[String, Float] = Map([], capacity=min_len)
+  for member_val, first_score in zsets[min_idx] {
     let mut total = first_score
     let mut present = true
-    for i = 1; i < keys.length(); i = i + 1 {
-      if self.check_expired(keys[i]) {
-        present = false
-        break
+    for i = 0; i < zsets.length(); i = i + 1 {
+      if i == min_idx {
+        continue
       }
-      match self.data.get(keys[i]) {
-        Some(RedisValue::ZSet(zset)) =>
-          match zset.get(member_val) {
-            Some(score) => total = total + score
-            None => {
-              present = false
-              break
-            }
-          }
-        _ => {
+      match zsets[i].get(member_val) {
+        Some(score) => total = total + score
+        None => {
           present = false
           break
         }
