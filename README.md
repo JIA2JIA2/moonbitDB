@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**197 个测试用例，全部通过**。
+当前测试覆盖：**201 个测试用例，全部通过**。
 
 ### 运行基准与覆盖率
 
@@ -173,7 +173,7 @@ moonbitDB/
 
 ## 支持的命令
 
-共支持 **161 个命令**，覆盖 Redis 核心功能。
+共支持 **163 个命令**，覆盖 Redis 核心功能。
 
 > **类型安全约定**：对已存在但类型不匹配的 key，写操作**不会覆盖**原数据。失败返回值约定如下：`HSET`/`LPUSH`/`RPUSH`/`APPEND`/`SETRANGE`/`LPUSHX`/`RPUSHX` 返回 `-1`，`SADD`/`ZADD`/`HSETNX`/`HMSET` 返回 `false`，`INCR`/`DECR`/`INCRBY`/`DECRBY`/`HINCRBY` 返回 `None`，`SINTERSTORE`/`SUNIONSTORE`/`SDIFFSTORE` 返回 `-1`。时间相关 API 使用 `Int64` 毫秒，可安全表示真实 Unix 时间戳与超过 24 天的 TTL。
 
@@ -195,6 +195,7 @@ moonbitDB/
 | `BITPOS` | `(key, bit) -> Int` | 查找第一个指定值的位（返回 -1 表示未找到） |
 | `BITCOUNT` | `(key, start?, end?) -> Int` | 统计置位位数（可选 code unit 范围，负索引从尾） |
 | `BITOP` | `(op, dest, src_keys) -> Int` | AND/OR/XOR/NOT 按位运算写入 dest，返回 dest 长度 |
+| `BITFIELD` | `(key, GET/SET/INCRBY u/i width offset [value]) -> Array[Int?]` | 位段读写（宽 1-32 位，u 无符号/i 符号扩展，INCRBY 溢出 WRAP；差异：本库位序为 code unit 内 LSB，与 Redis 字节序 MSB 不同） |
 | `INCR` | `(key) -> Int64?` | 自增 1（非数字返回 None） |
 | `DECR` | `(key) -> Int64?` | 自减 1（非数字返回 None） |
 | `INCRBY` | `(key, increment) -> Int64?` | 增加指定整数（非数字返回 None） |
@@ -303,7 +304,7 @@ moonbitDB/
 | 命令 | 签名 | 说明 |
 |------|------|------|
 | `ZADD` | `(key, score, member) -> Bool` | 添加成员（已存在更新分数） |
-| `ZRANGE` | `(key, start, end) -> Array[String]` | 按排名升序获取范围 |
+| `ZRANGE` | `(key, start, end) -> Array[String]` | 按排名升序获取范围；`try_zrange_modifiers` 支持 6.2 统一修饰符（BYSCORE/BYLEX/REV/LIMIT/WITHSCORES） |
 | `ZCARD` | `(key) -> Int` | 成员数量 |
 | `ZSCORE` | `(key, member) -> Float?` | 获取成员分数 |
 | `ZREM` | `(key, member) -> Bool` | 删除成员 |
@@ -385,6 +386,7 @@ moonbitDB/
 | `BGSAVE` | `() -> String` | 后台保存（返回 "Background saving started"） |
 | `LASTSAVE` | `() -> Int64` | 最近保存时间戳（秒） |
 | `RESET` | `() -> String` | 重置连接状态（清 WATCH 与事务队列，返回 "RESET"） |
+| `MEMORY_USAGE` | `(key) -> Int?` | 单 key 内存估算（字节，含 key 与 value） |
 | `SORT` | `(key, ALPHA?, DESC?, LIMIT offset count?, STORE dest?) -> Array[String]` | 对 List/Set/ZSet 排序（数值默认，非数字报 NotInteger；STORE 覆盖 dest 为 List） |
 
 ## 完整公共 API 文档
@@ -441,6 +443,12 @@ match db.try_incrby("name", 1) {
 | `try_setrange` | `(self : Database, key : String, offset : Int, value : String) -> Result[Int, RedisError]` | 精确错误版覆盖写入 |
 | `del` | `(self : Database, key : String) -> Bool` | 删除 key |
 | `exists` | `(self : Database, key : String) -> Bool` | 检查 key 是否存在 |
+| `exists_many` | `(self : Database, keys : Array[String]) -> Int` | 多 key 存在计数（EXISTS k1 k2 语义） |
+| `unlink_many` | `(self : Database, keys : Array[String]) -> Int` | 多 key 删除，返回删除个数 |
+| `memory_usage` | `(self : Database, key : String) -> Int?` | 单 key 内存估算（字节） |
+| `try_lpop_count` | `(self : Database, key : String, count : Int) -> Result[Array[String], RedisError]` | 精确错误版 LPOP count（负数返回 OutOfRange） |
+| `try_rpop_count` | `(self : Database, key : String, count : Int) -> Result[Array[String], RedisError]` | 精确错误版 RPOP count |
+| `try_zrange_modifiers` | `(self : Database, key : String, start : String, end : String, by : String?, rev : Bool, with_scores : Bool, offset : Int, count : Int) -> Result[Array[String], RedisError]` | 统一 ZRANGE 6.2 修饰符分发（by 为 None/BYSCORE/BYLEX） |
 | `append` | `(self : Database, key : String, value : String) -> Int` | 追加字符串，返回新长度 |
 | `strlen` | `(self : Database, key : String) -> Int` | 字符串长度 |
 | `getrange` | `(self : Database, key : String, start : Int, end : Int) -> String` | 获取子串（支持负数索引） |
@@ -461,6 +469,9 @@ match db.try_incrby("name", 1) {
 | `client_setname` | `(self : Database, name : String) -> String` | CLIENT SETNAME |
 | `client_kill` | `(self : Database, target : String) -> String` | CLIENT KILL（占位返回 "OK"） |
 | `config_set` | `(self : Database, parameter : String, value : String) -> String` | CONFIG SET（覆盖默认配置） |
+| `try_bitfield_get` | `(self : Database, key : String, offset : Int, width : Int, signed : Bool) -> Result[Int, RedisError]` | 位段读取（宽 1-32） |
+| `try_bitfield_set` | `(self : Database, key : String, offset : Int, width : Int, signed : Bool, value : Int) -> Result[Int, RedisError]` | 位段写入，返回旧值 |
+| `try_bitfield_incrby` | `(self : Database, key : String, offset : Int, width : Int, signed : Bool, increment : Int) -> Result[Int, RedisError]` | 位段自增（WRAP 溢出），返回新值 |
 | `getset` | `(self : Database, key : String, value : String) -> String?` | 设置新值并返回旧值 |
 | `getex` | `(self : Database, key : String, expire_ms : Int64?) -> String?` | 获取值并设置/移除 TTL |
 | `getex_ex` | `(self : Database, key : String, seconds : Int) -> String?` | GETEX EX（秒） |
@@ -871,14 +882,14 @@ moon run examples/cli_repl --target native
 
 | 命令组 | 命令数量 | 代表命令 |
 |--------|----------|----------|
-| String | 23 | SET, GET, DEL, EXISTS, APPEND, STRLEN, GETRANGE, SUBSTR, SETRANGE, GETBIT, SETBIT, BITPOS, BITCOUNT, BITOP, INCR, DECR, INCRBY, DECRBY, SETNX, SETEX, PSETEX, GETDEL, GETSET |
+| String | 24 | SET, GET, DEL, EXISTS, APPEND, STRLEN, GETRANGE, SUBSTR, SETRANGE, GETBIT, SETBIT, BITPOS, BITCOUNT, BITOP, BITFIELD, INCR, DECR, INCRBY, DECRBY, SETNX, SETEX, PSETEX, GETDEL, GETSET |
 | Key | 19 | KEYS, KEYS_PATTERN, SCAN, TYPE, EXPIRE, PEXPIRE, EXPIREAT, PEXPIREAT, EXPIRETIME, PEXPIRETIME, TTL, PTTL, PERSIST, RENAME, RENAMENX, RANDOMKEY, COPY, TOUCH, UNLINK |
 | Hash | 13 | HSET, HSETNX, HGET, HDEL, HGETALL, HLEN, HEXISTS, HKEYS, HVALS, HINCRBY, HSTRLEN, HSCAN, HRANDFIELD |
 | List | 17 | LPUSH, RPUSH, LPOP, RPOP, LLEN, LRANGE, LINDEX, LSET, LREM, LINSERT, LPUSHX, RPUSHX, RPOPLPUSH, LMOVE, LPOS, LTRIM, LMPOP |
 | Set | 17 | SADD, SMEMBERS, SREM, SCARD, SISMEMBER, SMISMEMBER, SINTER, SINTERCARD, SINTERSTORE, SUNION, SUNIONSTORE, SDIFF, SDIFFSTORE, SMOVE, SPOP, SRANDMEMBER, SSCAN |
 | Sorted Set | 32 | ZADD, ZRANGE, ZCARD, ZSCORE, ZREM, ZRANGEBYSCORE, ZRANGEBYLEX, ZREVRANGEBYLEX, ZLEXCOUNT, ZCOUNT, ZREVRANGE, ZREVRANGEBYSCORE, ZRANK, ZREVRANK, ZINCRBY, ZREMRANGEBYRANK, ZREMRANGEBYSCORE, ZREMRANGEBYLEX, ZPOPMIN, ZPOPMAX, ZMSCORE, ZRANDMEMBER, ZUNION, ZUNIONSTORE, ZINTER, ZINTERSTORE, ZINTERCARD, ZDIFF, ZDIFFSTORE, ZRANGESTORE, ZSCAN, ZMPOP |
 | 批量操作 | 6 | MSET, MSETNX, MGET, MDEL, HMSET, HMGET |
-| 服务器 | 33 | DBSIZE, FLUSHDB, FLUSHALL, PING, ECHO, INFO, TIME, COMMAND, COMMAND_INFO, COMMAND_COUNT, OBJECT_ENCODING, OBJECT_REFCOUNT, OBJECT_IDLETIME, MULTI, EXEC, DISCARD, WATCH, UNWATCH, AUTH, CLIENT, CONFIG, SLOWLOG, SELECT, MOVE, DUMP, RESTORE, MONITOR, OBJECT_FREQ, SAVE, BGSAVE, LASTSAVE, RESET, SORT |
+| 服务器 | 34 | DBSIZE, FLUSHDB, FLUSHALL, PING, ECHO, INFO, TIME, COMMAND, COMMAND_INFO, COMMAND_COUNT, OBJECT_ENCODING, OBJECT_REFCOUNT, OBJECT_IDLETIME, MULTI, EXEC, DISCARD, WATCH, UNWATCH, AUTH, CLIENT, CONFIG, SLOWLOG, SELECT, MOVE, DUMP, RESTORE, MONITOR, OBJECT_FREQ, SAVE, BGSAVE, LASTSAVE, RESET, SORT, MEMORY_USAGE |
 
 **Key 过期机制**：
 - EXPIRE / PEXPIRE / EXPIREAT / PEXPIREAT — 设置过期时间（秒/毫秒、相对/绝对时间戳）

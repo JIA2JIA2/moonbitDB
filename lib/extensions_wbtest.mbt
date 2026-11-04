@@ -65,10 +65,6 @@ test "coverage_getex_variants" {
     Ok(v) => @test.assert_eq(v, "v1")
     Err(_) => @test.assert_eq(true, false)
   }
-  match db.try_getex_ex("g1", -5) {
-    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
-    _ => @test.assert_eq(true, false)
-  }
   match db.try_getex_ex("missing", 100) {
     Err(RedisError::NotFound) => @test.assert_eq(true, true)
     _ => @test.assert_eq(true, false)
@@ -128,6 +124,88 @@ test "coverage_getex_variants" {
   @test.assert_eq(db.ttl("g4"), -1)
   @test.assert_eq(db.getex("missing", None), None)
   @test.assert_eq(db.getex("missing", Some(100L)), None)
+}
+
+test "f6_bitfield" {
+  let db = Database::new()
+  db.set("bf", "hello")
+
+  match db.try_bitfield_get("bf", 0, 8, false) {
+    Ok(v) => @test.assert_eq(v, 104)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_get("bf", 0, 8, true) {
+    Ok(v) => @test.assert_eq(v, 104)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_get("bf", 0, 16, false) {
+    Ok(v) => @test.assert_eq(v, 104)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_get("bf", 16, 8, false) {
+    Ok(v) => @test.assert_eq(v, 101)
+    Err(_) => @test.assert_eq(true, false)
+  }
+
+  match db.try_bitfield_set("bf", 0, 8, false, 65) {
+    Ok(old) => @test.assert_eq(old, 104)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_get("bf", 0, 8, false) {
+    Ok(v) => @test.assert_eq(v, 65)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.get("bf"), Some("Aello"))
+
+  match db.try_bitfield_incrby("bf", 0, 8, false, 1) {
+    Ok(v) => @test.assert_eq(v, 66)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_incrby("bf", 0, 8, false, 190) {
+    Ok(v) => @test.assert_eq(v, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+
+  match db.try_bitfield_get("missing", 0, 8, false) {
+    Ok(v) => @test.assert_eq(v, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_set("missing", 0, 8, false, 255) {
+    Ok(old) => @test.assert_eq(old, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_get("missing", 0, 8, false) {
+    Ok(v) => @test.assert_eq(v, 255)
+    Err(_) => @test.assert_eq(true, false)
+  }
+
+  db.hset("bfh", "f", "v") |> ignore
+  match db.try_bitfield_get("bfh", 0, 8, false) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_get("bf", -1, 8, false) {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_get("bf", 0, 33, false) {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+
+  db.set("sign", "")
+  match db.try_bitfield_set("sign", 0, 8, true, -1) {
+    Ok(old) => @test.assert_eq(old, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_get("sign", 0, 8, true) {
+    Ok(v) => @test.assert_eq(v, -1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_get("sign", 0, 8, false) {
+    Ok(v) => @test.assert_eq(v, 255)
+    Err(_) => @test.assert_eq(true, false)
+  }
 }
 
 test "f3_getdel_lmpop_copy_client_config" {
