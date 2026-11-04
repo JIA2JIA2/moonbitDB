@@ -3020,14 +3020,14 @@ test "set_options_and_getex" {
   let db = Database::new()
 
   @test.assert_eq(
-    match db.set_with_options("k", "v", true, false, false, None, None, false) {
+    match db.set_with_options("k", "v", true, false, false, None, None, None, None, false) {
       Ok(_) => true
       Err(_) => false
     },
     true,
   )
   @test.assert_eq(
-    match db.set_with_options("k", "v2", true, false, false, None, None, false) {
+    match db.set_with_options("k", "v2", true, false, false, None, None, None, None, false) {
       Ok(Some(_)) => true
       Ok(None) => false
       Err(_) => false
@@ -3036,7 +3036,7 @@ test "set_options_and_getex" {
   )
   @test.assert_eq(db.get("k"), Some("v"))
   @test.assert_eq(
-    match db.set_with_options("missing", "v", false, true, false, None, None, false) {
+    match db.set_with_options("missing", "v", false, true, false, None, None, None, None, false) {
       Ok(Some(_)) => true
       Ok(None) => false
       Err(_) => false
@@ -3048,7 +3048,7 @@ test "set_options_and_getex" {
   @test.assert_eq(db.setxx("missing", "v"), false)
 
   @test.assert_eq(
-    match db.set_with_options("ex", "v", false, false, false, Some(10), None, false) {
+    match db.set_with_options("ex", "v", false, false, false, Some(10), None, None, None, false) {
       Ok(_) => true
       Err(_) => false
     },
@@ -3056,7 +3056,7 @@ test "set_options_and_getex" {
   )
   @test.assert_eq(db.ttl("ex"), 10)
   @test.assert_eq(
-    match db.set_with_options("px", "v", false, false, false, None, Some(1500L), false) {
+    match db.set_with_options("px", "v", false, false, false, None, Some(1500L), None, None, false) {
       Ok(_) => true
       Err(_) => false
     },
@@ -3067,7 +3067,7 @@ test "set_options_and_getex" {
   db.set("keep", "v") |> ignore
   db.expire("keep", 100) |> ignore
   @test.assert_eq(
-    match db.set_with_options("keep", "v2", false, false, false, None, None, true) {
+    match db.set_with_options("keep", "v2", false, false, false, None, None, None, None, true) {
       Ok(_) => true
       Err(_) => false
     },
@@ -3076,14 +3076,14 @@ test "set_options_and_getex" {
   @test.assert_eq(db.ttl("keep"), 100)
 
   @test.assert_eq(
-    match db.set_with_options("x", "v", true, true, false, None, None, false) {
+    match db.set_with_options("x", "v", true, true, false, None, None, None, None, false) {
       Err(RedisError::InvalidArgument) => true
       _ => false
     },
     true,
   )
   @test.assert_eq(
-    match db.set_with_options("x", "v", false, false, false, Some(10), Some(10L), false) {
+    match db.set_with_options("x", "v", false, false, false, Some(10), Some(10L), None, None, false) {
       Err(RedisError::InvalidArgument) => true
       _ => false
     },
@@ -3466,6 +3466,104 @@ test "zset_store_and_card_commands" {
   @test.assert_eq(db.zintercard(["z1", "str"], 0), -1)
 }
 
+test "zset_store_weights_aggregate" {
+  let db = Database::new()
+  db.zadd("z1", 1.0, "a") |> ignore
+  db.zadd("z1", 2.0, "b") |> ignore
+  db.zadd("z2", 10.0, "a") |> ignore
+  db.zadd("z2", 20.0, "b") |> ignore
+
+  @test.assert_eq(
+    match db.try_zunionstore_with_options("u", ["z1", "z2"], Some([2.0, 3.0]), None) {
+      Ok(count) => {
+        @test.assert_eq(count, 2)
+        @test.assert_eq(
+          db.zrange_with_scores("u", 0, -1),
+          [("a", 32.0), ("b", 64.0)],
+        )
+        true
+      }
+      Err(_) => false
+    },
+    true,
+  )
+
+  @test.assert_eq(
+    match db.try_zunionstore_with_options("u2", ["z1", "z2"], None, Some("min")) {
+      Ok(count) => {
+        @test.assert_eq(count, 2)
+        @test.assert_eq(
+          db.zrange_with_scores("u2", 0, -1),
+          [("a", 1.0), ("b", 2.0)],
+        )
+        true
+      }
+      Err(_) => false
+    },
+    true,
+  )
+
+  @test.assert_eq(
+    match db.try_zunionstore_with_options("u3", ["z1", "z2"], None, Some("max")) {
+      Ok(count) => {
+        @test.assert_eq(count, 2)
+        @test.assert_eq(
+          db.zrange_with_scores("u3", 0, -1),
+          [("a", 10.0), ("b", 20.0)],
+        )
+        true
+      }
+      Err(_) => false
+    },
+    true,
+  )
+
+  @test.assert_eq(
+    match db.try_zinterstore_with_options("i", ["z1", "z2"], Some([2.0, 3.0]), None) {
+      Ok(count) => {
+        @test.assert_eq(count, 2)
+        @test.assert_eq(
+          db.zrange_with_scores("i", 0, -1),
+          [("a", 32.0), ("b", 64.0)],
+        )
+        true
+      }
+      Err(_) => false
+    },
+    true,
+  )
+
+  @test.assert_eq(
+    match db.try_zinterstore_with_options("i2", ["z1", "z2"], None, Some("min")) {
+      Ok(count) => {
+        @test.assert_eq(count, 2)
+        @test.assert_eq(
+          db.zrange_with_scores("i2", 0, -1),
+          [("a", 1.0), ("b", 2.0)],
+        )
+        true
+      }
+      Err(_) => false
+    },
+    true,
+  )
+
+  @test.assert_eq(
+    match db.try_zinterstore_with_options("i3", ["z1", "z2"], None, Some("max")) {
+      Ok(count) => {
+        @test.assert_eq(count, 2)
+        @test.assert_eq(
+          db.zrange_with_scores("i3", 0, -1),
+          [("a", 10.0), ("b", 20.0)],
+        )
+        true
+      }
+      Err(_) => false
+    },
+    true,
+  )
+}
+
 test "count_and_random_extensions" {
   let db = Database::new()
   db.sadd_all("s", ["a", "b", "c", "d"]) |> ignore
@@ -3785,21 +3883,21 @@ test "coverage_edge_cases" {
   @test.assert_eq(db.pexpire_with_options("k", 1000L, true, false, false, false), true)
   @test.assert_eq(db.pexpire_with_options("k", 2000L, false, false, false, true), false)
   @test.assert_eq(
-    match db.set_with_options("ex0", "v", false, false, false, Some(0), None, false) {
+    match db.set_with_options("ex0", "v", false, false, false, Some(0), None, None, None, false) {
       Err(RedisError::InvalidArgument) => true
       _ => false
     },
     true,
   )
   @test.assert_eq(
-    match db.set_with_options("px0", "v", false, false, false, None, Some(0L), false) {
+    match db.set_with_options("px0", "v", false, false, false, None, Some(0L), None, None, false) {
       Err(RedisError::InvalidArgument) => true
       _ => false
     },
     true,
   )
   @test.assert_eq(
-    match db.set_with_options("keep2", "v", false, false, false, Some(10), None, true) {
+    match db.set_with_options("keep2", "v", false, false, false, Some(10), None, None, None, true) {
       Err(RedisError::InvalidArgument) => true
       _ => false
     },
