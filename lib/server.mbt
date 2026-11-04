@@ -645,6 +645,10 @@ pub fn Database::try_sort(
       if limited.length() == 0 {
         self.delete_key(dest)
       } else {
+        match self.data.get(dest) {
+          Some(RedisValue::List(_)) | None => ()
+          Some(_) => return Err(RedisError::WrongType)
+        }
         let deque = Deque::new()
         for item in limited {
           deque.push_back(item)
@@ -884,6 +888,10 @@ pub fn Database::try_sort_advanced(
       if result.length() == 0 {
         self.delete_key(dest)
       } else {
+        match self.data.get(dest) {
+          Some(RedisValue::List(_)) | None => ()
+          Some(_) => return Err(RedisError::WrongType)
+        }
         let deque = Deque::new()
         for item in result {
           deque.push_back(item)

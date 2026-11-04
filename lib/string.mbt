@@ -843,6 +843,10 @@ pub fn Database::try_bitop(
     out.push("\{Int::unsafe_to_char(unit)}")
   }
   let result = out.join("")
+  match self.data.get(dest) {
+    Some(RedisValue::String(_)) | None => ()
+    Some(_) => return Err(RedisError::WrongType)
+  }
   self.put(dest, RedisValue::String(result))
   Ok(max_len)
 }

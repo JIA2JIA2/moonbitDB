@@ -1849,3 +1849,309 @@ test "m7_transaction_queue_expansion" {
   @test.assert_eq(db.hget("h", "newf"), Some("v"))
   @test.assert_eq(db.hget("h", "f"), Some("7"))
 }
+
+
+test "n2_string_error_paths" {
+  let db = Database::new()
+  db.hset("hh", "f", "v") |> ignore
+  db.set("s", "abc")
+  // try_psetex 溢出（时钟推进后巨大毫秒溢出）
+  db.advance_time(1)
+  match db.try_psetex("px", 9223372036854775807L, "v") {
+    Err(RedisError::Overflow) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  // try_psetex 类型错
+  match db.try_psetex("hh", 1000L, "v") {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  // try_setex 巨大秒数（Int32 上限 × 1000 在 Int64 范围内，Overflow 分支不可达）
+  match db.try_setex("sx", 2147483647, "v") {
+    Ok(done) => @test.assert_eq(done, true)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.pttl("sx") > 2000000000000L, true)
+  // try_setex 类型错
+  match db.try_setex("hh", 10, "v") {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  // try_getdel 过期 key
+  db.set("gone", "v")
+  db.pexpire("gone", 1L) |> ignore
+  db.advance_time(10)
+  match db.try_getdel("gone") {
+    Ok(None) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  // bitop dest 为 hash 类型
+  db.set("bo", "x")
+  match db.try_bitop("AND", "hh", ["bo"]) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  // SETRANGE offset 超大（NUL 填充上限）
+  match db.try_setrange("hh", 0, "x") {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  // GETRANGE 空 key
+  @test.assert_eq(db.getrange("missing", 0, -1), "")
+  // INCRBYFLOAT 精度路径（科学计数法存量值）
+  db.set("sci", "1e2")
+  match db.try_incrbyfloat("sci", 1.5) {
+    Ok(v) => @test.assert_eq(v > 101.4 && v < 101.6, true)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  // INCRBYFLOAT NaN 增量
+  let zero : Float = 0.0
+  match db.try_incrbyfloat("sci", zero / zero) {
+    Err(RedisError::Overflow) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  // DECRBY 对浮点存量值报 NotInteger
+  match db.try_decrby("sci", 2L) {
+    Err(RedisError::NotInteger) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  db.set("intv", "100")
+  match db.try_decrby("intv", 2L) {
+    Ok(v) => @test.assert_eq(v, 98L)
+    Err(_) => @test.assert_eq(true, false)
+  }
+}
+
+
+test "n2_list_set_error_paths" {
+  let db = Database::new()
+  db.hset("hh", "f", "v") |> ignore
+  db.set("str", "x")
+
+  match db.try_lpush("hh", "v") {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_rpush("hh", "v") {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_lpop("missing") {
+    Err(RedisError::NotFound) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_lmove("missing", "dst", true, true) {
+    Err(RedisError::NotFound) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_lpos_options("missing", "v", 1, 0, 0) {
+    Err(RedisError::NotFound) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_lpos_options("hh", "v", 1, 0, 0) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_lrem("missing", 0, "v") {
+    Ok(n) => @test.assert_eq(n, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_ltrim("missing", 0, -1) {
+    Ok(v) => @test.assert_eq(v, false)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_linsert("missing", true, "p", "v") {
+    Ok(n) => @test.assert_eq(n, -1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+
+  match db.try_sadd("hh", "v") {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_sunion(["hh"]) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_sdiff(["hh"]) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_sintercard(["missing"], 0) {
+    Ok(n) => @test.assert_eq(n, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+}
+
+
+test "n2_defensive_branches_batch2" {
+  let db = Database::new()
+  db.set("str", "x")
+  db.zadd("z", 1.0, "a") |> ignore
+
+  // zadd 族：类型错的 None => Map 分支与 early return
+  match db.try_zadd_with_options("z", 1.0, "b", false, true, false, false, false) {
+    Ok(n) => @test.assert_eq(n, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zadd_incr("z", 1.0, "b", false, true, false, false) {
+    Ok(v) => @test.assert_eq(v, None)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zincrby("str", 1.0, "a") {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  // zmscore 混合
+  let scores = db.zmscore("z", ["a", "missing"])
+  @test.assert_eq(scores[0], Some(1.0))
+  @test.assert_eq(scores[1], None)
+  // zrangestore count 截断
+  db.zadd("z2", 1.0, "x") |> ignore
+  db.zadd("z2", 2.0, "y") |> ignore
+  match db.try_zrangestore_byscore("zdst", "z2", "-inf", "+inf", 0, 1) {
+    Ok(n) => @test.assert_eq(n, 1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  // hash 边界
+  db.hset("h", "n", "10") |> ignore
+  let hf = db.hrandfield_with_values("h", 1)
+  @test.assert_eq(hf.length(), 1)
+  @test.assert_eq(db.hstrlen("h", "missing"), 0)
+  match db.try_hincrbyfloat("h", "n", 1.5) {
+    Ok(v) => @test.assert_eq(v, 11.5)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  // server
+  @test.assert_eq(db.command_info([]).length(), 0)
+  @test.assert_eq(db.client_kill("id=99"), "OK")
+  @test.assert_eq(db.slowlog("RESET"), ["OK"])
+  @test.assert_eq(db.slowlog("GET").length(), 0)
+  // database
+  db.set("t1", "v")
+  ignore(db.multi())
+  ignore(db.set("t2", "v"))
+  ignore(db.discard())
+  @test.assert_eq(db.exists("t2"), false)
+  // hash 类型错 branch
+  match db.try_hget("str", "f") {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+}
+
+
+test "n2_server_defensive_batch3" {
+  let db = Database::new()
+  db.set("s", "v")
+  db.hset("h", "f", "v") |> ignore
+  db.zadd("z", 1.0, "m") |> ignore
+
+  // object_encoding 各类型缺失分支
+  @test.assert_eq(db.object_encoding("missing"), None)
+  // object_idletime 无 TTL
+  @test.assert_eq(db.object_idletime("s"), Some(0))
+  // config_get 未知参数
+  @test.assert_eq(db.config_get("unknown_param"), ["unknown_param", ""])
+  // command_info 未知命令
+  @test.assert_eq(db.command_info(["NOPE"]), [""])
+  // exec 无 MULTI 的事务中止错误文本（兼容路径）
+  @test.assert_eq(db.exec(), "ERR EXEC without MULTI")
+  // sort offset 负数
+  match db.try_sort("s", false, false, -1, 0, None) {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  // sort_advanced store 到已有 hash dest → WrongType（类型安全约定）
+  match db.try_sort_advanced("s", None, [], false, false, 0, 0, Some("h")) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.type_of("h"), "hash")
+  match db.try_sort("s", false, false, 0, 0, Some("h")) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  // bitcount 类型错便捷版
+  @test.assert_eq(db.bitcount("h"), 0)
+  // getex 对 hash 类型
+  match db.try_getex_px("h", 1000L) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  // getdel 类型错（已在 n2 覆盖，此处覆盖便捷版）
+  @test.assert_eq(db.getdel("h"), None)
+  // move_key 类型错场景（source 不存在）
+  @test.assert_eq(db.move_key("missing", 0), false)
+  // dump 类型错
+  @test.assert_eq(db.dump("h"), None)
+  // slowlog 未知子命令
+  @test.assert_eq(db.slowlog("UNKNOWN").length(), 0)
+}
+
+
+test "n2_list_defensive_batch4" {
+  let db = Database::new()
+  db.hset("hh", "f", "v") |> ignore
+  db.set("str", "x")
+
+  // lmove 类型错（dst 为 hash）
+  db.rpush_all("l1", ["a"]) |> ignore
+  match db.try_lmove("l1", "hh", true, true) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  // try_lpush/rpush 类型错
+  match db.try_rpush("hh", "v") {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  // try_rpop 过期
+  db.set("gone2", "x")
+  db.rpush("gone2", "v") |> ignore
+  db.pexpire("gone2", 1L) |> ignore
+  db.advance_time(10)
+  match db.try_rpop("gone2") {
+    Err(RedisError::NotFound) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  // lpos_options count<-1 → OutOfRange（K 系列）与 maxlen
+  db.rpush_all("l2", ["a", "b", "a"]) |> ignore
+  match db.try_lpos_options("l2", "a", 1, -2, 0) {
+    Err(RedisError::OutOfRange) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  // lpop_count/rpop_count 便捷版对 missing
+  @test.assert_eq(db.lpop_count("missing", 1), [])
+  @test.assert_eq(db.rpop_count("missing", 1), [])
+  // lmpop 类型错（所有 key 都是 hash）
+  match db.try_lmpop(["hh"], true, 1) {
+    Ok(v) => @test.assert_eq(v, None)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  // lset 类型错
+  match db.try_lset("hh", 0, "v") {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  // linsert 过期
+  db.set("gone3", "x")
+  db.pexpire("gone3", 1L) |> ignore
+  db.advance_time(10)
+  match db.try_linsert("gone3", true, "p", "v") {
+    Ok(n) => @test.assert_eq(n, -1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  // ltrim 过期
+  match db.try_ltrim("gone3", 0, -1) {
+    Ok(v) => @test.assert_eq(v, false)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  // rpoplpush 对 hash src
+  @test.assert_eq(db.rpoplpush("hh", "d"), None)
+  // lpushx 过期
+  db.set("gone4", "x")
+  db.pexpire("gone4", 1L) |> ignore
+  db.advance_time(10)
+  @test.assert_eq(db.lpushx("gone4", "v"), 0)
+}
