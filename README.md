@@ -99,7 +99,7 @@ CI 同时执行命令表一致性校验、基准基线对比，并对 `lib/` 覆
 ### 1. 添加模块依赖
 
 ```bash
-moon add JIA2JIA2/moonbitdb@0.2.0
+moon add JIA2JIA2/moonbitdb@0.1.4
 ```
 
 该命令会更新 `moon.mod` 并同步依赖，推荐优先使用。
