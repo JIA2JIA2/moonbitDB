@@ -791,3 +791,134 @@ test "e1_info_sections_and_placeholders" {
   @test.assert_eq(db.config_get("timeout"), ["timeout", "0"])
   @test.assert_eq(db.config_get("weird_param"), ["weird_param", ""])
 }
+
+test "e2_bitop_and_bitcount_range" {
+  let db = Database::new()
+  db.setbit("s1", 0, 1) |> ignore
+  db.setbit("s1", 1, 1) |> ignore
+  db.setbit("s1", 2, 1) |> ignore
+  db.setbit("s1", 3, 1) |> ignore
+  db.setbit("s2", 2, 1) |> ignore
+  db.setbit("s2", 3, 1) |> ignore
+  db.setbit("s2", 4, 1) |> ignore
+  db.setbit("s2", 5, 1) |> ignore
+
+  match db.try_bitop("OR", "d1", ["s1", "s2"]) {
+    Ok(len) => @test.assert_eq(len, 1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.bitcount("d1"), 6)
+  match db.try_bitop("AND", "d2", ["s1", "s2"]) {
+    Ok(len) => @test.assert_eq(len, 1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.bitcount("d2"), 2)
+  match db.try_bitop("XOR", "d3", ["s1", "s2"]) {
+    Ok(len) => @test.assert_eq(len, 1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.bitcount("d3"), 4)
+  match db.try_bitop("NOT", "d4", ["s1"]) {
+    Ok(len) => @test.assert_eq(len, 1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.bitcount("d4"), 12)
+  @test.assert_eq(db.bitop("NOOP", "dx", ["s1"]), -1)
+  @test.assert_eq(db.bitop("NOT", "dx", ["s1", "s2"]), -1)
+  @test.assert_eq(db.bitop("AND", "dx", []), -1)
+  db.hset("hh_missing_type", "f", "v") |> ignore
+  match db.try_bitop("OR", "dx", ["hh_missing_type"]) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_bitop("OR", "dx", ["missing_key"]) {
+    Ok(len) => @test.assert_eq(len, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+
+  db.set("bc", "abc")
+  @test.assert_eq(db.bitcount("bc"), 10)
+  @test.assert_eq(db.bitcount_range("bc", 0, 0), 3)
+  @test.assert_eq(db.bitcount_range("bc", 1, 2), 7)
+  @test.assert_eq(db.bitcount_range("bc", -1, -1), 4)
+  @test.assert_eq(db.bitcount_range("bc", 0, 99), 10)
+  @test.assert_eq(db.bitcount_range("bc", 5, 99), 0)
+  match db.try_bitcount_range("missing", 0, -1) {
+    Ok(count) => @test.assert_eq(count, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  db.hset("bc_hash", "f", "v") |> ignore
+  match db.try_bitcount_range("bc_hash", 0, -1) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+}
+
+test "e2_lpos_options_and_misc" {
+  let db = Database::new()
+  db.rpush_all("l", ["a", "b", "a", "c", "a"]) |> ignore
+  match db.try_lpos_options("l", "a", 1, 0, 0) {
+    Ok(indices) => @test.assert_eq(indices, [0])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_lpos_options("l", "a", 2, 0, 0) {
+    Ok(indices) => @test.assert_eq(indices, [2])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_lpos_options("l", "a", 1, 1, 0) {
+    Ok(indices) => @test.assert_eq(indices, [0])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_lpos_options("l", "a", -1, 0, 0) {
+    Ok(indices) => @test.assert_eq(indices, [4])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_lpos_options("l", "a", -2, 0, 0) {
+    Ok(indices) => @test.assert_eq(indices, [2])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_lpos_options("l", "a", 1, -1, 0) {
+    Ok(indices) => @test.assert_eq(indices, [0, 2, 4])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_lpos_options("l", "a", 2, -1, 0) {
+    Ok(indices) => @test.assert_eq(indices, [2, 4])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_lpos_options("l", "a", -2, -1, 0) {
+    Ok(indices) => @test.assert_eq(indices, [2, 0])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_lpos_options("l", "a", 1, 0, 3) {
+    Ok(indices) => @test.assert_eq(indices, [0])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_lpos_options("l", "a", 1, -1, 3) {
+    Ok(indices) => @test.assert_eq(indices, [0, 2])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_lpos_options("l", "zz", 1, 0, 0) {
+    Err(RedisError::NotFound) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_lpos_options("l", "a", 0, 0, 0) {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.lpos_options("missing", "a", 1, 0, 0), [])
+
+  @test.assert_eq(db.save(), "OK")
+  @test.assert_eq(db.bgsave(), "Background saving started")
+  @test.assert_eq(db.lastsave() >= 0, true)
+  @test.assert_eq(db.command_count() > 100, true)
+  db.set("r1", "v")
+  db.watch("r1")
+  @test.assert_eq(db.reset(), "RESET")
+  db.set("r1", "changed") |> ignore
+  ignore(db.multi())
+  ignore(db.set("r1", "x"))
+  match db.try_exec() {
+    Ok(_) => @test.assert_eq(true, true)
+    Err(_) => @test.assert_eq(true, false)
+  }
+}

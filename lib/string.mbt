@@ -548,6 +548,82 @@ pub fn Database::bitpos(self : Database, key : String, bit : Int) -> Int {
   }
 }
 
+pub fn Database::try_bitop(
+  self : Database,
+  op : String,
+  dest : String,
+  src_keys : Array[String],
+) -> Result[Int, RedisError] {
+  let cmd = op.to_upper()
+  if cmd != "NOT" && cmd != "AND" && cmd != "OR" && cmd != "XOR" {
+    return Err(RedisError::InvalidArgument)
+  }
+  if cmd == "NOT" {
+    if src_keys.length() != 1 {
+      return Err(RedisError::InvalidArgument)
+    }
+  } else if src_keys.length() == 0 {
+    return Err(RedisError::InvalidArgument)
+  }
+  let units : Array[Array[Int]] = []
+  for skey in src_keys {
+    self.check_expired(skey) |> ignore
+    match self.data.get(skey) {
+      Some(RedisValue::String(s)) => {
+        let arr : Array[Int] = []
+        for i = 0; i < s.length(); i = i + 1 {
+          arr.push(s[i].to_int())
+        }
+        units.push(arr)
+      }
+      Some(_) => return Err(RedisError::WrongType)
+      None => units.push([])
+    }
+  }
+  let max_len = if cmd == "NOT" {
+    units[0].length()
+  } else {
+    let mut max_v = 0
+    for arr in units {
+      if arr.length() > max_v {
+        max_v = arr.length()
+      }
+    }
+    max_v
+  }
+  let out : Array[String] = []
+  for i = 0; i < max_len; i = i + 1 {
+    let first = if i < units[0].length() { units[0][i] } else { 0 }
+    let unit = if cmd == "NOT" {
+      0xFFFF ^ first
+    } else {
+      let mut acc = first
+      for k = 1; k < units.length(); k = k + 1 {
+        let other = if i < units[k].length() { units[k][i] } else { 0 }
+        if cmd == "AND" {
+          acc = acc & other
+        } else if cmd == "OR" {
+          acc = acc | other
+        } else {
+          acc = acc ^ other
+        }
+      }
+      acc
+    }
+    out.push("\{Int::unsafe_to_char(unit)}")
+  }
+  let result = out.join("")
+  self.put(dest, RedisValue::String(result))
+  Ok(max_len)
+}
+
+pub fn Database::bitop(self : Database, op : String, dest : String, src_keys : Array[String]) -> Int {
+  match self.try_bitop(op, dest, src_keys) {
+    Ok(len) => len
+    Err(_) => -1
+  }
+}
+
 pub fn Database::try_msetnx(
   self : Database,
   keys : Array[String],

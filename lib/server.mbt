@@ -139,7 +139,7 @@ pub fn Database::command() -> Array[String] {
   [
     "SET", "GET", "DEL", "EXISTS", "KEYS", "KEYS_PATTERN", "SCAN", "TYPE", "APPEND", "STRLEN",
     "INCR", "DECR", "INCRBY", "DECRBY", "SETNX", "SETEX", "PSETEX", "GETDEL", "GETSET", "GETEX",
-    "GETRANGE", "SETRANGE", "GETBIT", "SETBIT", "BITPOS",
+    "GETRANGE", "SUBSTR", "SETRANGE", "GETBIT", "SETBIT", "BITPOS", "BITCOUNT", "BITOP",
     "EXPIRE", "PEXPIRE", "EXPIREAT", "PEXPIREAT", "EXPIRETIME", "PEXPIRETIME", "TTL", "PTTL", "PERSIST",
     "MSET", "MSETNX", "MGET", "MDEL",
     "HSET", "HSETNX", "HGET", "HDEL", "HGETALL", "HLEN", "HEXISTS", "HKEYS", "HVALS",
@@ -156,11 +156,11 @@ pub fn Database::command() -> Array[String] {
     "DBSIZE", "FLUSHDB", "FLUSHALL", "RANDOMKEY", "RENAME", "RENAMENX", "COPY", "TOUCH", "UNLINK",
     "MULTI", "EXEC", "DISCARD", "WATCH", "UNWATCH",
     "LMPOP", "ZMPOP",
-    "PING", "ECHO", "INFO", "TIME", "COMMAND", "COMMAND_INFO", "OBJECT_ENCODING", "OBJECT_REFCOUNT", "OBJECT_IDLETIME",
+    "PING", "ECHO", "INFO", "TIME", "COMMAND", "COMMAND_INFO", "COMMAND_COUNT", "OBJECT_ENCODING", "OBJECT_REFCOUNT", "OBJECT_IDLETIME",
     "AUTH", "CLIENT", "CONFIG", "SLOWLOG",
     "SELECT", "MOVE", "DUMP", "RESTORE", "MONITOR",
     "OBJECT_FREQ",
-    "BITCOUNT"
+    "SAVE", "BGSAVE", "LASTSAVE", "RESET"
   ]
 }
 
@@ -376,28 +376,71 @@ pub fn Database::restore(self : Database, key : String, ttl_ms : Int64, value : 
   true
 }
 
-pub fn Database::bitcount(self : Database, key : String) -> Int {
+pub fn Database::try_bitcount_range(self : Database, key : String, start : Int, end : Int) -> Result[Int, RedisError] {
   if self.check_expired(key) {
-    0
-  } else {
-    match self.data.get(key) {
-      Some(RedisValue::String(s)) => {
-        let mut count = 0
-        for i = 0; i < s.length(); i = i + 1 {
-          let c = s[i]
-          let mut b = 0
-          while b < 8 {
-            if (c.to_int() & (1 << b)) != 0 {
-              count = count + 1
-            }
-            b = b + 1
-          }
-        }
-        count
-      }
-      _ => 0
-    }
+    return Ok(0)
   }
+  match self.data.get(key) {
+    Some(RedisValue::String(s)) => {
+      let len = s.length()
+      let s_idx = if start < 0 { len + start } else { start }
+      let e_idx = if end < 0 { len + end + 1 } else { end + 1 }
+      let from = if s_idx < 0 { 0 } else { s_idx }
+      let to = if e_idx > len { len } else { e_idx }
+      let mut count = 0
+      let mut i = from
+      while i < to {
+        let unit = s[i].to_int()
+        let mut b = 0
+        while b < 16 {
+          if (unit & (1 << b)) != 0 {
+            count = count + 1
+          }
+          b = b + 1
+        }
+        i = i + 1
+      }
+      Ok(count)
+    }
+    Some(_) => Err(RedisError::WrongType)
+    None => Ok(0)
+  }
+}
+
+pub fn Database::bitcount_range(self : Database, key : String, start : Int, end : Int) -> Int {
+  match self.try_bitcount_range(key, start, end) {
+    Ok(count) => count
+    Err(_) => -1
+  }
+}
+
+pub fn Database::bitcount(self : Database, key : String) -> Int {
+  match self.try_bitcount_range(key, 0, -1) {
+    Ok(count) => count
+    Err(_) => 0
+  }
+}
+
+pub fn Database::save(_self : Database) -> String {
+  "OK"
+}
+
+pub fn Database::bgsave(_self : Database) -> String {
+  "Background saving started"
+}
+
+pub fn Database::lastsave(self : Database) -> Int64 {
+  self.current_time / 1000
+}
+
+pub fn Database::command_count(_self : Database) -> Int {
+  Database::command().length()
+}
+
+pub fn Database::reset(self : Database) -> String {
+  self.unwatch()
+  ignore(self.clear_transaction())
+  "RESET"
 }
 
 

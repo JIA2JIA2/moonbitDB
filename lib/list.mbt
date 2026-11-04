@@ -564,6 +564,84 @@ pub fn Database::lpos(self : Database, key : String, value : String) -> Int? {
   }
 }
 
+pub fn Database::try_lpos_options(
+  self : Database,
+  key : String,
+  value : String,
+  rank : Int,
+  count : Int,
+  maxlen : Int,
+) -> Result[Array[Int], RedisError] {
+  if rank == 0 {
+    return Err(RedisError::InvalidArgument)
+  }
+  if count < -1 {
+    return Err(RedisError::InvalidArgument)
+  }
+  if self.check_expired(key) {
+    return Err(RedisError::NotFound)
+  }
+  match self.data.get(key) {
+    Some(RedisValue::List(deque)) => {
+      let arr = deque.to_array()
+      let len = arr.length()
+      let scan_limit = if maxlen > 0 && maxlen < len { maxlen } else { len }
+      let result : Array[Int] = []
+      if rank > 0 {
+        let mut matches = 0
+        for i = 0; i < scan_limit; i = i + 1 {
+          if arr[i] == value {
+            matches = matches + 1
+            if matches >= rank {
+              result.push(i)
+              if count == 0 || (count > 0 && result.length() >= count) {
+                break
+              }
+            }
+          }
+        }
+      } else {
+        let target = -rank
+        let mut matches = 0
+        let mut i = len - 1
+        let stop = if scan_limit < len { len - scan_limit } else { -1 }
+        while i > stop {
+          if arr[i] == value {
+            matches = matches + 1
+            if matches >= target {
+              result.push(i)
+              if count == 0 || (count > 0 && result.length() >= count) {
+                break
+              }
+            }
+          }
+          i = i - 1
+        }
+      }
+      if result.length() == 0 {
+        return Err(RedisError::NotFound)
+      }
+      Ok(result)
+    }
+    Some(_) => Err(RedisError::WrongType)
+    None => Err(RedisError::NotFound)
+  }
+}
+
+pub fn Database::lpos_options(
+  self : Database,
+  key : String,
+  value : String,
+  rank : Int,
+  count : Int,
+  maxlen : Int,
+) -> Array[Int] {
+  match self.try_lpos_options(key, value, rank, count, maxlen) {
+    Ok(indices) => indices
+    Err(_) => []
+  }
+}
+
 pub fn Database::lpop_count(self : Database, key : String, count : Int) -> Array[String] {
   if self.check_expired(key) || count <= 0 {
     return []

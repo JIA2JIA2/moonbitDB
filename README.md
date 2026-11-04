@@ -173,7 +173,7 @@ moonbitDB/
 
 ## 支持的命令
 
-共支持 **153 个命令**，覆盖 Redis 核心功能。
+共支持 **160 个命令**，覆盖 Redis 核心功能。
 
 > **类型安全约定**：对已存在但类型不匹配的 key，写操作**不会覆盖**原数据。失败返回值约定如下：`HSET`/`LPUSH`/`RPUSH`/`APPEND`/`SETRANGE`/`LPUSHX`/`RPUSHX` 返回 `-1`，`SADD`/`ZADD`/`HSETNX`/`HMSET` 返回 `false`，`INCR`/`DECR`/`INCRBY`/`DECRBY`/`HINCRBY` 返回 `None`，`SINTERSTORE`/`SUNIONSTORE`/`SDIFFSTORE` 返回 `-1`。时间相关 API 使用 `Int64` 毫秒，可安全表示真实 Unix 时间戳与超过 24 天的 TTL。
 
@@ -188,10 +188,13 @@ moonbitDB/
 | `APPEND` | `(key, value) -> Int` | 追加字符串，返回新长度（单值上限 512MB） |
 | `STRLEN` | `(key) -> Int` | 字符串长度 |
 | `GETRANGE` | `(key, start, end) -> String` | 获取子串（支持负数索引） |
+| `SUBSTR` | `(key, start, end) -> String` | GETRANGE 别名 |
 | `SETRANGE` | `(key, offset, value) -> Int` | 从 offset 覆盖写入，返回新长度（缺失部分以 NUL 填充，单值上限 512MB） |
 | `GETBIT` | `(key, offset) -> Int` | 获取位图位值（UTF-16 code unit 索引，超出范围返回 0） |
 | `SETBIT` | `(key, offset, value) -> Int` | 设置位图位值，返回原位值（自动扩容，NUL 填充） |
 | `BITPOS` | `(key, bit) -> Int` | 查找第一个指定值的位（返回 -1 表示未找到） |
+| `BITCOUNT` | `(key, start?, end?) -> Int` | 统计置位位数（可选 code unit 范围，负索引从尾） |
+| `BITOP` | `(op, dest, src_keys) -> Int` | AND/OR/XOR/NOT 按位运算写入 dest，返回 dest 长度 |
 | `INCR` | `(key) -> Int64?` | 自增 1（非数字返回 None） |
 | `DECR` | `(key) -> Int64?` | 自减 1（非数字返回 None） |
 | `INCRBY` | `(key, increment) -> Int64?` | 增加指定整数（非数字返回 None） |
@@ -202,7 +205,6 @@ moonbitDB/
 | `GETSET` | `(key, value) -> String?` | 设置新值并返回旧值（清除 TTL） |
 | `GETEX` | `(key, expire_ms) -> String?` | 获取值并设置/移除 TTL（`None` 表示 PERSIST） |
 | `PSETEX` | `(key, ms, value) -> Bool` | 设置值并指定过期时间（毫秒） |
-| `BITCOUNT` | `(key) -> Int` | 统计字符串值的置位位数（UTF-16 code unit 逐位计数） |
 
 > `STRLEN`/`GETRANGE`/`SETRANGE` 的索引按 **UTF-16 code unit** 计数，与 Redis 的字节索引不同；中文、emoji 等场景需要字节语义时请先自行编码。
 
@@ -378,6 +380,11 @@ moonbitDB/
 | `RESTORE` | `(key, ttl_ms, value) -> Bool` | 反序列化恢复 key（ttl_ms>0 时设置过期） |
 | `MONITOR` | `() -> String` | 进入监控模式（返回 "OK"） |
 | `OBJECT_FREQ` | `(key) -> Int?` | 对象访问频率（当前为 0） |
+| `COMMAND_COUNT` | `() -> Int` | 命令总数 |
+| `SAVE` | `() -> String` | 同步保存（内存库返回 "OK"） |
+| `BGSAVE` | `() -> String` | 后台保存（返回 "Background saving started"） |
+| `LASTSAVE` | `() -> Int64` | 最近保存时间戳（秒） |
+| `RESET` | `() -> String` | 重置连接状态（清 WATCH 与事务队列，返回 "RESET"） |
 
 ## 完整公共 API 文档
 
@@ -449,11 +456,20 @@ match db.try_incrby("name", 1) {
 | `try_getbit` | `(self : Database, key : String, offset : Int) -> Result[Int, RedisError]` | 精确错误版读位 |
 | `try_setbit` | `(self : Database, key : String, offset : Int, value : Int) -> Result[Int, RedisError]` | 精确错误版写位，返回原位值 |
 | `try_bitpos` | `(self : Database, key : String, bit : Int, start : Int, end : Int) -> Result[Int, RedisError]` | 精确错误版找位（start/end 为 code unit 索引） |
+| `try_bitcount_range` | `(self : Database, key : String, start : Int, end : Int) -> Result[Int, RedisError]` | 精确错误版范围置位计数 |
+| `bitcount_range` | `(self : Database, key : String, start : Int, end : Int) -> Int` | 范围置位计数（类型错返回 -1） |
+| `try_bitop` | `(self : Database, op : String, dest : String, src_keys : Array[String]) -> Result[Int, RedisError]` | AND/OR/XOR/NOT 按位运算（返回 dest 长度） |
+| `bitop` | `(self : Database, op : String, dest : String, src_keys : Array[String]) -> Int` | 按位运算便捷版（错误返回 -1） |
 | `expiretime` | `(self : Database, key : String) -> Int64` | 绝对过期时间戳（秒） |
 | `pexpiretime` | `(self : Database, key : String) -> Int64` | 绝对过期时间戳（毫秒） |
 | `watch` | `(self : Database, key : String) -> Unit` | WATCH 监视 key |
 | `unwatch` | `(self : Database) -> Unit` | UNWATCH 取消监视 |
 | `try_exec` | `(self : Database) -> Result[String, RedisError]` | 精确错误版 EXEC（监视冲突返回 TransactionAborted） |
+| `save` | `(self : Database) -> String` | 同步保存（返回 "OK"） |
+| `bgsave` | `(self : Database) -> String` | 后台保存 |
+| `lastsave` | `(self : Database) -> Int64` | 最近保存时间戳（秒） |
+| `command_count` | `(self : Database) -> Int` | 命令总数 |
+| `reset` | `(self : Database) -> String` | 重置连接状态（返回 "RESET"） |
 | `info_section` | `(self : Database, section : String) -> String` | INFO 按节查询（server/memory/keyspace/stats） |
 | `try_getex` | `(self : Database, key : String, expire_ms : Int64?) -> Result[String, RedisError]` | 精确错误版 GETEX |
 | `set_get` | `(self : Database, key : String, value : String) -> String?` | 设置新值并返回旧值（SET ... GET） |
@@ -541,6 +557,8 @@ match db.try_incrby("name", 1) {
 | `try_lmove` | `(self : Database, source : String, destination : String, from_left : Bool, to_left : Bool) -> Result[String, RedisError]` | 精确错误版 LMOVE |
 | `lpos` | `(self : Database, key : String, value : String) -> Int?` | 元素的首次索引 |
 | `try_lpos` | `(self : Database, key : String, value : String) -> Result[Int, RedisError]` | 精确错误版 LPOS |
+| `try_lpos_options` | `(self : Database, key : String, value : String, rank : Int, count : Int, maxlen : Int) -> Result[Array[Int], RedisError]` | LPOS RANK/COUNT/MAXLEN（count 0=单个、-1=全部） |
+| `lpos_options` | `(self : Database, key : String, value : String, rank : Int, count : Int, maxlen : Int) -> Array[Int]` | LPOS 选项便捷版（错误返回空） |
 | `lpop_count` | `(self : Database, key : String, count : Int) -> Array[String]` | 批量左端弹出 |
 | `rpop_count` | `(self : Database, key : String, count : Int) -> Array[String]` | 批量右端弹出 |
 
@@ -840,14 +858,14 @@ moon run examples/cli_repl --target native
 
 | 命令组 | 命令数量 | 代表命令 |
 |--------|----------|----------|
-| String | 22 | SET, GET, DEL, EXISTS, APPEND, STRLEN, GETRANGE, SETRANGE, GETBIT, SETBIT, BITPOS, INCR, DECR, INCRBY, DECRBY, SETNX, SETEX, PSETEX, GETDEL, GETSET, GETEX, BITCOUNT |
+| String | 23 | SET, GET, DEL, EXISTS, APPEND, STRLEN, GETRANGE, SUBSTR, SETRANGE, GETBIT, SETBIT, BITPOS, BITCOUNT, BITOP, INCR, DECR, INCRBY, DECRBY, SETNX, SETEX, PSETEX, GETDEL, GETSET |
 | Key | 19 | KEYS, KEYS_PATTERN, SCAN, TYPE, EXPIRE, PEXPIRE, EXPIREAT, PEXPIREAT, EXPIRETIME, PEXPIRETIME, TTL, PTTL, PERSIST, RENAME, RENAMENX, RANDOMKEY, COPY, TOUCH, UNLINK |
 | Hash | 13 | HSET, HSETNX, HGET, HDEL, HGETALL, HLEN, HEXISTS, HKEYS, HVALS, HINCRBY, HSTRLEN, HSCAN, HRANDFIELD |
 | List | 17 | LPUSH, RPUSH, LPOP, RPOP, LLEN, LRANGE, LINDEX, LSET, LREM, LINSERT, LPUSHX, RPUSHX, RPOPLPUSH, LMOVE, LPOS, LTRIM, LMPOP |
 | Set | 17 | SADD, SMEMBERS, SREM, SCARD, SISMEMBER, SMISMEMBER, SINTER, SINTERCARD, SINTERSTORE, SUNION, SUNIONSTORE, SDIFF, SDIFFSTORE, SMOVE, SPOP, SRANDMEMBER, SSCAN |
 | Sorted Set | 32 | ZADD, ZRANGE, ZCARD, ZSCORE, ZREM, ZRANGEBYSCORE, ZRANGEBYLEX, ZREVRANGEBYLEX, ZLEXCOUNT, ZCOUNT, ZREVRANGE, ZREVRANGEBYSCORE, ZRANK, ZREVRANK, ZINCRBY, ZREMRANGEBYRANK, ZREMRANGEBYSCORE, ZREMRANGEBYLEX, ZPOPMIN, ZPOPMAX, ZMSCORE, ZRANDMEMBER, ZUNION, ZUNIONSTORE, ZINTER, ZINTERSTORE, ZINTERCARD, ZDIFF, ZDIFFSTORE, ZRANGESTORE, ZSCAN, ZMPOP |
 | 批量操作 | 6 | MSET, MSETNX, MGET, MDEL, HMSET, HMGET |
-| 服务器 | 27 | DBSIZE, FLUSHDB, FLUSHALL, PING, ECHO, INFO, TIME, COMMAND, COMMAND_INFO, OBJECT_ENCODING, OBJECT_REFCOUNT, OBJECT_IDLETIME, MULTI, EXEC, DISCARD, WATCH, UNWATCH, AUTH, CLIENT, CONFIG, SLOWLOG, SELECT, MOVE, DUMP, RESTORE, MONITOR, OBJECT_FREQ |
+| 服务器 | 32 | DBSIZE, FLUSHDB, FLUSHALL, PING, ECHO, INFO, TIME, COMMAND, COMMAND_INFO, COMMAND_COUNT, OBJECT_ENCODING, OBJECT_REFCOUNT, OBJECT_IDLETIME, MULTI, EXEC, DISCARD, WATCH, UNWATCH, AUTH, CLIENT, CONFIG, SLOWLOG, SELECT, MOVE, DUMP, RESTORE, MONITOR, OBJECT_FREQ, SAVE, BGSAVE, LASTSAVE, RESET |
 
 **Key 过期机制**：
 - EXPIRE / PEXPIRE / EXPIREAT / PEXPIREAT — 设置过期时间（秒/毫秒、相对/绝对时间戳）
