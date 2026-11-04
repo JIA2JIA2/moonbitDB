@@ -63,31 +63,20 @@ pub fn Database::zrange(self : Database, key : String, start : Int, end : Int) -
 }
 
 fn insertion_sort(arr : Array[(String, Float)]) -> Array[(String, Float)] {
-  let mut result : Array[(String, Float)] = []
-  for item in arr {
-    let mut i = result.length()
-    while i > 0 {
-      let prev = result[i - 1]
+  for i = 1; i < arr.length(); i = i + 1 {
+    let item = arr[i]
+    let mut j = i - 1
+    while j >= 0 {
+      let prev = arr[j]
       if prev.1 < item.1 || (prev.1 == item.1 && prev.0.lexical_compare(item.0) <= 0) {
         break
       }
-      i = i - 1
+      arr[j + 1] = arr[j]
+      j = j - 1
     }
-    if i == result.length() {
-      result.push(item)
-    } else {
-      let new_result : Array[(String, Float)] = []
-      for j = 0; j < i; j = j + 1 {
-        new_result.push(result[j])
-      }
-      new_result.push(item)
-      for j = i; j < result.length(); j = j + 1 {
-        new_result.push(result[j])
-      }
-      result = new_result
-    }
+    arr[j + 1] = item
   }
-  result
+  arr
 }
 
 pub fn sort_by_score(items : Array[(String, Float)]) -> Array[(String, Float)] {
@@ -101,18 +90,48 @@ pub fn sort_by_score(items : Array[(String, Float)]) -> Array[(String, Float)] {
 pub fn merge_sort(arr : Array[(String, Float)]) -> Array[(String, Float)] {
   let len = arr.length()
   if len <= 1 {
-    arr
-  } else {
-    let mid = len / 2
-    let left : Array[(String, Float)] = []
-    let right : Array[(String, Float)] = []
-    for i = 0; i < mid; i = i + 1 {
-      left.push(arr[i])
+    return arr
+  }
+  let tmp : Array[(String, Float)] = []
+  for i = 0; i < len; i = i + 1 {
+    tmp.push(arr[i])
+  }
+  merge_sort_range(arr, tmp, 0, len)
+  arr
+}
+
+fn merge_sort_range(arr : Array[(String, Float)], tmp : Array[(String, Float)], lo : Int, hi : Int) -> Unit {
+  if hi - lo <= 1 {
+    return
+  }
+  let mid = (lo + hi) / 2
+  merge_sort_range(arr, tmp, lo, mid)
+  merge_sort_range(arr, tmp, mid, hi)
+  let mut i = lo
+  let mut j = mid
+  let mut k = lo
+  while i < mid && j < hi {
+    if arr[i].1 < arr[j].1 || (arr[i].1 == arr[j].1 && arr[i].0.lexical_compare(arr[j].0) <= 0) {
+      tmp[k] = arr[i]
+      i = i + 1
+    } else {
+      tmp[k] = arr[j]
+      j = j + 1
     }
-    for i = mid; i < len; i = i + 1 {
-      right.push(arr[i])
-    }
-    merge(merge_sort(left), merge_sort(right))
+    k = k + 1
+  }
+  while i < mid {
+    tmp[k] = arr[i]
+    i = i + 1
+    k = k + 1
+  }
+  while j < hi {
+    tmp[k] = arr[j]
+    j = j + 1
+    k = k + 1
+  }
+  for idx = lo; idx < hi; idx = idx + 1 {
+    arr[idx] = tmp[idx]
   }
 }
 

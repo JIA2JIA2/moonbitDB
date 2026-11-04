@@ -1,4 +1,8 @@
 pub fn Database::expire(self : Database, key : String, seconds : Int) -> Bool {
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::Expire(key, seconds))
+    return true
+  }
   if self.check_expired(key) {
     return false
   }
@@ -213,6 +217,10 @@ pub fn Database::pttl(self : Database, key : String) -> Int64 {
 }
 
 pub fn Database::persist(self : Database, key : String) -> Bool {
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::Persist(key))
+    return true
+  }
   if self.check_expired(key) {
     return false
   }
@@ -226,6 +234,10 @@ pub fn Database::persist(self : Database, key : String) -> Bool {
 }
 
 pub fn Database::del(self : Database, key : String) -> Bool {
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::Del(key))
+    return true
+  }
   if self.check_expired(key) {
     false
   } else {

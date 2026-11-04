@@ -180,6 +180,23 @@ pub fn Database::hgetall(self : Database, key : String) -> Map[String, String] {
   }
 }
 
+pub fn Database::hgetall_entries(self : Database, key : String) -> Array[(String, String)] {
+  if self.check_expired(key) {
+    []
+  } else {
+    match self.data.get(key) {
+      Some(RedisValue::Hash(h)) => {
+        let result : Array[(String, String)] = []
+        for field, value in h {
+          result.push((field, value))
+        }
+        result
+      }
+      _ => []
+    }
+  }
+}
+
 pub fn Database::hlen(self : Database, key : String) -> Int {
   if self.check_expired(key) {
     0

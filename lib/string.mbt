@@ -71,6 +71,10 @@ pub fn Database::try_set_get(
   key : String,
   value : String,
 ) -> Result[String?, RedisError] {
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::GetSet(key, value))
+    return Ok(None)
+  }
   if self.check_expired(key) {
     self.put(key, RedisValue::String(value))
     Ok(None)

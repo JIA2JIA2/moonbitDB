@@ -422,3 +422,90 @@ test "d3_zrangestore_byscore_bylex" {
     Err(_) => @test.assert_eq(true, false)
   }
 }
+
+test "d4_transaction_extended_ops" {
+  let db = Database::new()
+  db.set("d1", "v")
+  db.set("d2", "old")
+  db.rpush_all("dl", ["a", "b", "c"]) |> ignore
+  db.set("exp1", "v")
+  db.set("per1", "v")
+  db.pexpire("per1", 50000L) |> ignore
+
+  ignore(db.multi())
+  ignore(db.del("d1"))
+  ignore(db.getset("d2", "new"))
+  ignore(db.lpop("dl"))
+  ignore(db.rpop("dl"))
+  ignore(db.expire("exp1", 100))
+  ignore(db.persist("per1"))
+  @test.assert_eq(db.exec(), "OK")
+
+  @test.assert_eq(db.exists("d1"), false)
+  @test.assert_eq(db.get("d2"), Some("new"))
+  @test.assert_eq(db.lrange("dl", 0, -1), ["b"])
+  @test.assert_eq(db.ttl("exp1") > 0, true)
+  @test.assert_eq(db.ttl("per1"), -1)
+
+  ignore(db.multi())
+  ignore(db.lpop("dl"))
+  ignore(db.lpop("dl"))
+  @test.assert_eq(db.exec(), "OK")
+  @test.assert_eq(db.exists("dl"), false)
+}
+
+test "d4_hgetall_entries" {
+  let db = Database::new()
+  @test.assert_eq(db.hgetall_entries("missing").length(), 0)
+  db.hset("h1", "a", "1") |> ignore
+  db.hset("h1", "b", "2") |> ignore
+  let entries = db.hgetall_entries("h1")
+  @test.assert_eq(entries.length(), 2)
+  db.set("str", "x")
+  @test.assert_eq(db.hgetall_entries("str").length(), 0)
+  db.pexpire("h1", 1L) |> ignore
+  db.advance_time(10)
+  @test.assert_eq(db.hgetall_entries("h1").length(), 0)
+}
+
+test "d4_sort_and_sample_direct" {
+  let arr : Array[(String, Float)] = [("m", 5.0), ("a", 3.0), ("z", 9.0), ("b", 3.0), ("c", 1.0)]
+  let sorted = merge_sort(arr)
+  @test.assert_eq(sorted.length(), 5)
+  @test.assert_eq(sorted[0].0, "c")
+  @test.assert_eq(sorted[4].0, "z")
+
+  let arr2 : Array[(String, Float)] = [("e", 5.0), ("d", 4.0), ("c", 3.0), ("b", 2.0), ("a", 1.0)]
+  let sorted2 = merge_sort(arr2)
+  @test.assert_eq(sorted2[0].0, "a")
+  @test.assert_eq(sorted2[4].0, "e")
+
+  let m1 : Array[(String, Float)] = [("a", 1.0), ("c", 3.0)]
+  let m2 : Array[(String, Float)] = [("b", 2.0)]
+  let merged = merge(m1, m2)
+  @test.assert_eq(merged.length(), 3)
+  @test.assert_eq(merged[0].0, "a")
+  @test.assert_eq(merged[1].0, "b")
+  @test.assert_eq(merged[2].0, "c")
+
+  let m3 : Array[(String, Float)] = [("x", 2.0)]
+  let m4 : Array[(String, Float)] = [("a", 1.0), ("c", 3.0)]
+  let merged2 = merge(m3, m4)
+  @test.assert_eq(merged2[0].0, "a")
+  @test.assert_eq(merged2[1].0, "x")
+  @test.assert_eq(merged2[2].0, "c")
+
+  let small : Array[(String, Float)] = [("n", 2.0), ("m", 1.0), ("k", 2.0)]
+  let sorted3 = sort_by_score(small)
+  @test.assert_eq(sorted3[0].0, "m")
+  @test.assert_eq(sorted3[1].0, "k")
+  @test.assert_eq(sorted3[2].0, "n")
+
+  let db = Database::new()
+  @test.assert_eq(db.random_sample([], 3).length(), 0)
+  @test.assert_eq(db.random_sample(["a"], 0).length(), 0)
+  @test.assert_eq(db.random_sample(["a", "b"], 5).length(), 2)
+  let src : Array[String] = ["p", "q", "r"]
+  @test.assert_eq(db.random_sample(src, 2).length(), 2)
+  @test.assert_eq(db.random_sample(src, -4).length(), 4)
+}

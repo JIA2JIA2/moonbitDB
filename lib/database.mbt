@@ -18,6 +18,12 @@ pub enum TransactionOp {
   SRem(String, String)
   ZAdd(String, Float, String)
   ZRem(String, String)
+  Del(String)
+  Expire(String, Int)
+  Persist(String)
+  LPop(String)
+  RPop(String)
+  GetSet(String, String)
 }
 
 const MAX_CACHE_SIZE : Int = 100
@@ -322,6 +328,47 @@ fn Database::run_transaction(self : Database) -> Bool {
       TransactionOp::ZRem(key, member_val) => {
         self.zrem(key, member_val) |> ignore
       }
+      TransactionOp::Del(key) => {
+        self.delete_key(key)
+      }
+      TransactionOp::Expire(key, seconds) => {
+        match checked_add_i64(self.current_time, seconds.to_int64() * 1000) {
+          Some(expire_time) => {
+            if expire_time <= self.current_time {
+              self.delete_key(key)
+            } else {
+              self.set_expire(key, expire_time)
+            }
+          }
+          None => ()
+        }
+      }
+      TransactionOp::Persist(key) => {
+        self.expires.remove(key)
+        self.maybe_compact_expire_heap()
+      }
+      TransactionOp::LPop(key) => {
+        match self.data.get(key) {
+          Some(RedisValue::List(deque)) => {
+            ignore(deque.pop_front())
+            self.remove_if_empty(key, deque.length())
+          }
+          _ => ()
+        }
+      }
+      TransactionOp::RPop(key) => {
+        match self.data.get(key) {
+          Some(RedisValue::List(deque)) => {
+            ignore(deque.pop_back())
+            self.remove_if_empty(key, deque.length())
+          }
+          _ => ()
+        }
+      }
+      TransactionOp::GetSet(key, value) => {
+        self.put(key, RedisValue::String(value))
+        self.expires.remove(key)
+      }
     }
   }
   true
@@ -343,16 +390,12 @@ fn Database::random_sample(self : Database, items : Array[String], count : Int) 
     result
   } else if count > 0 {
     let take = if count >= len { len } else { count }
-    let pool : Array[String] = []
-    for item in items {
-      pool.push(item)
-    }
     for i = 0; i < take; i = i + 1 {
       let j = i + self.next_rand() % (len - i)
-      let tmp = pool[i]
-      pool[i] = pool[j]
-      pool[j] = tmp
-      result.push(pool[i])
+      let tmp = items[i]
+      items[i] = items[j]
+      items[j] = tmp
+      result.push(items[i])
     }
     result
   } else {

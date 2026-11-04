@@ -485,6 +485,7 @@ match db.try_incrby("name", 1) {
 | `hget` | `(self : Database, key : String, field : String) -> String?` | 获取 hash 字段 |
 | `hdel` | `(self : Database, key : String, field : String) -> Bool` | 删除 hash 字段 |
 | `hgetall` | `(self : Database, key : String) -> Map[String, String]` | 获取所有字段和值 |
+| `hgetall_entries` | `(self : Database, key : String) -> Array[(String, String)]` | 获取所有字段和值（免 Map 复制，遍历更快） |
 | `hlen` | `(self : Database, key : String) -> Int` | 字段数量 |
 | `hexists` | `(self : Database, key : String, field : String) -> Bool` | 检查 hash 字段是否存在 |
 | `hkeys` | `(self : Database, key : String) -> Array[String]` | 获取 hash 所有字段名 |

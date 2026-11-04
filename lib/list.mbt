@@ -95,6 +95,10 @@ pub fn Database::rpush_all(self : Database, key : String, values : Array[String]
 }
 
 pub fn Database::try_lpop(self : Database, key : String) -> Result[String, RedisError] {
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::LPop(key))
+    return Err(RedisError::NotFound)
+  }
   if self.check_expired(key) {
     Err(RedisError::NotFound)
   } else {
@@ -125,6 +129,10 @@ pub fn Database::lpop(self : Database, key : String) -> String? {
 }
 
 pub fn Database::try_rpop(self : Database, key : String) -> Result[String, RedisError] {
+  if self.in_transaction {
+    self.transaction_queue.push(TransactionOp::RPop(key))
+    return Err(RedisError::NotFound)
+  }
   if self.check_expired(key) {
     Err(RedisError::NotFound)
   } else {
