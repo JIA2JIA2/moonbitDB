@@ -204,7 +204,7 @@ moonbitDB/
 | `SETEX` | `(key, seconds, value) -> Bool` | 设置值并指定过期时间（秒） |
 | `GETDEL` | `(key) -> String?` | 获取值并删除 key |
 | `GETSET` | `(key, value) -> String?` | 设置新值并返回旧值（清除 TTL） |
-| `GETEX` | `(key, expire_ms) -> String?` | 获取值并设置/移除 TTL（`None` 表示 PERSIST） |
+| `GETEX` | `(key, expire_ms) -> String?` | 获取值并设置/移除 TTL（`None` 表示 PERSIST；差异：MULTI 期间直接执行不排队，官方入队） |
 | `PSETEX` | `(key, ms, value) -> Bool` | 设置值并指定过期时间（毫秒） |
 
 > `STRLEN`/`GETRANGE`/`SETRANGE` 的索引按 **UTF-16 code unit** 计数，与 Redis 的字节索引不同；中文、emoji 等场景需要字节语义时请先自行编码。
@@ -215,7 +215,7 @@ moonbitDB/
 |------|------|------|
 | `KEYS` | `() -> Array[String]` | 列出所有 key |
 | `KEYS_PATTERN` | `(pattern) -> Array[String]` | 模式匹配 key（支持 `*` `?`） |
-| `SCAN` | `(cursor, count) -> (Int, Array[String])` | 游标遍历 key，返回下一游标（0 表示结束） |
+| `SCAN` | `(cursor, count) -> (Int, Array[String])` | 游标遍历 key，返回下一游标（0 表示结束；差异：跨调用期间未写入时可能返回快照中已过期的 key） |
 | `TYPE` | `(key) -> String` | 返回值类型（string/hash/list/set/zset/none） |
 | `EXPIRE` | `(key, seconds) -> Bool` | 设置过期时间（秒） |
 | `PEXPIRE` | `(key, ms) -> Bool` | 设置过期时间（毫秒） |

@@ -929,7 +929,15 @@ pub fn Database::try_incrbyfloat(
       }
     }
     Some(_) => Err(RedisError::WrongType)
-    None => Err(RedisError::NotFound)
+    None => {
+      let new_value = increment
+      if new_value != new_value {
+        Err(RedisError::Overflow)
+      } else {
+        self.put(key, RedisValue::String(format_float(new_value)))
+        Ok(new_value)
+      }
+    }
   }
 }
 

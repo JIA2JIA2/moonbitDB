@@ -307,8 +307,8 @@ fn Database::run_transaction(self : Database) -> Bool {
         self.expires.remove(key)
       }
       TransactionOp::Incr(key) => {
-        match self.get(key) {
-          Some(s) => {
+        match self.data.get(key) {
+          Some(RedisValue::String(s)) => {
             match parse_int64(s) {
               Some(n) => {
                 match checked_add_i64(n, 1) {
@@ -321,14 +321,15 @@ fn Database::run_transaction(self : Database) -> Bool {
               None => ()
             }
           }
+          Some(_) => ()
           None => {
             self.put(key, RedisValue::String("1"))
           }
         }
       }
       TransactionOp::Decr(key) => {
-        match self.get(key) {
-          Some(s) => {
+        match self.data.get(key) {
+          Some(RedisValue::String(s)) => {
             match parse_int64(s) {
               Some(n) => {
                 match checked_add_i64(n, -1) {
@@ -341,6 +342,7 @@ fn Database::run_transaction(self : Database) -> Bool {
               None => ()
             }
           }
+          Some(_) => ()
           None => {
             self.put(key, RedisValue::String("-1"))
           }
@@ -408,8 +410,13 @@ fn Database::run_transaction(self : Database) -> Bool {
         }
       }
       TransactionOp::GetSet(key, value) => {
-        self.put(key, RedisValue::String(value))
-        self.expires.remove(key)
+        match self.data.get(key) {
+          Some(RedisValue::String(_)) | None => {
+            self.put(key, RedisValue::String(value))
+            self.expires.remove(key)
+          }
+          Some(_) => ()
+        }
       }
     }
   }

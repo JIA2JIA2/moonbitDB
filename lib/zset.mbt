@@ -930,6 +930,7 @@ pub fn Database::try_zrangestore_byscore(
     Err(e) => return Err(e)
   }
   if self.check_expired(source) {
+    self.delete_key(destination)
     return Ok(0)
   }
   match self.data.get(source) {
@@ -951,12 +952,19 @@ pub fn Database::try_zrangestore_byscore(
         scores.set(sorted[i].0, sorted[i].1)
         taken = taken + 1
       }
-      self.put(destination, RedisValue::ZSet(scores))
-      self.expires.remove(destination)
+      if scores.length() == 0 {
+        self.delete_key(destination)
+      } else {
+        self.put(destination, RedisValue::ZSet(scores))
+        self.expires.remove(destination)
+      }
       Ok(scores.length())
     }
     Some(_) => Err(RedisError::WrongType)
-    None => Ok(0)
+    None => {
+      self.delete_key(destination)
+      Ok(0)
+    }
   }
 }
 
@@ -971,6 +979,7 @@ pub fn Database::try_zrangestore_bylex(
     return Err(RedisError::InvalidArgument)
   }
   if self.check_expired(source) {
+    self.delete_key(destination)
     return Ok(0)
   }
   match self.data.get(source) {
@@ -985,12 +994,19 @@ pub fn Database::try_zrangestore_bylex(
           None => ()
         }
       }
-      self.put(destination, RedisValue::ZSet(scores))
-      self.expires.remove(destination)
+      if scores.length() == 0 {
+        self.delete_key(destination)
+      } else {
+        self.put(destination, RedisValue::ZSet(scores))
+        self.expires.remove(destination)
+      }
       Ok(scores.length())
     }
     Some(_) => Err(RedisError::WrongType)
-    None => Ok(0)
+    None => {
+      self.delete_key(destination)
+      Ok(0)
+    }
   }
 }
 
@@ -2238,6 +2254,7 @@ pub fn Database::try_zrangestore(
   end : Int,
 ) -> Result[Int, RedisError] {
   if self.check_expired(source) {
+    self.delete_key(destination)
     return Ok(0)
   }
   match self.data.get(source) {
@@ -2247,12 +2264,19 @@ pub fn Database::try_zrangestore(
       for pair in result {
         scores.set(pair.0, pair.1)
       }
-      self.put(destination, RedisValue::ZSet(scores))
-      self.expires.remove(destination)
+      if scores.length() == 0 {
+        self.delete_key(destination)
+      } else {
+        self.put(destination, RedisValue::ZSet(scores))
+        self.expires.remove(destination)
+      }
       Ok(result.length())
     }
     Some(_) => Err(RedisError::WrongType)
-    None => Ok(0)
+    None => {
+      self.delete_key(destination)
+      Ok(0)
+    }
   }
 }
 

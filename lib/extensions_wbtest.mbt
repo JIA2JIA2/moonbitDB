@@ -1568,3 +1568,43 @@ test "h2_placeholder_commands" {
   let lwut = db.lolwut()
   @test.assert_eq(lwut.contains("moonbitDB ver. 0.1.4"), true)
 }
+
+
+test "h3_combination_fixes" {
+  let db = Database::new()
+  db.hset("hh", "f", "v") |> ignore
+  ignore(db.multi())
+  ignore(db.getset("hh", "overwrite"))
+  ignore(db.exec())
+  @test.assert_eq(db.hget("hh", "f"), Some("v"))
+
+  db.hset("hh2", "f", "v") |> ignore
+  ignore(db.multi())
+  ignore(db.incr("hh2"))
+  ignore(db.exec())
+  @test.assert_eq(db.hget("hh2", "f"), Some("v"))
+
+  db.zadd("zs1", 1.0, "a") |> ignore
+  match db.try_zrangestore("dst1", "zs1", 5, 10) {
+    Ok(count) => @test.assert_eq(count, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.exists("dst1"), false)
+  match db.try_zrangestore("dst1", "missing", 0, -1) {
+    Ok(count) => @test.assert_eq(count, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.exists("dst1"), false)
+  db.set("dst1", "string-value")
+  match db.try_zrangestore_byscore("dst1", "zs1", "-inf", "+inf", 0, 0) {
+    Ok(count) => @test.assert_eq(count, 1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.type_of("dst1"), "zset")
+
+  match db.try_incrbyfloat("fresh", 1.5) {
+    Ok(v) => @test.assert_eq(v, 1.5)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.get("fresh"), Some("1.5"))
+}
