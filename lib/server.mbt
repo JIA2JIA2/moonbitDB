@@ -220,6 +220,10 @@ pub fn Database::select(_ : Database, _index : Int) -> String {
   "OK"
 }
 
+pub fn Database::monitor(_ : Database) -> String {
+  "OK"
+}
+
 pub fn Database::move_key(self : Database, key : String, db_index : Int) -> Bool {
   if self.check_expired(key) {
     false

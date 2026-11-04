@@ -549,8 +549,76 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
         "  SADD/SMEMBERS/SREM/SCARD/SISMEMBER",
         "  ZADD/ZRANGE/ZRANGEBYLEX/ZRANK/ZINCRBY",
         "  MSET/MGET/MDEL | COPY/TOUCH/UNLINK | DBSIZE/FLUSHDB/PING/INFO",
+        "  AUTH/CLIENT/CONFIG/SLOWLOG | SELECT/MOVE/DUMP/RESTORE/MONITOR",
         "  ADVANCE ms | HELP | QUIT"
       ]
+    }
+    "AUTH" => {
+      if parts.length() < 2 { ["ERR wrong number"] }
+      else { [@lib.Database::auth(db, parts[1])] }
+    }
+    "CLIENT" => {
+      if parts.length() < 2 { ["ERR wrong number"] }
+      else { [@lib.Database::client_list(db)] }
+    }
+    "CONFIG" => {
+      if parts.length() < 3 { ["ERR wrong number"] }
+      else { [@lib.Database::config_get(db, parts[2])] }
+    }
+    "SLOWLOG" => {
+      if parts.length() < 2 { ["ERR wrong number"] }
+      else {
+        let entries = @lib.Database::slowlog(db, parts[1])
+        if entries.length() == 0 { ["(empty)"] } else { entries }
+      }
+    }
+    "SELECT" => {
+      if parts.length() < 2 { ["ERR wrong number"] }
+      else {
+        match parse_int(parts[1]) {
+          Some(idx) => [@lib.Database::select(db, idx)]
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "MOVE" => {
+      if parts.length() < 3 { ["ERR wrong number"] }
+      else {
+        match parse_int(parts[2]) {
+          Some(idx) => { ["(integer) \{@lib.Database::move_key(db, parts[1], idx)}"] }
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "DUMP" => {
+      if parts.length() < 2 { ["ERR wrong number"] }
+      else {
+        match @lib.Database::dump(db, parts[1]) {
+          Some(v) => ["\"\{v}\""]
+          None => ["(nil)"]
+        }
+      }
+    }
+    "RESTORE" => {
+      if parts.length() < 4 { ["ERR wrong number"] }
+      else {
+        match parse_int(parts[2]) {
+          Some(ttl) => {
+            ["(integer) \{@lib.Database::restore(db, parts[1], ttl.to_int64(), parts[3])}"]
+          }
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "MONITOR" => { [@lib.Database::monitor(db)] }
+    "OBJECT_FREQ" => {
+      if parts.length() < 2 { ["ERR wrong number"] }
+      else {
+        match @lib.Database::object_freq(db, parts[1]) {
+          Some(freq) => ["(integer) \{freq}"]
+          None => ["(nil)"]
+        }
+      }
     }
     _ => ["ERR unknown command '\{command}'"]
   }

@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**159 个测试用例，全部通过**。
+当前测试覆盖：**160 个测试用例，全部通过**。
 
 ### 运行基准与覆盖率
 
@@ -144,7 +144,7 @@ moonbitDB/
 │   ├── util.mbt                # 整数解析与通配符匹配
 │   ├── error.mbt               # RedisError 错误模型
 │   ├── server.mbt              # 服务器命令
-│   ├── database_wbtest.mbt     # 白盒测试（149 个用例）
+│   ├── database_wbtest.mbt     # 白盒测试（160 个用例）
 │   ├── database_property_wbtest.mbt # 属性测试
 │   ├── database_bench_test.mbt # 基准测试
 │   └── moon.pkg
@@ -171,7 +171,7 @@ moonbitDB/
 
 ## 支持的命令
 
-共支持 **126 个命令**，覆盖 Redis 核心功能。
+共支持 **141 个命令**，覆盖 Redis 核心功能。
 
 > **类型安全约定**：对已存在但类型不匹配的 key，写操作**不会覆盖**原数据。失败返回值约定如下：`HSET`/`LPUSH`/`RPUSH`/`APPEND`/`SETRANGE` 返回 `-1`，`SADD`/`ZADD`/`HSETNX` 返回 `false`，`INCR`/`DECR`/`INCRBY`/`DECRBY`/`HINCRBY` 返回 `None`，`HMSET` 为空操作，`SINTERSTORE`/`SUNIONSTORE`/`SDIFFSTORE` 返回 `-1`。时间相关 API 使用 `Int64` 毫秒，可安全表示真实 Unix 时间戳与超过 24 天的 TTL。
 
@@ -354,6 +354,16 @@ moonbitDB/
 | `MULTI` | `() -> String` | 开启事务（返回 "OK"） |
 | `EXEC` | `() -> String` | 执行事务队列（返回 "OK"） |
 | `DISCARD` | `() -> String` | 清空事务队列（返回 "OK"） |
+| `AUTH` | `(password) -> String` | 认证（始终返回 "OK"） |
+| `CLIENT` | `(subcommand) -> String` | 客户端信息（LIST 返回连接描述） |
+| `CONFIG` | `(subcommand, parameter) -> String` | 配置查询（GET 返回 "0"） |
+| `SLOWLOG` | `(subcommand) -> Array[String]` | 慢查询日志（当前为空） |
+| `SELECT` | `(index) -> String` | 选择数据库（始终返回 "OK"） |
+| `MOVE` | `(key, db_index) -> Bool` | 移动 key 到其他数据库（仅支持 db 0） |
+| `DUMP` | `(key) -> String?` | 序列化字符串值（仅 String 类型） |
+| `RESTORE` | `(key, ttl_ms, value) -> Bool` | 反序列化恢复 key（ttl_ms>0 时设置过期） |
+| `MONITOR` | `() -> String` | 进入监控模式（返回 "OK"） |
+| `OBJECT_FREQ` | `(key) -> Int?` | 对象访问频率（当前为 0） |
 
 ## 完整公共 API 文档
 
@@ -758,7 +768,7 @@ moon run examples/cli_repl --target native
 
 参考 [examples/cli_repl/main.mbt](examples/cli_repl/main.mbt)
 
-支持解析和执行 55 个命令，包括 SET/GET/HSET/LPUSH/SADD/ZADD/SCAN/COPY 等常用命令。
+支持解析和执行 65 个命令，包括 SET/GET/HSET/LPUSH/SADD/ZADD/SCAN/COPY 等常用命令。
 
 ## 许可证
 
@@ -781,7 +791,7 @@ moon run examples/cli_repl --target native
 - Set — 集合（无序唯一元素）
 - Sorted Set — 有序集合（分数排序）
 
-**命令语义**（8 大命令组，131 个命令）：
+**命令语义**（8 大命令组，141 个命令）：
 
 | 命令组 | 命令数量 | 代表命令 |
 |--------|----------|----------|
@@ -792,7 +802,7 @@ moon run examples/cli_repl --target native
 | Set | 17 | SADD, SMEMBERS, SREM, SCARD, SISMEMBER, SMISMEMBER, SINTER, SINTERCARD, SINTERSTORE, SUNION, SUNIONSTORE, SDIFF, SDIFFSTORE, SMOVE, SPOP, SRANDMEMBER, SSCAN |
 | Sorted Set | 32 | ZADD, ZRANGE, ZCARD, ZSCORE, ZREM, ZRANGEBYSCORE, ZRANGEBYLEX, ZREVRANGEBYLEX, ZLEXCOUNT, ZCOUNT, ZREVRANGE, ZREVRANGEBYSCORE, ZRANK, ZREVRANK, ZINCRBY, ZREMRANGEBYRANK, ZREMRANGEBYSCORE, ZREMRANGEBYLEX, ZPOPMIN, ZPOPMAX, ZMSCORE, ZRANDMEMBER, ZUNION, ZUNIONSTORE, ZINTER, ZINTERSTORE, ZINTERCARD, ZDIFF, ZDIFFSTORE, ZRANGESTORE, ZSCAN, ZMPOP |
 | 批量操作 | 6 | MSET, MSETNX, MGET, MDEL, HMSET, HMGET |
-| 服务器 | 12 | DBSIZE, FLUSHDB, FLUSHALL, PING, ECHO, INFO, TIME, COMMAND, OBJECT_ENCODING, MULTI, EXEC, DISCARD |
+| 服务器 | 22 | DBSIZE, FLUSHDB, FLUSHALL, PING, ECHO, INFO, TIME, COMMAND, OBJECT_ENCODING, MULTI, EXEC, DISCARD, AUTH, CLIENT, CONFIG, SLOWLOG, SELECT, MOVE, DUMP, RESTORE, MONITOR, OBJECT_FREQ |
 
 **Key 过期机制**：
 - EXPIRE / PEXPIRE / EXPIREAT / PEXPIREAT — 设置过期时间（秒/毫秒、相对/绝对时间戳）
