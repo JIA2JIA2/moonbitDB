@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**204 个测试用例，全部通过**。
+当前测试覆盖：**206 个测试用例，全部通过**。
 
 ### 运行基准与覆盖率
 
@@ -392,6 +392,7 @@ moonbitDB/
 | `CONFIG_RESETSTAT` | `() -> String` | 重置统计与配置覆盖（返回 "OK"） |
 | `LOLWUT` | `() -> String` | 版本彩蛋输出 |
 | `SORT` | `(key, ALPHA?, DESC?, LIMIT offset count?, STORE dest?) -> Array[String]` | 对 List/Set/ZSet 排序（数值默认，非数字报 NotInteger；STORE 覆盖 dest 为 List） |
+| `SORT BY/GET` | `(key, BY pattern\|nosort?, GET #\|pattern->field..., ...) -> Array[String]` | 完整版：BY hash 权重排序（缺失权重按 0）、GET 展开输出（缺失为空串）、支持 ALPHA/DESC/LIMIT/STORE（`try_sort_advanced`） |
 
 ## 完整公共 API 文档
 
@@ -473,6 +474,9 @@ match db.try_incrby("name", 1) {
 | `client_setname` | `(self : Database, name : String) -> String` | CLIENT SETNAME |
 | `client_kill` | `(self : Database, target : String) -> String` | CLIENT KILL（占位返回 "OK"） |
 | `config_set` | `(self : Database, parameter : String, value : String) -> String` | CONFIG SET（覆盖默认配置） |
+| `try_sort` | `(self : Database, key : String, alpha : Bool, desc : Bool, offset : Int, count : Int, store : String?) -> Result[Array[String], RedisError]` | 基础版 SORT |
+| `try_sort_advanced` | `(self : Database, key : String, by_pattern : String?, get_patterns : Array[String], alpha : Bool, desc : Bool, offset : Int, count : Int, store : String?) -> Result[Array[String], RedisError]` | 完整版 SORT（BY hash 权重/nosort、GET #/pattern->field 展开） |
+| `sort_advanced` | `(self : Database, key, by_pattern, get_patterns, alpha, desc, offset, count, store) -> Array[String]` | 完整版 SORT 便捷版（错误返回空） |
 | `try_bitfield_get` | `(self : Database, key : String, offset : Int, width : Int, signed : Bool) -> Result[Int, RedisError]` | 位段读取（宽 1-32） |
 | `try_bitfield_set` | `(self : Database, key : String, offset : Int, width : Int, signed : Bool, value : Int) -> Result[Int, RedisError]` | 位段写入，返回旧值 |
 | `try_bitfield_incrby` | `(self : Database, key : String, offset : Int, width : Int, signed : Bool, increment : Int) -> Result[Int, RedisError]` | 位段自增（WRAP 溢出），返回新值 |

@@ -1608,3 +1608,56 @@ test "h3_combination_fixes" {
   }
   @test.assert_eq(db.get("fresh"), Some("1.5"))
 }
+
+
+test "h4_sort_by_get" {
+  let db = Database::new()
+  db.hset("w_a", "wt", "3") |> ignore
+  db.hset("w_a", "name", "Alice") |> ignore
+  db.hset("w_b", "wt", "1") |> ignore
+  db.hset("w_b", "name", "Bob") |> ignore
+  db.hset("w_c", "name", "Cara") |> ignore
+  db.rpush_all("players", ["a", "b", "c"]) |> ignore
+
+  match db.try_sort_advanced("players", Some("w_*->wt"), [], false, false, 0, 0, None) {
+    Ok(items) => @test.assert_eq(items, ["c", "b", "a"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_sort_advanced("players", Some("w_*->wt"), [], false, true, 0, 0, None) {
+    Ok(items) => @test.assert_eq(items, ["a", "b", "c"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_sort_advanced("players", Some("w_*->wt"), ["w_*->name", "#"], false, false, 0, 0, None) {
+    Ok(items) => @test.assert_eq(items, ["Cara", "c", "Bob", "b", "Alice", "a"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_sort_advanced("players", None, ["#"], true, false, 0, 0, None) {
+    Ok(items) => @test.assert_eq(items, ["a", "b", "c"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_sort_advanced("players", Some("nosort"), ["#"], false, false, 0, 0, None) {
+    Ok(items) => @test.assert_eq(items, ["a", "b", "c"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_sort_advanced("players", Some("w_*->wt"), ["w_*->name"], false, false, 1, 1, None) {
+    Ok(items) => @test.assert_eq(items, ["Bob"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_sort_advanced("players", Some("w_*->wt"), ["w_*->name"], false, false, 0, 0, Some("sorted-out")) {
+    Ok(items) => @test.assert_eq(items, ["Cara", "Bob", "Alice"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.lrange("sorted-out", 0, -1), ["Cara", "Bob", "Alice"])
+  match db.try_sort_advanced("players", Some("w_*->wt"), [], false, false, 0, 0, None) {
+    Ok(items) => @test.assert_eq(items, ["c", "b", "a"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_sort_advanced("players", Some("bad_pattern"), [], false, false, 0, 0, None) {
+    Ok(items) => @test.assert_eq(items, ["a", "b", "c"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_sort_advanced("missing", None, [], false, false, 0, 0, None) {
+    Ok(items) => @test.assert_eq(items.length(), 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+}

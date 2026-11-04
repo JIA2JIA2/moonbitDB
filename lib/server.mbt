@@ -672,4 +672,245 @@ pub fn Database::sort(
   }
 }
 
+fn substitute_pattern(pattern : String, element : String) -> String {
+  let out : Array[String] = []
+  let mut start = 0
+  for i = 0; i < pattern.length(); i = i + 1 {
+    if pattern[i] == 42 {
+      out.push(pattern[start:i].to_owned())
+      out.push(element)
+      start = i + 1
+    }
+  }
+  out.push(pattern[start:pattern.length()].to_owned())
+  out.join("")
+}
+
+fn split_arrow(pattern : String) -> (String, String)? {
+  for i = 0; i < pattern.length() - 1; i = i + 1 {
+    if pattern[i] == 45 && pattern[i + 1] == 62 {
+      return Some((pattern[0:i].to_owned(), pattern[i + 2:pattern.length()].to_owned()))
+    }
+  }
+  None
+}
+
+fn Database::hash_field_lookup(self : Database, hkey : String, field : String) -> String? {
+  self.check_expired(hkey) |> ignore
+  match self.data.get(hkey) {
+    Some(RedisValue::Hash(h)) => h.get(field)
+    _ => None
+  }
+}
+
+fn Database::resolve_get_pattern(self : Database, pattern : String, element : String) -> String {
+  if pattern == "#" {
+    return element
+  }
+  match split_arrow(pattern) {
+    Some((prefix, field)) => {
+      let hkey = substitute_pattern(prefix, element)
+      match self.hash_field_lookup(hkey, field) {
+        Some(v) => v
+        None => ""
+      }
+    }
+    None => {
+      let k = substitute_pattern(pattern, element)
+      match self.get(k) {
+        Some(v) => v
+        None => ""
+      }
+    }
+  }
+}
+
+pub fn Database::try_sort_advanced(
+  self : Database,
+  key : String,
+  by_pattern : String?,
+  get_patterns : Array[String],
+  alpha : Bool,
+  desc : Bool,
+  offset : Int,
+  count : Int,
+  store : String?,
+) -> Result[Array[String], RedisError] {
+  if offset < 0 {
+    return Err(RedisError::InvalidArgument)
+  }
+  let nosort = match by_pattern {
+    Some(bp) => bp == "nosort"
+    None => false
+  }
+  if self.check_expired(key) {
+    return match store {
+      Some(dest) => {
+        self.delete_key(dest)
+        Ok([])
+      }
+      None => Ok([])
+    }
+  }
+  let items : Array[String] = match self.data.get(key) {
+    Some(RedisValue::List(d)) => d.to_array()
+    Some(RedisValue::Set(s)) => {
+      let a : Array[String] = []
+      for m, _ in s {
+        a.push(m)
+      }
+      a
+    }
+    Some(RedisValue::ZSet(z)) => {
+      let a : Array[String] = []
+      for m, _ in z {
+        a.push(m)
+      }
+      a
+    }
+    Some(_) => return Err(RedisError::WrongType)
+    None => []
+  }
+  let pairs : Array[(String, String)] = []
+  for element in items {
+    let sort_key = match by_pattern {
+      None => element
+      Some(bp) => {
+        if bp == "nosort" {
+          element
+        } else {
+          match split_arrow(bp) {
+            Some((prefix, field)) => {
+              let hkey = substitute_pattern(prefix, element)
+              match self.hash_field_lookup(hkey, field) {
+                Some(v) => v
+                None => ""
+              }
+            }
+            None => {
+              let k = substitute_pattern(bp, element)
+              match self.get(k) {
+                Some(v) => v
+                None => ""
+              }
+            }
+          }
+        }
+      }
+    }
+    pairs.push((element, sort_key))
+  }
+  if !nosort {
+    if alpha {
+      for i = 1; i < pairs.length(); i = i + 1 {
+        let item = pairs[i]
+        let mut j = i - 1
+        while j >= 0 {
+          if pairs[j].1.lexical_compare(item.1) <= 0 {
+            break
+          }
+          pairs[j + 1] = pairs[j]
+          j = j - 1
+        }
+        pairs[j + 1] = item
+      }
+    } else {
+      let numeric : Array[(String, Float)] = []
+      for p in pairs {
+        if p.1 == "" {
+          numeric.push((p.0, 0.0))
+        } else {
+          match parse_float(p.1) {
+            Some(v) => numeric.push((p.0, v))
+            None => return Err(RedisError::NotInteger)
+          }
+        }
+      }
+      let sorted_pairs = sort_by_score(numeric)
+      let used : Array[Bool] = []
+      for j = 0; j < pairs.length(); j = j + 1 {
+        used.push(false)
+      }
+      let rebuilt : Array[(String, String)] = []
+      for sp in sorted_pairs {
+        for j = 0; j < pairs.length(); j = j + 1 {
+          if !used[j] && pairs[j].0 == sp.0 {
+            rebuilt.push(pairs[j])
+            used[j] = true
+            break
+          }
+        }
+      }
+      pairs.clear()
+      for p in rebuilt {
+        pairs.push(p)
+      }
+    }
+    if desc {
+      let mut l = 0
+      let mut r = pairs.length() - 1
+      while l < r {
+        let tmp = pairs[l]
+        pairs[l] = pairs[r]
+        pairs[r] = tmp
+        l = l + 1
+        r = r - 1
+      }
+    }
+  }
+  let limited : Array[(String, String)] = if count <= 0 {
+    pairs
+  } else {
+    let out : Array[(String, String)] = []
+    let mut i = offset
+    while i < pairs.length() && out.length() < count {
+      out.push(pairs[i])
+      i = i + 1
+    }
+    out
+  }
+  let result : Array[String] = []
+  for p in limited {
+    if get_patterns.length() == 0 {
+      result.push(p.0)
+    } else {
+      for gp in get_patterns {
+        result.push(self.resolve_get_pattern(gp, p.0))
+      }
+    }
+  }
+  match store {
+    Some(dest) => {
+      if result.length() == 0 {
+        self.delete_key(dest)
+      } else {
+        let deque = Deque::new()
+        for item in result {
+          deque.push_back(item)
+        }
+        self.put(dest, RedisValue::List(deque))
+      }
+      Ok(result)
+    }
+    None => Ok(result)
+  }
+}
+
+pub fn Database::sort_advanced(
+  self : Database,
+  key : String,
+  by_pattern : String?,
+  get_patterns : Array[String],
+  alpha : Bool,
+  desc : Bool,
+  offset : Int,
+  count : Int,
+  store : String?,
+) -> Array[String] {
+  match self.try_sort_advanced(key, by_pattern, get_patterns, alpha, desc, offset, count, store) {
+    Ok(items) => items
+    Err(_) => []
+  }
+}
+
 
