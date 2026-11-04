@@ -411,6 +411,20 @@ pub fn Database::sdiffstore(self : Database, destination : String, keys : Array[
   }
 }
 
+pub fn Database::try_smove(self : Database, source : String, destination : String, member_val : String) -> Result[Bool, RedisError] {
+  self.check_expired(source) |> ignore
+  self.check_expired(destination) |> ignore
+  match self.data.get(source) {
+    Some(RedisValue::Set(_)) | None => ()
+    Some(_) => return Err(RedisError::WrongType)
+  }
+  match self.data.get(destination) {
+    Some(RedisValue::Set(_)) | None => ()
+    Some(_) => return Err(RedisError::WrongType)
+  }
+  Ok(self.smove(source, destination, member_val))
+}
+
 pub fn Database::smove(self : Database, source : String, destination : String, value : String) -> Bool {
   if self.check_expired(source) || self.check_expired(destination) {
     return false

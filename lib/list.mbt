@@ -243,6 +243,17 @@ pub fn Database::lset(self : Database, key : String, index : Int, value : String
   }
 }
 
+pub fn Database::try_lrem(self : Database, key : String, count : Int, value : String) -> Result[Int, RedisError] {
+  if self.check_expired(key) {
+    return Ok(0)
+  }
+  match self.data.get(key) {
+    Some(RedisValue::List(_)) => Ok(self.lrem(key, count, value))
+    Some(_) => Err(RedisError::WrongType)
+    None => Ok(0)
+  }
+}
+
 pub fn Database::lrem(self : Database, key : String, count : Int, value : String) -> Int {
   if self.check_expired(key) {
     0
@@ -310,24 +321,31 @@ pub fn Database::lrem(self : Database, key : String, count : Int, value : String
   }
 }
 
-pub fn Database::linsert(self : Database, key : String, before : Bool, pivot : String, value : String) -> Int {
+pub fn Database::try_linsert(self : Database, key : String, before : Bool, pivot : String, value : String) -> Result[Int, RedisError] {
   if self.check_expired(key) {
-    -1
-  } else {
-    match self.data.get(key) {
-      Some(RedisValue::List(deque)) => {
-        let idx = deque.find_index(pivot)
-        if idx == -1 {
-          -1
-        } else {
-          let insert_idx = if before { idx } else { idx + 1 }
-          deque.insert_at(insert_idx, value) |> ignore
-          self.put(key, RedisValue::List(deque))
-          deque.length()
-        }
+    return Ok(-1)
+  }
+  match self.data.get(key) {
+    Some(RedisValue::List(deque)) => {
+      let idx = deque.find_index(pivot)
+      if idx == -1 {
+        Ok(-1)
+      } else {
+        let insert_idx = if before { idx } else { idx + 1 }
+        ignore(deque.insert_at(insert_idx, value))
+        self.put(key, RedisValue::List(deque))
+        Ok(deque.length())
       }
-      _ => -1
     }
+    Some(_) => Err(RedisError::WrongType)
+    None => Ok(-1)
+  }
+}
+
+pub fn Database::linsert(self : Database, key : String, before : Bool, pivot : String, value : String) -> Int {
+  match self.try_linsert(key, before, pivot, value) {
+    Ok(result) => result
+    Err(_) => -1
   }
 }
 
@@ -503,6 +521,17 @@ pub fn Database::lmove(
       }
       _ => None
     }
+  }
+}
+
+pub fn Database::try_ltrim(self : Database, key : String, start : Int, end : Int) -> Result[Bool, RedisError] {
+  if self.check_expired(key) {
+    return Ok(false)
+  }
+  match self.data.get(key) {
+    Some(RedisValue::List(_)) => Ok(self.ltrim(key, start, end))
+    Some(_) => Err(RedisError::WrongType)
+    None => Ok(false)
   }
 }
 

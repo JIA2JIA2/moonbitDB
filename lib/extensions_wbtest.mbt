@@ -1696,3 +1696,86 @@ test "k1_glob_classes_and_escape" {
   db.zadd("g3", 2.0, "two") |> ignore
   @test.assert_eq(db.zscan_with_match("g3", 0, 10, Some("t*o")).1.length(), 1)
 }
+
+
+test "k4_try_variants" {
+  let db = Database::new()
+  db.hset("hh", "f", "v") |> ignore
+
+  match db.try_setnx("hh", "x") {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_setnx("sx", "v") {
+    Ok(set) => @test.assert_eq(set, true)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_setex("hh", 10, "x") {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_setex("se", 0, "x") {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_psetex("pe", -1L, "x") {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+
+  db.rpush_all("l1", ["a", "b", "a"]) |> ignore
+  match db.try_lrem("hh", 0, "x") {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_lrem("l1", 1, "a") {
+    Ok(n) => @test.assert_eq(n, 1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_ltrim("hh", 0, -1) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_ltrim("l1", 0, 0) {
+    Ok(_) => @test.assert_eq(true, true)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_linsert("l1", true, "pivot_missing", "v") {
+    Ok(n) => @test.assert_eq(n, -1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_linsert("hh", true, "f", "v") {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+
+  db.sadd_all("s1", ["a"]) |> ignore
+  match db.try_smove("hh", "s1", "x") {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_smove("s1", "s2", "a") {
+    Ok(moved) => @test.assert_eq(moved, true)
+    Err(_) => @test.assert_eq(true, false)
+  }
+
+  db.zadd("z1", 1.0, "a") |> ignore
+  match db.try_zremrangebyrank("hh", 0, -1) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_zremrangebyrank("z1", 0, -1) {
+    Ok(n) => @test.assert_eq(n, 1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+
+  match db.try_rename("missing", "r2") {
+    Err(RedisError::NotFound) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  db.set("rn1", "v")
+  match db.try_rename("rn1", "rn2") {
+    Ok(v) => @test.assert_eq(v, true)
+    Err(_) => @test.assert_eq(true, false)
+  }
+}

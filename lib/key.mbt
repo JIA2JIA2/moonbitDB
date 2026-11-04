@@ -384,6 +384,15 @@ pub fn Database::randomkey(self : Database) -> String? {
   chosen
 }
 
+pub fn Database::try_rename(self : Database, old_key : String, new_key : String) -> Result[Bool, RedisError] {
+  self.check_expired(old_key) |> ignore
+  if !self.data.contains(old_key) {
+    return Err(RedisError::NotFound)
+  }
+  ignore(self.rename(old_key, new_key))
+  Ok(true)
+}
+
 pub fn Database::rename(self : Database, old_key : String, new_key : String) -> Bool {
   if self.check_expired(old_key) {
     return false

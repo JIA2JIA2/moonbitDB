@@ -1324,6 +1324,17 @@ pub fn Database::zrange_modifiers(
   }
 }
 
+pub fn Database::try_zremrangebyrank(self : Database, key : String, start : Int, end : Int) -> Result[Int, RedisError] {
+  if self.check_expired(key) {
+    return Ok(0)
+  }
+  match self.data.get(key) {
+    Some(RedisValue::ZSet(_)) => Ok(self.zremrangebyrank(key, start, end))
+    Some(_) => Err(RedisError::WrongType)
+    None => Ok(0)
+  }
+}
+
 pub fn Database::zremrangebyrank(self : Database, key : String, start : Int, end : Int) -> Int {
   if self.check_expired(key) {
     0

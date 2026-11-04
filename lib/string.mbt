@@ -7,46 +7,74 @@ pub fn Database::set(self : Database, key : String, value : String) -> Unit {
   }
 }
 
-pub fn Database::setnx(self : Database, key : String, value : String) -> Bool {
-  if self.check_expired(key) {
-    self.put(key, RedisValue::String(value))
-    return true
+pub fn Database::try_setnx(self : Database, key : String, value : String) -> Result[Bool, RedisError] {
+  self.check_expired(key) |> ignore
+  match self.data.get(key) {
+    Some(RedisValue::String(_)) => Ok(false)
+    Some(_) => Err(RedisError::WrongType)
+    None => {
+      self.put(key, RedisValue::String(value))
+      Ok(true)
+    }
   }
-  if self.data.contains(key) {
-    false
-  } else {
-    self.put(key, RedisValue::String(value))
-    true
+}
+
+pub fn Database::setnx(self : Database, key : String, value : String) -> Bool {
+  match self.try_setnx(key, value) {
+    Ok(set) => set
+    Err(_) => false
+  }
+}
+
+pub fn Database::try_setex(self : Database, key : String, seconds : Int, value : String) -> Result[Bool, RedisError] {
+  if seconds <= 0 {
+    return Err(RedisError::InvalidArgument)
+  }
+  self.check_expired(key) |> ignore
+  match self.data.get(key) {
+    Some(RedisValue::String(_)) | None => ()
+    Some(_) => return Err(RedisError::WrongType)
+  }
+  match checked_add_i64(self.current_time, seconds.to_int64() * 1000) {
+    Some(expire_time) => {
+      self.put(key, RedisValue::String(value))
+      self.set_expire(key, expire_time)
+      Ok(true)
+    }
+    None => Err(RedisError::Overflow)
   }
 }
 
 pub fn Database::setex(self : Database, key : String, seconds : Int, value : String) -> Bool {
-  if seconds <= 0 {
-    false
-  } else {
-    match checked_add_i64(self.current_time, seconds.to_int64() * 1000) {
-      Some(expire_time) => {
-        self.put(key, RedisValue::String(value))
-        self.set_expire(key, expire_time)
-        true
-      }
-      None => false
+  match self.try_setex(key, seconds, value) {
+    Ok(done) => done
+    Err(_) => false
+  }
+}
+
+pub fn Database::try_psetex(self : Database, key : String, milliseconds : Int64, value : String) -> Result[Bool, RedisError] {
+  if milliseconds <= 0 {
+    return Err(RedisError::InvalidArgument)
+  }
+  self.check_expired(key) |> ignore
+  match self.data.get(key) {
+    Some(RedisValue::String(_)) | None => ()
+    Some(_) => return Err(RedisError::WrongType)
+  }
+  match checked_add_i64(self.current_time, milliseconds) {
+    Some(expire_time) => {
+      self.put(key, RedisValue::String(value))
+      self.set_expire(key, expire_time)
+      Ok(true)
     }
+    None => Err(RedisError::Overflow)
   }
 }
 
 pub fn Database::psetex(self : Database, key : String, milliseconds : Int64, value : String) -> Bool {
-  if milliseconds <= 0 {
-    false
-  } else {
-    match checked_add_i64(self.current_time, milliseconds) {
-      Some(expire_time) => {
-        self.put(key, RedisValue::String(value))
-        self.set_expire(key, expire_time)
-        true
-      }
-      None => false
-    }
+  match self.try_psetex(key, milliseconds, value) {
+    Ok(done) => done
+    Err(_) => false
   }
 }
 
