@@ -177,6 +177,12 @@ moonbitDB/
 
 > **类型安全约定**：对已存在但类型不匹配的 key，写操作**不会覆盖**原数据。失败返回值约定如下：`HSET`/`LPUSH`/`RPUSH`/`APPEND`/`SETRANGE`/`LPUSHX`/`RPUSHX` 返回 `-1`，`SADD`/`ZADD`/`HSETNX`/`HMSET` 返回 `false`，`INCR`/`DECR`/`INCRBY`/`DECRBY`/`HINCRBY` 返回 `None`，`SINTERSTORE`/`SUNIONSTORE`/`SDIFFSTORE` 返回 `-1`。时间相关 API 使用 `Int64` 毫秒，可安全表示真实 Unix 时间戳与超过 24 天的 TTL。
 
+> **与 Redis 的已知差异（精度）**：分数与浮点值为 **Float32**（约 7 位有效数字，Redis 为 Double）：① `0.1+0.2` 类累加误差在 1e-8 量级即暴露，INCRBYFLOAT 连续累加存在双重舍入漂移；② 绝对值 ≥ 2^24（16777216）的整数分数会静默丢失低位；③ `format_float` 输出最多 10 位小数且为截断（非四舍五入）、无科学计数法；④ 计数类数值用 `Int64`（与 Redis 一致）。
+
+> **与 Redis 的已知差异（字符串索引与 Unicode）**：字符串按 **UTF-16 code unit** 索引（Redis 按字节）。中文/emoji 场景：emoji（代理对）占 2 个 code unit，`GETRANGE`/`SETRANGE`/`SETBIT` 等落在代理对中间会**拆出孤立代理（无效字符）**；`STRLEN` 对 emoji 返回 2（Redis 按字节返回 4）；位命令对 emoji 的一半置位会破坏整个字符。
+
+> **与 Redis 的已知差异（事务）**：MULTI 期间仅 17 种操作排队（见 `MULTI` 命令行），其余写命令直接执行；WATCH 冲突时 EXEC 返回错误（官方返回 nil 回复）。
+
 ### String 命令
 
 | 命令 | 签名 | 说明 |
@@ -454,6 +460,11 @@ match db.try_incrby("name", 1) {
 | `try_lpop_count` | `(self : Database, key : String, count : Int) -> Result[Array[String], RedisError]` | 精确错误版 LPOP count（负数返回 OutOfRange） |
 | `try_rpop_count` | `(self : Database, key : String, count : Int) -> Result[Array[String], RedisError]` | 精确错误版 RPOP count |
 | `try_zrange_modifiers` | `(self : Database, key : String, start : String, end : String, by : String?, rev : Bool, with_scores : Bool, offset : Int, count : Int) -> Result[Array[String], RedisError]` | 统一 ZRANGE 6.2 修饰符分发（by 为 None/BYSCORE/BYLEX） |
+| `zrange` | `(self : Database, key : String, start : Int, end : Int) -> Array[String]` | 按排名区间返回成员 |
+| `try_zrange` | `(self : Database, key : String, start : Int, end : Int, with_scores : Bool) -> Result[Array[String], RedisError]` | 精确错误版 ZRANGE（WITHSCORES 返回成员/分数交替数组） |
+| `multi` | `(self : Database) -> String` | 开启事务 |
+| `exec` | `(self : Database) -> String` | 执行事务队列 |
+| `discard` | `(self : Database) -> String` | 清空事务队列 |
 | `append` | `(self : Database, key : String, value : String) -> Int` | 追加字符串，返回新长度 |
 | `strlen` | `(self : Database, key : String) -> Int` | 字符串长度 |
 | `getrange` | `(self : Database, key : String, start : Int, end : Int) -> String` | 获取子串（支持负数索引） |
@@ -478,6 +489,12 @@ match db.try_incrby("name", 1) {
 | `try_sort_advanced` | `(self : Database, key : String, by_pattern : String?, get_patterns : Array[String], alpha : Bool, desc : Bool, offset : Int, count : Int, store : String?) -> Result[Array[String], RedisError]` | 完整版 SORT（BY hash 权重/nosort、GET #/pattern->field 展开） |
 | `sort_advanced` | `(self : Database, key, by_pattern, get_patterns, alpha, desc, offset, count, store) -> Array[String]` | 完整版 SORT 便捷版（错误返回空） |
 | `try_bitfield_get` | `(self : Database, key : String, offset : Int, width : Int, signed : Bool) -> Result[Int, RedisError]` | 位段读取（宽 1-32） |
+| `getbit` | `(self : Database, key : String, offset : Int) -> Int` | 读位便捷版（错误返回 0） |
+| `setbit` | `(self : Database, key : String, offset : Int, value : Int) -> Int` | 写位便捷版（错误返回 -1，正常返回原位值） |
+| `bitcount` | `(self : Database, key : String) -> Int` | 全串置位计数便捷版（类型错返回 0） |
+| `try_incrbyfloat` | `(self : Database, key : String, increment : Float) -> Result[Float, RedisError]` | 精确错误版浮点自增（对不存在 key 按 0 创建） |
+| `incrbyfloat` | `(self : Database, key : String, increment : Float) -> Float?` | 浮点自增便捷版 |
+| `hincrbyfloat` | `(self : Database, key : String, field : String, increment : Float) -> Float?` | Hash 字段浮点自增便捷版 |
 | `try_bitfield_set` | `(self : Database, key : String, offset : Int, width : Int, signed : Bool, value : Int) -> Result[Int, RedisError]` | 位段写入，返回旧值 |
 | `try_bitfield_incrby` | `(self : Database, key : String, offset : Int, width : Int, signed : Bool, increment : Int) -> Result[Int, RedisError]` | 位段自增（WRAP 溢出），返回新值 |
 | `getset` | `(self : Database, key : String, value : String) -> String?` | 设置新值并返回旧值 |
