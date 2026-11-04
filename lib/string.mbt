@@ -639,6 +639,70 @@ pub fn Database::try_bitfield_incrby(
   Ok(bitfield_read_units(new_s, offset, width, signed))
 }
 
+pub fn Database::try_bitfield_incrby_mode(
+  self : Database,
+  key : String,
+  offset : Int,
+  width : Int,
+  signed : Bool,
+  increment : Int,
+  overflow : String?,
+) -> Result[Int?, RedisError] {
+  if offset < 0 || width < 1 || width > 32 {
+    return Err(RedisError::InvalidArgument)
+  }
+  let mode = match overflow {
+    Some(m) => m.to_upper()
+    None => "WRAP"
+  }
+  if mode != "WRAP" && mode != "SAT" && mode != "FAIL" {
+    return Err(RedisError::InvalidArgument)
+  }
+  self.check_expired(key) |> ignore
+  let current = match self.data.get(key) {
+    Some(RedisValue::String(s)) => bitfield_read_units(s, offset, width, false)
+    Some(_) => return Err(RedisError::WrongType)
+    None => 0
+  }
+  let mask = if width >= 32 { -1 } else { (1 << width) - 1 }
+  let max_val = if signed {
+    (1 << (width - 1)) - 1
+  } else if width >= 32 {
+    2147483647
+  } else {
+    mask
+  }
+  let min_val = if signed {
+    -(1 << (width - 1))
+  } else {
+    0
+  }
+  let raw_sum = current + increment
+  let overflowed = raw_sum > max_val || raw_sum < min_val
+  let new_raw = if overflowed {
+    if mode == "FAIL" {
+      return Ok(None)
+    } else if mode == "SAT" {
+      if raw_sum > max_val {
+        max_val
+      } else {
+        min_val
+      }
+    } else {
+      raw_sum & mask
+    }
+  } else {
+    raw_sum
+  }
+  let old_str = match self.data.get(key) {
+    Some(RedisValue::String(s)) => s
+    _ => ""
+  }
+  let new_s = bitfield_write_units(old_str, offset, width, new_raw)
+  self.put(key, RedisValue::String(new_s))
+  Ok(Some(bitfield_read_units(new_s, offset, width, signed)))
+}
+
 pub fn Database::try_bitpos(self : Database, key : String, bit : Int, start : Int, end : Int) -> Result[Int, RedisError] {
   if bit != 0 && bit != 1 {
     return Err(RedisError::InvalidArgument)

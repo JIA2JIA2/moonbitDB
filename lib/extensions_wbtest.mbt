@@ -1470,3 +1470,53 @@ test "g1_pop_count_negative" {
   }
   @test.assert_eq(db.lpop_count("l", -1), [])
 }
+
+
+test "g2_bitfield_overflow_modes" {
+  let db = Database::new()
+  db.set("bo", "")
+  ignore(db.try_bitfield_set("bo", 0, 8, false, 250))
+
+  match db.try_bitfield_incrby_mode("bo", 0, 8, false, 10, Some("WRAP")) {
+    Ok(v) => @test.assert_eq(v, Some(4))
+    Err(_) => @test.assert_eq(true, false)
+  }
+  ignore(db.try_bitfield_set("bo", 0, 8, false, 250))
+  match db.try_bitfield_incrby_mode("bo", 0, 8, false, 10, Some("SAT")) {
+    Ok(v) => @test.assert_eq(v, Some(255))
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_incrby_mode("bo", 0, 8, false, 1, Some("FAIL")) {
+    Ok(v) => @test.assert_eq(v, None)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_get("bo", 0, 8, false) {
+    Ok(v) => @test.assert_eq(v, 255)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_incrby_mode("bo", 0, 8, false, -300, Some("SAT")) {
+    Ok(v) => @test.assert_eq(v, Some(0))
+    Err(_) => @test.assert_eq(true, false)
+  }
+  ignore(db.try_bitfield_set("bo", 8, 8, true, 120))
+  match db.try_bitfield_incrby_mode("bo", 8, 8, true, 10, Some("SAT")) {
+    Ok(v) => @test.assert_eq(v, Some(127))
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_incrby_mode("bo", 8, 8, true, 1, Some("FAIL")) {
+    Ok(v) => @test.assert_eq(v, None)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_incrby_mode("bo", 8, 8, true, -200, Some("SAT")) {
+    Ok(v) => @test.assert_eq(v, Some(-73))
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_incrby_mode("bo", 0, 8, false, 1, Some("BAD")) {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_incrby_mode("bo", 0, 8, false, 1, None) {
+    Ok(v) => @test.assert_eq(v, Some(1))
+    Err(_) => @test.assert_eq(true, false)
+  }
+}

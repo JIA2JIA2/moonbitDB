@@ -16,7 +16,10 @@
 - 新增事务操作：DEL/EXPIRE/PERSIST/LPOP/RPOP/GETSET 排队回放（TransactionOp 扩至 17 种）
 - 新增命令：EXPIRETIME/PEXPIRETIME、SPOP count（spop_count）、HSET 多字段（hset_all）、
   SUBSTR、SAVE/BGSAVE/LASTSAVE、COMMAND_COUNT、RESET、PSETEX/BITCOUNT 命令表登记
-- 新增 LPOS RANK/COUNT/MAXLEN 选项（try_lpos_options）
+- 新增 LPOS RANK/COUNT/MAXLEN 选项（try_lpos_options；差异：无 COUNT 时本库恒返回数组，官方返回单整数）
+- 新增 BITFIELD 位段读写（try_bitfield_get/set/incrby，宽 1-32 位 WRAP 溢出；差异：code unit 内 LSB-first 位序）
+- 新增 GETDEL WRONGTYPE 修复（try_getdel，此前类型错误被吞且不删除）
+- 新增 RedisError::WrongArgumentCount(cmd)（"ERR wrong number of arguments for 'x' command"）
 - 新增 expireat_with_options/pexpireat_with_options（NX/XX/GT/LT）、try_lset
 - 新增 HSCAN/SSCAN/ZSCAN MATCH 模式匹配（zscan 改独立快照，迭代期间写入不再重复/漏读）
 - 新增 INFO section（server/memory/keyspace/stats 四节，info_section API）

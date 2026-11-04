@@ -273,7 +273,7 @@ moonbitDB/
 | `RPUSHX` | `(key, value) -> Int` | 仅当列表存在时右端插入 |
 | `RPOPLPUSH` | `(source, dest) -> String?` | source 右端弹出插入 dest 左端 |
 | `LMOVE` | `(source, dest, from_left, to_left) -> String?` | 从 source 指定端弹出并插入 dest 指定端 |
-| `LPOS` | `(key, value) -> Int?` | 返回元素首次出现的索引 |
+| `LPOS` | `(key, value) -> Int?` | 返回元素首次出现的索引（`try_lpos_options` 支持 RANK/COUNT/MAXLEN；差异：无 COUNT 时本库恒返回数组，官方返回单整数） |
 | `LTRIM` | `(key, start, end) -> Bool` | 裁剪列表至指定区间（区间外删除） |
 | `LMPOP` | `(keys, left, count) -> (String, Array[String])?` | 从多个列表中弹出第一个非空列表的元素 |
 
