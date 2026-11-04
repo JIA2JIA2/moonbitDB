@@ -1001,3 +1001,42 @@ test "e3_error_variants_and_flush" {
   @test.assert_eq(db.exists("fd"), false)
   @test.assert_eq(db.flushall(), "OK")
 }
+
+test "e5_zset_boundary_gaps" {
+  let db = Database::new()
+  db.zadd("zb", 1.0, "a") |> ignore
+  db.zadd("zb", 2.0, "b") |> ignore
+  db.zadd("zb", 3.0, "c") |> ignore
+  db.pexpire("zb", 1L) |> ignore
+  db.advance_time(10)
+
+  @test.assert_eq(db.zpopmin("zb"), None)
+  @test.assert_eq(db.zpopmax("zb"), None)
+  @test.assert_eq(db.zremrangebyrank("zb", 0, -1), 0)
+  @test.assert_eq(db.zremrangebyscore("zb", 1.0, 3.0), 0)
+  @test.assert_eq(db.zdiff(["zb"]).length(), 0)
+  @test.assert_eq(db.zrangebyscore("zb", 1.0, 3.0).length(), 0)
+  @test.assert_eq(db.zrevrangebyscore("zb", 3.0, 1.0).length(), 0)
+  @test.assert_eq(db.zrank("zb", "a"), None)
+  @test.assert_eq(db.zrevrank("zb", "a"), None)
+  @test.assert_eq(db.zincrby("zb", 1.0, "a"), 1.0)
+
+  db.set("str2", "x")
+  @test.assert_eq(db.zpopmin("str2"), None)
+  @test.assert_eq(db.zpopmax("str2"), None)
+  @test.assert_eq(db.zremrangebyrank("str2", 0, -1), 0)
+  @test.assert_eq(db.zremrangebyscore("str2", 1.0, 2.0), 0)
+
+  db.zadd("live", 5.0, "m1") |> ignore
+  db.zadd("live", 6.0, "m2") |> ignore
+  @test.assert_eq(
+    match db.zpopmax("live") {
+      Some(item) => item.0 == "m2"
+      None => false
+    },
+    true,
+  )
+  @test.assert_eq(db.zpopmin("live"), Some(("m1", 5.0)))
+  @test.assert_eq(db.exists("live"), false)
+  @test.assert_eq(db.zdiff(["nope1", "nope2"]).length(), 0)
+}
