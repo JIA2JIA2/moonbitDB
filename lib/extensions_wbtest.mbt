@@ -206,6 +206,32 @@ test "f3_getdel_lmpop_copy_client_config" {
   @test.assert_eq(db.config_get("databases"), ["databases", "16"])
 }
 
+test "f5_deque_rebalance_gaps" {
+  let d = Deque::new()
+  d.push_back("b1")
+  d.push_front("f1")
+  d.push_back("b2")
+  d.push_front("f2")
+
+  @test.assert_eq(d.pop_front(), Some("f2"))
+  @test.assert_eq(d.pop_front(), Some("f1"))
+  @test.assert_eq(d.pop_front(), Some("b1"))
+  @test.assert_eq(d.pop_back(), Some("b2"))
+  @test.assert_eq(d.pop_back(), None)
+  @test.assert_eq(d.pop_front(), None)
+
+  d.push_back("x")
+  d.push_back("y")
+  @test.assert_eq(d.insert_at(2, "m"), true)
+  @test.assert_eq(d.get_at(0) != None, true)
+  @test.assert_eq(d.get_at(1) != None, true)
+  @test.assert_eq(d.get_at(2) != None, true)
+  @test.assert_eq(d.length(), 3)
+  @test.assert_eq(d.remove_at(2), true)
+  @test.assert_eq(d.length(), 2)
+  @test.assert_eq(d.find_index("m"), -1)
+}
+
 test "d1_past_timestamp_deletes_key" {
   let db = Database::new()
   db.set("p1", "v")

@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**196 个测试用例，全部通过**。
+当前测试覆盖：**197 个测试用例，全部通过**。
 
 ### 运行基准与覆盖率
 
@@ -844,7 +844,7 @@ moon run examples/cli_repl --target native
 
 参考 [examples/cli_repl/main.mbt](examples/cli_repl/main.mbt)
 
-支持解析和执行 65 个命令，包括 SET/GET/HSET/LPUSH/SADD/ZADD/SCAN/COPY 等常用命令。
+支持解析和执行 74 个命令，包括 SET/GET/HSET/LPUSH/SADD/ZADD/SCAN/COPY/SORT 等常用命令。
 
 ## 许可证
 

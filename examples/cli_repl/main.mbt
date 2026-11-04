@@ -544,14 +544,140 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       [
         "  SET/GET/DEL/EXISTS | KEYS/SCAN | TYPE | APPEND/STRLEN",
         "  GETRANGE/SETRANGE | INCR/DECR/INCRBY/DECRBY | EXPIRE/TTL",
-        "  HSET/HSETNX/HGET/HGETALL/HLEN",
-        "  LPUSH/RPUSH/LPOP/RPOP/LRANGE",
-        "  SADD/SMEMBERS/SREM/SCARD/SISMEMBER",
-        "  ZADD/ZRANGE/ZRANGEBYLEX/ZRANK/ZINCRBY",
+        "  HSET/HSETNX/HGET/HGETALL/HLEN | HINCRBY",
+        "  LPUSH/RPUSH/LPOP/RPOP/LRANGE | LINSERT/LMOVE",
+        "  SADD/SMEMBERS/SREM/SCARD/SISMEMBER | SMOVE/SPOP",
+        "  ZADD/ZRANGE/ZRANGEBYLEX/ZRANK/ZINCRBY | ZPOPMIN/ZUNIONSTORE",
+        "  GETDEL/GETEX/SETNX/SETEX | SORT | MULTI/EXEC",
         "  MSET/MGET/MDEL | COPY/TOUCH/UNLINK | DBSIZE/FLUSHDB/PING/INFO",
         "  AUTH/CLIENT/CONFIG/SLOWLOG | SELECT/MOVE/DUMP/RESTORE/MONITOR",
         "  ADVANCE ms | HELP | QUIT"
       ]
+    }
+    "GETDEL" => {
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
+      else {
+        match db.try_getdel(parts[1]) {
+          Ok(Some(v)) => ["\"\{v}\""]
+          Ok(None) => ["(nil)"]
+          Err(_) => ["(error) WRONGTYPE"]
+        }
+      }
+    }
+    "GETEX" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else {
+        match parse_int(parts[2]) {
+          Some(ms) => {
+            match db.getex(parts[1], Some(ms.to_int64())) {
+              Some(v) => ["\"\{v}\""]
+              None => ["(nil)"]
+            }
+          }
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "SETNX" => {
+      if parts.length() < 3 { ["ERR wrong number of arguments"] }
+      else { ["(integer) \{if db.setnx(parts[1], parts[2]) { 1 } else { 0 }}"] }
+    }
+    "SETEX" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else {
+        match parse_int(parts[2]) {
+          Some(sec) => {
+            if db.setex(parts[1], sec, parts[3]) {
+              ["OK"]
+            } else {
+              ["(error)"]
+            }
+          }
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "HINCRBY" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else {
+        match parse_int(parts[3]) {
+          Some(n) => {
+            match db.hincrby(parts[1], parts[2], n.to_int64()) {
+              Some(v) => ["(integer) \{v.to_string()}"]
+              None => ["(error) not an integer"]
+            }
+          }
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "LINSERT" => {
+      if parts.length() < 5 { ["ERR wrong number of arguments"] }
+      else {
+        let before = parts[2].to_upper() == "BEFORE"
+        ["(integer) \{db.linsert(parts[1], before, parts[3], parts[4])}"]
+      }
+    }
+    "LMOVE" => {
+      if parts.length() < 5 { ["ERR wrong number of arguments"] }
+      else {
+        let src_left = parts[3].to_upper() == "LEFT"
+        let dst_left = parts[4].to_upper() == "LEFT"
+        match db.lmove(parts[1], parts[2], src_left, dst_left) {
+          Some(v) => ["\"\{v}\""]
+          None => ["(nil)"]
+        }
+      }
+    }
+    "SMOVE" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else { ["(integer) \{if db.smove(parts[1], parts[2], parts[3]) { 1 } else { 0 }}"] }
+    }
+    "SPOP" => {
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
+      else {
+        match db.spop(parts[1]) {
+          Some(v) => ["\"\{v}\""]
+          None => ["(nil)"]
+        }
+      }
+    }
+    "ZPOPMIN" => {
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
+      else {
+        match db.zpopmin(parts[1]) {
+          Some((m, s)) => ["1) \"\{m}\"", "2) \"\{s}\""]
+          None => ["(empty array)"]
+        }
+      }
+    }
+    "ZUNIONSTORE" => {
+      if parts.length() < 4 { ["ERR wrong number of arguments"] }
+      else {
+        match parse_int(parts[2]) {
+          Some(n) => {
+            let keys = Array::make(n, "")
+            for i = 0; i < n; i = i + 1 {
+              keys[i] = parts[3 + i]
+            }
+            ["(integer) \{db.zunionstore(parts[1], keys)}"]
+          }
+          None => ["ERR value is not an integer"]
+        }
+      }
+    }
+    "SORT" => {
+      if parts.length() < 2 { ["ERR wrong number of arguments"] }
+      else {
+        let alpha = parts.contains("ALPHA")
+        let desc = parts.contains("DESC")
+        let items = db.sort(parts[1], alpha, desc, 0, 0, None)
+        let result = []
+        for i = 0; i < items.length(); i = i + 1 {
+          result.push("  \{i + 1}) \"\{items[i]}\"")
+        }
+        result
+      }
     }
     "AUTH" => {
       if parts.length() < 2 { ["ERR wrong number of arguments"] }
