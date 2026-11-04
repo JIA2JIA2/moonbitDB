@@ -435,6 +435,119 @@ pub fn Database::getex_pxat(self : Database, key : String, timestamp_ms : Int64)
   }
 }
 
+pub fn Database::try_getbit(self : Database, key : String, offset : Int) -> Result[Int, RedisError] {
+  if offset < 0 {
+    return Err(RedisError::InvalidArgument)
+  }
+  if self.check_expired(key) {
+    return Ok(0)
+  }
+  match self.data.get(key) {
+    Some(RedisValue::String(s)) => {
+      let cu = offset / 16
+      let bit = offset % 16
+      if cu >= s.length() {
+        Ok(0)
+      } else {
+        Ok((s[cu].to_int() >> bit) & 1)
+      }
+    }
+    Some(_) => Err(RedisError::WrongType)
+    None => Ok(0)
+  }
+}
+
+pub fn Database::getbit(self : Database, key : String, offset : Int) -> Int {
+  match self.try_getbit(key, offset) {
+    Ok(bit) => bit
+    Err(_) => 0
+  }
+}
+
+pub fn Database::try_setbit(self : Database, key : String, offset : Int, value : Int) -> Result[Int, RedisError] {
+  if offset < 0 {
+    return Err(RedisError::InvalidArgument)
+  }
+  if value != 0 && value != 1 {
+    return Err(RedisError::InvalidArgument)
+  }
+  self.check_expired(key) |> ignore
+  match self.data.get(key) {
+    Some(RedisValue::String(s)) => {
+      let cu = offset / 16
+      let bit = offset % 16
+      let old_unit : Int = if cu < s.length() { s[cu].to_int() } else { 0 }
+      let old_bit = (old_unit >> bit) & 1
+      let new_unit = if value == 1 { old_unit | (1 << bit) } else { old_unit & (0xFFFF ^ (1 << bit)) }
+      let new_char = Int::unsafe_to_char(new_unit)
+      let new_str = if cu < s.length() {
+        s[0:cu].to_owned() + "\{new_char}" + s[cu + 1:s.length()].to_owned()
+      } else {
+        let pad = String::make(cu - s.length(), Int::unsafe_to_char(0))
+        s + pad + "\{new_char}"
+      }
+      self.put(key, RedisValue::String(new_str))
+      Ok(old_bit)
+    }
+    Some(_) => Err(RedisError::WrongType)
+    None => {
+      let cu = offset / 16
+      let bit = offset % 16
+      let new_unit = if value == 1 { 1 << bit } else { 0 }
+      let pad = String::make(cu, Int::unsafe_to_char(0))
+      let new_str = pad + "\{Int::unsafe_to_char(new_unit)}"
+      self.put(key, RedisValue::String(new_str))
+      Ok(0)
+    }
+  }
+}
+
+pub fn Database::setbit(self : Database, key : String, offset : Int, value : Int) -> Int {
+  match self.try_setbit(key, offset, value) {
+    Ok(bit) => bit
+    Err(_) => -1
+  }
+}
+
+pub fn Database::try_bitpos(self : Database, key : String, bit : Int, start : Int, end : Int) -> Result[Int, RedisError] {
+  if bit != 0 && bit != 1 {
+    return Err(RedisError::InvalidArgument)
+  }
+  if self.check_expired(key) {
+    return Ok(-1)
+  }
+  match self.data.get(key) {
+    Some(RedisValue::String(s)) => {
+      let len = s.length()
+      let s_idx = if start < 0 { len + start } else { start }
+      let e_idx = if end < 0 { len + end + 1 } else { end + 1 }
+      let from = if s_idx < 0 { 0 } else { s_idx }
+      let to = if e_idx > len { len } else { e_idx }
+      if from >= to {
+        return Ok(-1)
+      }
+      for cu = from; cu < to; cu = cu + 1 {
+        let unit = s[cu].to_int()
+        for b = 0; b < 16; b = b + 1 {
+          if ((unit >> b) & 1) == bit {
+            return Ok(cu * 16 + b)
+          }
+        }
+      }
+      Ok(-1)
+    }
+    Some(_) => Err(RedisError::WrongType)
+    None => Ok(-1)
+  }
+}
+
+pub fn Database::bitpos(self : Database, key : String, bit : Int) -> Int {
+  match self.try_bitpos(key, bit, 0, -1) {
+    Ok(pos) => pos
+    Err(_) => -1
+  }
+}
+
 pub fn Database::try_msetnx(
   self : Database,
   keys : Array[String],

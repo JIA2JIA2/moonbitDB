@@ -184,6 +184,32 @@ pub fn Database::pexpireat_with_options(
   self.set_expire_with_options(key, unix_milliseconds, nx, xx, gt, lt)
 }
 
+pub fn Database::expiretime(self : Database, key : String) -> Int64 {
+  if self.check_expired(key) {
+    return -2
+  }
+  if !self.data.contains(key) {
+    return -2
+  }
+  match self.expires.get(key) {
+    Some(expire_time) => (expire_time + 999) / 1000
+    None => -1
+  }
+}
+
+pub fn Database::pexpiretime(self : Database, key : String) -> Int64 {
+  if self.check_expired(key) {
+    return -2
+  }
+  if !self.data.contains(key) {
+    return -2
+  }
+  match self.expires.get(key) {
+    Some(expire_time) => expire_time
+    None => -1
+  }
+}
+
 pub fn Database::ttl(self : Database, key : String) -> Int64 {
   if !self.data.contains(key) {
     -2

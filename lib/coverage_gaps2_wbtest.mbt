@@ -509,3 +509,170 @@ test "d4_sort_and_sample_direct" {
   @test.assert_eq(db.random_sample(src, 2).length(), 2)
   @test.assert_eq(db.random_sample(src, -4).length(), 4)
 }
+
+test "d5_zadd_options_and_expiretime" {
+  let db = Database::new()
+  db.set("str", "x")
+  db.zadd("z", 1.0, "a") |> ignore
+
+  match db.try_zadd_with_options("z", 2.0, "a", true, false, false, false, false) {
+    Ok(count) => @test.assert_eq(count, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zadd_with_options("z", 2.0, "a", false, true, false, false, false) {
+    Ok(count) => @test.assert_eq(count, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zadd_with_options("z", 2.0, "a", false, true, true, false, false) {
+    Ok(count) => @test.assert_eq(count, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zadd_with_options("z", 3.0, "a", false, true, true, false, false) {
+    Ok(count) => @test.assert_eq(count, 1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zadd_with_options("z", 2.0, "a", false, true, true, true, false) {
+    Ok(count) => @test.assert_eq(count, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zadd_with_options("z", 4.0, "a", false, true, true, true, false) {
+    Ok(count) => @test.assert_eq(count, 1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zadd_with_options("z", 5.0, "a", false, true, true, false, true) {
+    Ok(count) => @test.assert_eq(count, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zadd_with_options("z", 3.0, "a", false, true, true, false, true) {
+    Ok(count) => @test.assert_eq(count, 1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zadd_with_options("z", 6.0, "a", false, true, true, false, true) {
+    Ok(count) => @test.assert_eq(count, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zadd_with_options("z", 1.0, "b", false, false, true, false, false) {
+    Ok(count) => @test.assert_eq(count, 1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zadd_with_options("z", 1.0, "b", true, true, false, false, false) {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_zadd_with_options("z", 1.0, "b", false, true, false, true, true) {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_zadd_with_options("str", 1.0, "b", false, false, false, false, false) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_zadd_with_options("z", 0.0 / 0.0, "c", false, false, false, false, false) {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+
+  match db.try_zadd_incr("z", 10.0, "i", false, false, false, false) {
+    Ok(v) => @test.assert_eq(v, Some(10.0))
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zadd_incr("z", 5.0, "i", false, false, false, false) {
+    Ok(v) => @test.assert_eq(v, Some(15.0))
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zadd_incr("z", 5.0, "i", true, false, false, false) {
+    Ok(v) => @test.assert_eq(v, None)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zadd_incr("z", -100.0, "i", false, false, true, false) {
+    Ok(v) => @test.assert_eq(v, None)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zadd_incr("z", 1.0, "i", false, false, true, false) {
+    Ok(v) => @test.assert_eq(v, Some(16.0))
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zadd_incr("z", 1.0, "i", false, false, false, true) {
+    Ok(v) => @test.assert_eq(v, None)
+    Err(_) => @test.assert_eq(true, false)
+  }
+
+  db.set("et1", "v")
+  @test.assert_eq(db.expiretime("et1"), -1)
+  @test.assert_eq(db.pexpiretime("et1"), -1)
+  db.expire("et1", 100) |> ignore
+  @test.assert_eq(db.expiretime("et1") > 0, true)
+  @test.assert_eq(db.pexpiretime("et1") > 0, true)
+  @test.assert_eq(db.pexpiretime("et1") > db.expiretime("et1") * 999, true)
+  db.pexpire("et1", 1L) |> ignore
+  db.advance_time(10)
+  @test.assert_eq(db.expiretime("et1"), -2)
+  @test.assert_eq(db.expiretime("missing"), -2)
+}
+
+test "d5_bitmap_commands" {
+  let db = Database::new()
+  db.set("h1", "x")
+  db.hset("hh1", "f", "v") |> ignore
+
+  match db.try_setbit("b1", 0, 1) {
+    Ok(old) => @test.assert_eq(old, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.getbit("b1", 0), 1)
+  @test.assert_eq(db.getbit("b1", 1), 0)
+  @test.assert_eq(db.getbit("b1", 100), 0)
+
+  match db.try_setbit("b1", 20, 1) {
+    Ok(old) => @test.assert_eq(old, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.getbit("b1", 20), 1)
+  @test.assert_eq(db.getbit("b1", 4), 0)
+
+  match db.try_setbit("b1", 0, 0) {
+    Ok(old) => @test.assert_eq(old, 1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.getbit("b1", 0), 0)
+
+  match db.try_setbit("b1", -1, 1) {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_setbit("b1", 0, 2) {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_setbit("hh1", 0, 1) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_getbit("hh1", 0) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.setbit("hh1", 0, 1), -1)
+
+  db.setbit("bp", 0, 1) |> ignore
+  db.setbit("bp", 50, 1) |> ignore
+  @test.assert_eq(db.bitpos("bp", 1), 0)
+  match db.try_bitpos("bp", 1, 3, -1) {
+    Ok(pos) => @test.assert_eq(pos, 50)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitpos("bp", 1, 1, 2) {
+    Ok(pos) => @test.assert_eq(pos, -1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.bitpos("bp", 0), 1)
+  match db.try_bitpos("bp", 2, 0, -1) {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_bitpos("hh1", 1, 0, -1) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.bitpos("missing", 1), -1)
+}

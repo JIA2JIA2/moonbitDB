@@ -40,6 +40,131 @@ pub fn Database::zadd(self : Database, key : String, score : Float, member_val :
   }
 }
 
+pub fn Database::try_zadd_with_options(
+  self : Database,
+  key : String,
+  score : Float,
+  member_val : String,
+  nx : Bool,
+  xx : Bool,
+  ch : Bool,
+  gt : Bool,
+  lt : Bool,
+) -> Result[Int, RedisError] {
+  if score != score {
+    return Err(RedisError::InvalidArgument)
+  }
+  if (nx && (xx || gt || lt)) || (gt && lt) {
+    return Err(RedisError::InvalidArgument)
+  }
+  self.check_expired(key) |> ignore
+  let zset = match self.data.get(key) {
+    Some(RedisValue::ZSet(z)) => z
+    None => Map([], capacity=10)
+    Some(_) => return Err(RedisError::WrongType)
+  }
+  let mut added = 0
+  let mut changed = 0
+  match zset.get(member_val) {
+    Some(current) => {
+      if nx {
+        return Ok(0)
+      }
+      if gt && score <= current {
+        return Ok(0)
+      }
+      if lt && score >= current {
+        return Ok(0)
+      }
+      if score != current {
+        zset.set(member_val, score)
+        changed = 1
+      }
+    }
+    None => {
+      if xx {
+        return Ok(0)
+      }
+      zset.set(member_val, score)
+      added = 1
+    }
+  }
+  if added + changed > 0 {
+    self.data.set(key, RedisValue::ZSet(zset))
+    self.zset_rank_cache.remove(key)
+    if added > 0 {
+      match self.zset_lex_cache.get(key) {
+        Some(cached) => self.zset_lex_cache.set(key, add_lex_member(cached, member_val))
+        None => ()
+      }
+    }
+    match self.zset_sorted_cache.get(key) {
+      Some(cached) => self.zset_sorted_cache.set(key, update_sorted_items(cached, member_val, Some(score)))
+      None => ()
+    }
+  }
+  Ok(if ch { added + changed } else { added })
+}
+
+pub fn Database::try_zadd_incr(
+  self : Database,
+  key : String,
+  increment : Float,
+  member_val : String,
+  nx : Bool,
+  xx : Bool,
+  gt : Bool,
+  lt : Bool,
+) -> Result[Float?, RedisError] {
+  if increment != increment {
+    return Err(RedisError::InvalidArgument)
+  }
+  if (nx && (xx || gt || lt)) || (gt && lt) {
+    return Err(RedisError::InvalidArgument)
+  }
+  self.check_expired(key) |> ignore
+  let zset = match self.data.get(key) {
+    Some(RedisValue::ZSet(z)) => z
+    None => Map([], capacity=10)
+    Some(_) => return Err(RedisError::WrongType)
+  }
+  match zset.get(member_val) {
+    Some(current) => {
+      if nx {
+        return Ok(None)
+      }
+      let new_score = current + increment
+      if gt && new_score <= current {
+        return Ok(None)
+      }
+      if lt && new_score >= current {
+        return Ok(None)
+      }
+      zset.set(member_val, new_score)
+      self.data.set(key, RedisValue::ZSet(zset))
+      self.zset_rank_cache.remove(key)
+      match self.zset_sorted_cache.get(key) {
+        Some(cached) => self.zset_sorted_cache.set(key, update_sorted_items(cached, member_val, Some(new_score)))
+        None => ()
+      }
+      Ok(Some(new_score))
+    }
+    None => {
+      if xx {
+        return Ok(None)
+      }
+      zset.set(member_val, increment)
+      self.data.set(key, RedisValue::ZSet(zset))
+      self.zset_rank_cache.remove(key)
+      match self.zset_lex_cache.get(key) {
+        Some(cached) => self.zset_lex_cache.set(key, add_lex_member(cached, member_val))
+        None => ()
+      }
+      Ok(Some(increment))
+    }
+  }
+}
+
 pub fn Database::zrange(self : Database, key : String, start : Int, end : Int) -> Array[String] {
   if self.check_expired(key) {
     []

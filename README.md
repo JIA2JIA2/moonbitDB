@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**178 个测试用例，全部通过**。
+当前测试覆盖：**185 个测试用例，全部通过**。
 
 ### 运行基准与覆盖率
 
@@ -173,7 +173,7 @@ moonbitDB/
 
 ## 支持的命令
 
-共支持 **146 个命令**，覆盖 Redis 核心功能。
+共支持 **151 个命令**，覆盖 Redis 核心功能。
 
 > **类型安全约定**：对已存在但类型不匹配的 key，写操作**不会覆盖**原数据。失败返回值约定如下：`HSET`/`LPUSH`/`RPUSH`/`APPEND`/`SETRANGE`/`LPUSHX`/`RPUSHX` 返回 `-1`，`SADD`/`ZADD`/`HSETNX`/`HMSET` 返回 `false`，`INCR`/`DECR`/`INCRBY`/`DECRBY`/`HINCRBY` 返回 `None`，`SINTERSTORE`/`SUNIONSTORE`/`SDIFFSTORE` 返回 `-1`。时间相关 API 使用 `Int64` 毫秒，可安全表示真实 Unix 时间戳与超过 24 天的 TTL。
 
@@ -189,6 +189,9 @@ moonbitDB/
 | `STRLEN` | `(key) -> Int` | 字符串长度 |
 | `GETRANGE` | `(key, start, end) -> String` | 获取子串（支持负数索引） |
 | `SETRANGE` | `(key, offset, value) -> Int` | 从 offset 覆盖写入，返回新长度（缺失部分以 NUL 填充，单值上限 512MB） |
+| `GETBIT` | `(key, offset) -> Int` | 获取位图位值（UTF-16 code unit 索引，超出范围返回 0） |
+| `SETBIT` | `(key, offset, value) -> Int` | 设置位图位值，返回原位值（自动扩容，NUL 填充） |
+| `BITPOS` | `(key, bit) -> Int` | 查找第一个指定值的位（返回 -1 表示未找到） |
 | `INCR` | `(key) -> Int64?` | 自增 1（非数字返回 None） |
 | `DECR` | `(key) -> Int64?` | 自减 1（非数字返回 None） |
 | `INCRBY` | `(key, increment) -> Int64?` | 增加指定整数（非数字返回 None） |
@@ -215,6 +218,8 @@ moonbitDB/
 | `PEXPIRE` | `(key, ms) -> Bool` | 设置过期时间（毫秒） |
 | `EXPIREAT` | `(key, unix_seconds) -> Bool` | 设置过期时间戳（秒，过去时间戳立即删除 key） |
 | `PEXPIREAT` | `(key, unix_ms) -> Bool` | 设置过期时间戳（毫秒，过去时间戳立即删除 key） |
+| `EXPIRETIME` | `(key) -> Int64` | 绝对过期时间戳（秒），-1 永久，-2 不存在 |
+| `PEXPIRETIME` | `(key) -> Int64` | 绝对过期时间戳（毫秒），-1 永久，-2 不存在 |
 | `TTL` | `(key) -> Int64` | 剩余生存时间（秒，向上取整），-1 永久，-2 不存在 |
 | `PTTL` | `(key) -> Int64` | 剩余生存时间（毫秒） |
 | `PERSIST` | `(key) -> Bool` | 移除过期时间 |
@@ -439,6 +444,11 @@ match db.try_incrby("name", 1) {
 | `getex_ex` | `(self : Database, key : String, seconds : Int) -> String?` | GETEX EX（秒） |
 | `getex_exat` | `(self : Database, key : String, timestamp_ms : Int64) -> String?` | GETEX EXAT（毫秒时间戳） |
 | `getex_pxat` | `(self : Database, key : String, timestamp_ms : Int64) -> String?` | GETEX PXAT（毫秒时间戳） |
+| `try_getbit` | `(self : Database, key : String, offset : Int) -> Result[Int, RedisError]` | 精确错误版读位 |
+| `try_setbit` | `(self : Database, key : String, offset : Int, value : Int) -> Result[Int, RedisError]` | 精确错误版写位，返回原位值 |
+| `try_bitpos` | `(self : Database, key : String, bit : Int, start : Int, end : Int) -> Result[Int, RedisError]` | 精确错误版找位（start/end 为 code unit 索引） |
+| `expiretime` | `(self : Database, key : String) -> Int64` | 绝对过期时间戳（秒） |
+| `pexpiretime` | `(self : Database, key : String) -> Int64` | 绝对过期时间戳（毫秒） |
 | `try_getex` | `(self : Database, key : String, expire_ms : Int64?) -> Result[String, RedisError]` | 精确错误版 GETEX |
 | `set_get` | `(self : Database, key : String, value : String) -> String?` | 设置新值并返回旧值（SET ... GET） |
 | `try_set_get` | `(self : Database, key : String, value : String) -> Result[String?, RedisError]` | 精确错误版 SET ... GET |
@@ -570,6 +580,8 @@ match db.try_incrby("name", 1) {
 |------|------|------|
 | `zadd` | `(self : Database, key : String, score : Float, member_val : String) -> Bool` | 添加/更新成员 |
 | `try_zadd` | `(self : Database, key : String, score : Float, member_val : String) -> Result[Bool, RedisError]` | 精确错误版添加/更新成员 |
+| `try_zadd_with_options` | `(self : Database, key : String, score : Float, member_val : String, nx : Bool, xx : Bool, ch : Bool, gt : Bool, lt : Bool) -> Result[Int, RedisError]` | ZADD NX/XX/CH/GT/LT（返回新增或变更数） |
+| `try_zadd_incr` | `(self : Database, key : String, increment : Float, member_val : String, nx : Bool, xx : Bool, gt : Bool, lt : Bool) -> Result[Float?, RedisError]` | ZADD INCR（None 表示未更新） |
 | `zrange` | `(self : Database, key : String, start : Int, end : Int) -> Array[String]` | 按排名升序获取范围 |
 | `zcard` | `(self : Database, key : String) -> Int` | 成员数量 |
 | `zscore` | `(self : Database, key : String, member_val : String) -> Float?` | 获取成员分数 |
@@ -822,8 +834,8 @@ moon run examples/cli_repl --target native
 
 | 命令组 | 命令数量 | 代表命令 |
 |--------|----------|----------|
-| String | 19 | SET, GET, DEL, EXISTS, APPEND, STRLEN, GETRANGE, SETRANGE, INCR, DECR, INCRBY, DECRBY, SETNX, SETEX, PSETEX, GETDEL, GETSET, GETEX, BITCOUNT |
-| Key | 17 | KEYS, KEYS_PATTERN, SCAN, TYPE, EXPIRE, PEXPIRE, EXPIREAT, PEXPIREAT, TTL, PTTL, PERSIST, RENAME, RENAMENX, RANDOMKEY, COPY, TOUCH, UNLINK |
+| String | 22 | SET, GET, DEL, EXISTS, APPEND, STRLEN, GETRANGE, SETRANGE, GETBIT, SETBIT, BITPOS, INCR, DECR, INCRBY, DECRBY, SETNX, SETEX, PSETEX, GETDEL, GETSET, GETEX, BITCOUNT |
+| Key | 19 | KEYS, KEYS_PATTERN, SCAN, TYPE, EXPIRE, PEXPIRE, EXPIREAT, PEXPIREAT, EXPIRETIME, PEXPIRETIME, TTL, PTTL, PERSIST, RENAME, RENAMENX, RANDOMKEY, COPY, TOUCH, UNLINK |
 | Hash | 13 | HSET, HSETNX, HGET, HDEL, HGETALL, HLEN, HEXISTS, HKEYS, HVALS, HINCRBY, HSTRLEN, HSCAN, HRANDFIELD |
 | List | 17 | LPUSH, RPUSH, LPOP, RPOP, LLEN, LRANGE, LINDEX, LSET, LREM, LINSERT, LPUSHX, RPUSHX, RPOPLPUSH, LMOVE, LPOS, LTRIM, LMPOP |
 | Set | 17 | SADD, SMEMBERS, SREM, SCARD, SISMEMBER, SMISMEMBER, SINTER, SINTERCARD, SINTERSTORE, SUNION, SUNIONSTORE, SDIFF, SDIFFSTORE, SMOVE, SPOP, SRANDMEMBER, SSCAN |
