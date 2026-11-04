@@ -1103,6 +1103,211 @@ fn Database::remove_zset_collected(
   members.length()
 }
 
+fn Database::zrangebyscore_by_bound_with_scores_impl(
+  self : Database,
+  key : String,
+  min_bound : String,
+  max_bound : String,
+  rev : Bool,
+  offset : Int,
+  count : Int,
+) -> Result[Array[(String, Float)], RedisError] {
+  let min_parsed = match parse_score_bound(min_bound) {
+    Ok(p) => p
+    Err(e) => return Err(e)
+  }
+  let max_parsed = match parse_score_bound(max_bound) {
+    Ok(p) => p
+    Err(e) => return Err(e)
+  }
+  if self.check_expired(key) {
+    return Ok([])
+  }
+  match self.data.get(key) {
+    Some(RedisValue::ZSet(_)) => {
+      let sorted = self.get_sorted_zset(key)
+      let lo = lower_bound_incl(sorted, min_parsed.0, !min_parsed.1)
+      let hi = upper_bound_incl(sorted, max_parsed.0, !max_parsed.1)
+      let result : Array[(String, Float)] = []
+      let total = hi - lo
+      if total <= 0 || offset < 0 {
+        return Ok(result)
+      }
+      if rev {
+        let mut i = hi - 1
+        if offset > 0 {
+          if offset >= total {
+            return Ok(result)
+          }
+          i = hi - 1 - offset
+        }
+        let mut taken = 0
+        while i >= lo && (count <= 0 || taken < count) {
+          result.push(sorted[i])
+          i = i - 1
+          taken = taken + 1
+        }
+      } else {
+        let mut i = lo
+        if offset > 0 {
+          if offset >= total {
+            return Ok(result)
+          }
+          i = lo + offset
+        }
+        let mut taken = 0
+        while i < hi && (count <= 0 || taken < count) {
+          result.push(sorted[i])
+          i = i + 1
+          taken = taken + 1
+        }
+      }
+      Ok(result)
+    }
+    Some(_) => Err(RedisError::WrongType)
+    None => Ok([])
+  }
+}
+
+fn Database::zrangebylex_with_scores_impl(
+  self : Database,
+  key : String,
+  min_bound : String,
+  max_bound : String,
+  rev : Bool,
+  offset : Int,
+  count : Int,
+) -> Result[Array[(String, Float)], RedisError] {
+  if !lex_bound_valid(min_bound) || !lex_bound_valid(max_bound) {
+    return Ok([])
+  }
+  if self.check_expired(key) {
+    return Ok([])
+  }
+  match self.data.get(key) {
+    Some(RedisValue::ZSet(zset)) => {
+      let members = self.get_sorted_lex(key)
+      let start = lex_lower_index(members, min_bound)
+      let end = lex_upper_index(members, max_bound)
+      let total = end - start
+      if total <= 0 || offset < 0 {
+        return Ok([])
+      }
+      let apply_offset = if offset > total { total } else { offset }
+      let apply_count = if count <= 0 { total - apply_offset } else { count }
+      let apply_end = if apply_offset + apply_count > total { total } else { apply_offset + apply_count }
+      let result : Array[(String, Float)] = []
+      if rev {
+        let mut i = end - 1 - apply_offset
+        let stop = end - apply_end
+        while i >= stop {
+          let m = members[i]
+          match zset.get(m) {
+            Some(s) => result.push((m, s))
+            None => ()
+          }
+          i = i - 1
+        }
+      } else {
+        for i = start + apply_offset; i < start + apply_end; i = i + 1 {
+          let m = members[i]
+          match zset.get(m) {
+            Some(s) => result.push((m, s))
+            None => ()
+          }
+        }
+      }
+      Ok(result)
+    }
+    Some(_) => Err(RedisError::WrongType)
+    None => Ok([])
+  }
+}
+
+fn pairs_to_flat(pairs : Array[(String, Float)], with_scores : Bool) -> Array[String] {
+  let out : Array[String] = []
+  for p in pairs {
+    out.push(p.0)
+    if with_scores {
+      out.push(format_float(p.1))
+    }
+  }
+  out
+}
+
+pub fn Database::try_zrange_modifiers(
+  self : Database,
+  key : String,
+  start : String,
+  end : String,
+  by : String?,
+  rev : Bool,
+  with_scores : Bool,
+  offset : Int,
+  count : Int,
+) -> Result[Array[String], RedisError] {
+  match by {
+    None => {
+      let s_idx = match parse_int(start) {
+        Some(v) => v
+        None => return Err(RedisError::InvalidArgument)
+      }
+      let e_idx = match parse_int(end) {
+        Some(v) => v
+        None => return Err(RedisError::InvalidArgument)
+      }
+      if self.check_expired(key) {
+        return Ok([])
+      }
+      match self.data.get(key) {
+        Some(RedisValue::ZSet(_)) => {
+          let pairs = if rev {
+            self.zrevrange_with_scores(key, s_idx, e_idx)
+          } else {
+            self.zrange_with_scores(key, s_idx, e_idx)
+          }
+          Ok(pairs_to_flat(pairs, with_scores))
+        }
+        Some(_) => Err(RedisError::WrongType)
+        None => Ok([])
+      }
+    }
+    Some(b) => {
+      let by_kind = b.to_lower()
+      if by_kind == "byscore" {
+        match self.zrangebyscore_by_bound_with_scores_impl(key, start, end, rev, offset, count) {
+          Ok(pairs) => Ok(pairs_to_flat(pairs, with_scores))
+          Err(e) => Err(e)
+        }
+      } else if by_kind == "bylex" {
+        match self.zrangebylex_with_scores_impl(key, start, end, rev, offset, count) {
+          Ok(pairs) => Ok(pairs_to_flat(pairs, with_scores))
+          Err(e) => Err(e)
+        }
+      } else {
+        Err(RedisError::InvalidArgument)
+      }
+    }
+  }
+}
+
+pub fn Database::zrange_modifiers(
+  self : Database,
+  key : String,
+  start : String,
+  end : String,
+  by : String?,
+  rev : Bool,
+  with_scores : Bool,
+  offset : Int,
+  count : Int,
+) -> Array[String] {
+  match self.try_zrange_modifiers(key, start, end, by, rev, with_scores, offset, count) {
+    Ok(items) => items
+    Err(_) => []
+  }
+}
+
 pub fn Database::zremrangebyrank(self : Database, key : String, start : Int, end : Int) -> Int {
   if self.check_expired(key) {
     0

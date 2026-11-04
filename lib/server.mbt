@@ -40,26 +40,48 @@ fn Database::info_server_section(self : Database) -> Array[String] {
   ]
 }
 
+fn value_size_bytes(value : RedisValue) -> Int {
+  match value {
+    RedisValue::String(s) => s.length() * 2
+    RedisValue::Hash(h) => {
+      let mut bytes = 0
+      for f, v in h {
+        bytes = bytes + (f.length() + v.length()) * 2
+      }
+      bytes
+    }
+    RedisValue::Set(s) => {
+      let mut bytes = 0
+      for m, _ in s {
+        bytes = bytes + m.length() * 2
+      }
+      bytes
+    }
+    RedisValue::ZSet(z) => {
+      let mut bytes = 0
+      for m, _ in z {
+        bytes = bytes + m.length() * 2 + 8
+      }
+      bytes
+    }
+    RedisValue::List(d) => d.length() * 16
+  }
+}
+
+pub fn Database::memory_usage(self : Database, key : String) -> Int? {
+  if self.check_expired(key) {
+    return None
+  }
+  match self.data.get(key) {
+    Some(value) => Some(key.length() * 2 + value_size_bytes(value))
+    None => None
+  }
+}
+
 fn Database::info_memory_section(self : Database) -> Array[String] {
   let mut value_bytes : Int = 0
   for key, value in self.data {
-    value_bytes = value_bytes + key.length() * 2
-    match value {
-      RedisValue::String(s) => value_bytes = value_bytes + s.length() * 2
-      RedisValue::Hash(h) =>
-        for f, v in h {
-          value_bytes = value_bytes + (f.length() + v.length()) * 2
-        }
-      RedisValue::Set(s) =>
-        for m, _ in s {
-          value_bytes = value_bytes + m.length() * 2
-        }
-      RedisValue::ZSet(z) =>
-        for m, _ in z {
-          value_bytes = value_bytes + m.length() * 2 + 8
-        }
-      RedisValue::List(d) => value_bytes = value_bytes + d.length() * 16
-    }
+    value_bytes = value_bytes + key.length() * 2 + value_size_bytes(value)
   }
   [
     "# Memory",
@@ -165,7 +187,7 @@ pub fn Database::command() -> Array[String] {
     "AUTH", "CLIENT", "CONFIG", "SLOWLOG",
     "SELECT", "MOVE", "DUMP", "RESTORE", "MONITOR",
     "OBJECT_FREQ",
-    "SAVE", "BGSAVE", "LASTSAVE", "RESET", "SORT"
+    "SAVE", "BGSAVE", "LASTSAVE", "RESET", "SORT", "MEMORY_USAGE"
   ]
 }
 

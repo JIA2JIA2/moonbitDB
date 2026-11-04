@@ -740,6 +740,20 @@ pub fn Database::try_lmpop(
   Ok(None)
 }
 
+pub fn Database::try_lpop_count(self : Database, key : String, count : Int) -> Result[Array[String], RedisError] {
+  if count < 0 {
+    return Err(RedisError::OutOfRange)
+  }
+  Ok(self.lpop_count(key, count))
+}
+
+pub fn Database::try_rpop_count(self : Database, key : String, count : Int) -> Result[Array[String], RedisError] {
+  if count < 0 {
+    return Err(RedisError::OutOfRange)
+  }
+  Ok(self.rpop_count(key, count))
+}
+
 pub fn Database::lmpop(
   self : Database,
   keys : Array[String],

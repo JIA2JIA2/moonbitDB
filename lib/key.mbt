@@ -534,6 +534,27 @@ pub fn Database::copy(self : Database, source : String, destination : String) ->
   self.copy_with_replace(source, destination, false)
 }
 
+pub fn Database::exists_many(self : Database, keys : Array[String]) -> Int {
+  let mut count = 0
+  for k in keys {
+    self.check_expired(k) |> ignore
+    if self.data.contains(k) {
+      count = count + 1
+    }
+  }
+  count
+}
+
+pub fn Database::unlink_many(self : Database, keys : Array[String]) -> Int {
+  let mut count = 0
+  for k in keys {
+    if self.del(k) {
+      count = count + 1
+    }
+  }
+  count
+}
+
 pub fn Database::scan_match(
   self : Database,
   cursor : Int,

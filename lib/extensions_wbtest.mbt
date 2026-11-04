@@ -1375,3 +1375,98 @@ test "f1_watch_dirty_paths" {
     Err(_) => @test.assert_eq(true, false)
   }
 }
+
+
+test "g1_zrange_modifiers" {
+  let db = Database::new()
+  db.set("str", "x")
+  db.zadd("z", 1.0, "a") |> ignore
+  db.zadd("z", 2.0, "b") |> ignore
+  db.zadd("z", 3.0, "c") |> ignore
+
+  match db.try_zrange_modifiers("z", "0", "-1", None, false, false, 0, 0) {
+    Ok(items) => @test.assert_eq(items, ["a", "b", "c"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrange_modifiers("z", "0", "-1", None, true, false, 0, 0) {
+    Ok(items) => @test.assert_eq(items, ["c", "b", "a"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrange_modifiers("z", "0", "-1", None, false, true, 0, 0) {
+    Ok(items) => @test.assert_eq(items, ["a", "1", "b", "2", "c", "3"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrange_modifiers("z", "(1", "(3", Some("byscore"), false, false, 0, 0) {
+    Ok(items) => @test.assert_eq(items, ["b"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrange_modifiers("z", "(1", "+inf", Some("byscore"), true, false, 0, 0) {
+    Ok(items) => @test.assert_eq(items, ["c", "b"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrange_modifiers("z", "-inf", "+inf", Some("byscore"), false, true, 1, 1) {
+    Ok(items) => @test.assert_eq(items, ["b", "2"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrange_modifiers("z", "-", "+", Some("bylex"), false, false, 1, 1) {
+    Ok(items) => @test.assert_eq(items, ["b"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrange_modifiers("z", "-", "+", Some("bylex"), true, true, 0, 0) {
+    Ok(items) => @test.assert_eq(items, ["c", "3", "b", "2", "a", "1"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrange_modifiers("z", "0", "-1", Some("bad"), false, false, 0, 0) {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_zrange_modifiers("str", "0", "-1", None, false, false, 0, 0) {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_zrange_modifiers("missing", "0", "-1", None, false, false, 0, 0) {
+    Ok(items) => @test.assert_eq(items.length(), 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.zrange_modifiers("z", "0", "-1", None, false, false, 0, 0), ["a", "b", "c"])
+}
+
+test "g1_multi_key_and_memory_usage" {
+  let db = Database::new()
+  db.set("k1", "v")
+  db.rpush_all("k2", ["a"]) |> ignore
+  @test.assert_eq(db.exists_many(["k1", "k2", "k3"]), 2)
+  @test.assert_eq(db.exists_many([]), 0)
+  @test.assert_eq(db.unlink_many(["k1", "k2", "k3"]), 2)
+  @test.assert_eq(db.exists_many(["k1", "k2"]), 0)
+
+  db.set("mu", "hello")
+  match db.memory_usage("mu") {
+    Some(bytes) => @test.assert_eq(bytes, 2 * 2 + 5 * 2)
+    None => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.memory_usage("missing"), None)
+  db.hset("muh", "f", "vv") |> ignore
+  match db.memory_usage("muh") {
+    Some(bytes) => @test.assert_eq(bytes, 3 * 2 + (1 + 2) * 2)
+    None => @test.assert_eq(true, false)
+  }
+}
+
+test "g1_pop_count_negative" {
+  let db = Database::new()
+  db.rpush_all("l", ["a", "b"]) |> ignore
+  match db.try_lpop_count("l", -1) {
+    Err(RedisError::OutOfRange) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_rpop_count("l", -1) {
+    Err(RedisError::OutOfRange) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_lpop_count("l", 1) {
+    Ok(vals) => @test.assert_eq(vals, ["a"])
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.lpop_count("l", -1), [])
+}
