@@ -232,9 +232,9 @@ fn Database::get_sorted_zset(self : Database, key : String) -> Array[(String, Fl
   }
 }
 
-fn Database::get_rank_map(self : Database, key : String) -> Map[String, Int] {
+fn Database::ensure_rank_cache(self : Database, key : String) -> Unit {
   match self.zset_rank_cache.get(key) {
-    Some(ranks) => ranks
+    Some(_) => ()
     None => {
       let sorted = self.get_sorted_zset(key)
       let ranks = Map([], capacity=sorted.length())
@@ -242,8 +242,15 @@ fn Database::get_rank_map(self : Database, key : String) -> Map[String, Int] {
         ranks.set(sorted[i].0, i)
       }
       self.zset_rank_cache.set(key, ranks)
-      ranks
     }
+  }
+}
+
+fn Database::get_rank_map(self : Database, key : String) -> Map[String, Int] {
+  self.ensure_rank_cache(key)
+  match self.zset_rank_cache.get(key) {
+    Some(ranks) => ranks
+    None => Map([], capacity=0)
   }
 }
 
