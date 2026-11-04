@@ -181,6 +181,8 @@ pub fn Database::set_with_options(
   get : Bool,
   ex_seconds : Int?,
   px_milliseconds : Int64?,
+  exat : Int64?,
+  pxat : Int64?,
   keep_ttl : Bool,
 ) -> Result[String?, RedisError] {
   if nx && xx {
@@ -194,10 +196,28 @@ pub fn Database::set_with_options(
     Some(_) => true
     None => false
   }
+  let has_exat = match exat {
+    Some(_) => true
+    None => false
+  }
+  let has_pxat = match pxat {
+    Some(_) => true
+    None => false
+  }
+  let has_expiry = has_ex || has_px || has_exat || has_pxat
   if has_ex && has_px {
     return Err(RedisError::InvalidArgument)
   }
-  if keep_ttl && (has_ex || has_px) {
+  if has_ex && has_pxat {
+    return Err(RedisError::InvalidArgument)
+  }
+  if has_px && has_exat {
+    return Err(RedisError::InvalidArgument)
+  }
+  if has_exat && has_pxat {
+    return Err(RedisError::InvalidArgument)
+  }
+  if keep_ttl && has_expiry {
     return Err(RedisError::InvalidArgument)
   }
   self.check_expired(key) |> ignore
@@ -247,6 +267,18 @@ pub fn Database::set_with_options(
       Some(expire_time) => Some(expire_time)
       None => return Err(RedisError::InvalidArgument)
     }
+  } else if has_exat {
+    let timestamp = exat.unwrap()
+    if timestamp <= self.current_time {
+      return Err(RedisError::InvalidArgument)
+    }
+    Some(timestamp)
+  } else if has_pxat {
+    let timestamp = pxat.unwrap()
+    if timestamp <= self.current_time {
+      return Err(RedisError::InvalidArgument)
+    }
+    Some(timestamp)
   } else {
     None
   }
@@ -260,14 +292,14 @@ pub fn Database::set_with_options(
 
 pub fn Database::setxx(self : Database, key : String, value : String) -> Bool {
   let existed = !self.check_expired(key) && self.data.contains(key)
-  match self.set_with_options(key, value, false, true, false, None, None, false) {
+  match self.set_with_options(key, value, false, true, false, None, None, None, None, false) {
     Ok(_) => existed
     Err(_) => false
   }
 }
 
 pub fn Database::set_get(self : Database, key : String, value : String) -> String? {
-  match self.set_with_options(key, value, false, false, true, None, None, false) {
+  match self.set_with_options(key, value, false, false, true, None, None, None, None, false) {
     Ok(old_value) => old_value
     Err(_) => None
   }
