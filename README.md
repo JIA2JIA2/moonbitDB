@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**160 个测试用例，全部通过**。
+当前测试覆盖：**174 个测试用例，全部通过**。
 
 ### 运行基准与覆盖率
 
@@ -144,7 +144,7 @@ moonbitDB/
 │   ├── util.mbt                # 整数解析与通配符匹配
 │   ├── error.mbt               # RedisError 错误模型
 │   ├── server.mbt              # 服务器命令
-│   ├── database_wbtest.mbt     # 白盒测试（160 个用例）
+│   ├── database_wbtest.mbt     # 白盒测试（171 个用例）
 │   ├── database_property_wbtest.mbt # 属性测试
 │   ├── database_bench_test.mbt # 基准测试
 │   └── moon.pkg

@@ -208,10 +208,16 @@ pub fn Database::set_with_options(
   if has_ex && has_px {
     return Err(RedisError::InvalidArgument)
   }
+  if has_ex && has_exat {
+    return Err(RedisError::InvalidArgument)
+  }
   if has_ex && has_pxat {
     return Err(RedisError::InvalidArgument)
   }
   if has_px && has_exat {
+    return Err(RedisError::InvalidArgument)
+  }
+  if has_px && has_pxat {
     return Err(RedisError::InvalidArgument)
   }
   if has_exat && has_pxat {
