@@ -80,7 +80,7 @@ pub fn Database::command() -> Array[String] {
     "ZRANK", "ZREVRANK", "ZINCRBY", "ZREMRANGEBYRANK", "ZREMRANGEBYSCORE", "ZREMRANGEBYLEX",
     "ZPOPMIN", "ZPOPMAX", "ZMSCORE", "ZRANDMEMBER", "ZDIFF", "ZDIFFSTORE", "ZUNION", "ZUNIONSTORE", "ZINTER", "ZINTERSTORE", "ZINTERCARD", "ZRANGESTORE", "ZSCAN",
     "DBSIZE", "FLUSHDB", "FLUSHALL", "RANDOMKEY", "RENAME", "RENAMENX", "COPY", "TOUCH", "UNLINK",
-    "MULTI", "EXEC", "DISCARD",
+    "MULTI", "EXEC", "DISCARD", "WATCH", "UNWATCH",
     "LMPOP", "ZMPOP",
     "PING", "ECHO", "INFO", "TIME", "COMMAND", "COMMAND_INFO", "OBJECT_ENCODING", "OBJECT_REFCOUNT", "OBJECT_IDLETIME",
     "AUTH", "CLIENT", "CONFIG", "SLOWLOG",
@@ -173,14 +173,31 @@ pub fn Database::multi(self : Database) -> String {
   }
 }
 
+pub fn Database::try_exec(self : Database) -> Result[String, RedisError] {
+  if !self.in_transaction {
+    return Err(RedisError::InvalidArgument)
+  }
+  if self.watched_keys_conflict() {
+    ignore(self.clear_transaction())
+    self.unwatch()
+    return Err(RedisError::TransactionAborted)
+  }
+  if self.run_transaction() {
+    self.unwatch()
+    Ok("OK")
+  } else {
+    Err(RedisError::InvalidArgument)
+  }
+}
+
 pub fn Database::exec(self : Database) -> String {
   if !self.in_transaction {
     "ERR EXEC without MULTI"
   } else {
-    if self.run_transaction() {
-      "OK"
-    } else {
-      "ERR EXEC failed"
+    match self.try_exec() {
+      Ok(msg) => msg
+      Err(RedisError::TransactionAborted) => "ERR EXEC aborted (watched key modified)"
+      Err(_) => "ERR EXEC failed"
     }
   }
 }

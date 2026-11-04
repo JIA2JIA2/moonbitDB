@@ -4,6 +4,7 @@ pub enum RedisError {
   NotFound
   InvalidArgument
   Overflow
+  TransactionAborted
 }
 
 pub fn RedisError::message(self : RedisError) -> String {
@@ -13,5 +14,6 @@ pub fn RedisError::message(self : RedisError) -> String {
     RedisError::NotFound => "ERR no such key"
     RedisError::InvalidArgument => "ERR invalid argument"
     RedisError::Overflow => "ERR increment or decrement would overflow"
+    RedisError::TransactionAborted => "TransactionAborted Transaction aborted because the watched keys were modified"
   }
 }

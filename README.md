@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**185 个测试用例，全部通过**。
+当前测试覆盖：**186 个测试用例，全部通过**。
 
 ### 运行基准与覆盖率
 
@@ -173,7 +173,7 @@ moonbitDB/
 
 ## 支持的命令
 
-共支持 **151 个命令**，覆盖 Redis 核心功能。
+共支持 **153 个命令**，覆盖 Redis 核心功能。
 
 > **类型安全约定**：对已存在但类型不匹配的 key，写操作**不会覆盖**原数据。失败返回值约定如下：`HSET`/`LPUSH`/`RPUSH`/`APPEND`/`SETRANGE`/`LPUSHX`/`RPUSHX` 返回 `-1`，`SADD`/`ZADD`/`HSETNX`/`HMSET` 返回 `false`，`INCR`/`DECR`/`INCRBY`/`DECRBY`/`HINCRBY` 返回 `None`，`SINTERSTORE`/`SUNIONSTORE`/`SDIFFSTORE` 返回 `-1`。时间相关 API 使用 `Int64` 毫秒，可安全表示真实 Unix 时间戳与超过 24 天的 TTL。
 
@@ -366,6 +366,8 @@ moonbitDB/
 | `MULTI` | `() -> String` | 开启事务（返回 "OK"） |
 | `EXEC` | `() -> String` | 执行事务队列（返回 "OK"） |
 | `DISCARD` | `() -> String` | 清空事务队列（返回 "OK"） |
+| `WATCH` | `(key) -> Unit` | 监视 key（EXEC 前被修改则事务中止） |
+| `UNWATCH` | `() -> Unit` | 取消所有监视 |
 | `AUTH` | `(password) -> String` | 认证（始终返回 "OK"） |
 | `CLIENT` | `(subcommand) -> String` | 客户端信息（LIST 返回连接描述） |
 | `CONFIG` | `(subcommand, parameter) -> String` | 配置查询（GET 返回 "0"） |
@@ -449,6 +451,9 @@ match db.try_incrby("name", 1) {
 | `try_bitpos` | `(self : Database, key : String, bit : Int, start : Int, end : Int) -> Result[Int, RedisError]` | 精确错误版找位（start/end 为 code unit 索引） |
 | `expiretime` | `(self : Database, key : String) -> Int64` | 绝对过期时间戳（秒） |
 | `pexpiretime` | `(self : Database, key : String) -> Int64` | 绝对过期时间戳（毫秒） |
+| `watch` | `(self : Database, key : String) -> Unit` | WATCH 监视 key |
+| `unwatch` | `(self : Database) -> Unit` | UNWATCH 取消监视 |
+| `try_exec` | `(self : Database) -> Result[String, RedisError]` | 精确错误版 EXEC（监视冲突返回 TransactionAborted） |
 | `try_getex` | `(self : Database, key : String, expire_ms : Int64?) -> Result[String, RedisError]` | 精确错误版 GETEX |
 | `set_get` | `(self : Database, key : String, value : String) -> String?` | 设置新值并返回旧值（SET ... GET） |
 | `try_set_get` | `(self : Database, key : String, value : String) -> Result[String?, RedisError]` | 精确错误版 SET ... GET |
@@ -841,7 +846,7 @@ moon run examples/cli_repl --target native
 | Set | 17 | SADD, SMEMBERS, SREM, SCARD, SISMEMBER, SMISMEMBER, SINTER, SINTERCARD, SINTERSTORE, SUNION, SUNIONSTORE, SDIFF, SDIFFSTORE, SMOVE, SPOP, SRANDMEMBER, SSCAN |
 | Sorted Set | 32 | ZADD, ZRANGE, ZCARD, ZSCORE, ZREM, ZRANGEBYSCORE, ZRANGEBYLEX, ZREVRANGEBYLEX, ZLEXCOUNT, ZCOUNT, ZREVRANGE, ZREVRANGEBYSCORE, ZRANK, ZREVRANK, ZINCRBY, ZREMRANGEBYRANK, ZREMRANGEBYSCORE, ZREMRANGEBYLEX, ZPOPMIN, ZPOPMAX, ZMSCORE, ZRANDMEMBER, ZUNION, ZUNIONSTORE, ZINTER, ZINTERSTORE, ZINTERCARD, ZDIFF, ZDIFFSTORE, ZRANGESTORE, ZSCAN, ZMPOP |
 | 批量操作 | 6 | MSET, MSETNX, MGET, MDEL, HMSET, HMGET |
-| 服务器 | 25 | DBSIZE, FLUSHDB, FLUSHALL, PING, ECHO, INFO, TIME, COMMAND, COMMAND_INFO, OBJECT_ENCODING, OBJECT_REFCOUNT, OBJECT_IDLETIME, MULTI, EXEC, DISCARD, AUTH, CLIENT, CONFIG, SLOWLOG, SELECT, MOVE, DUMP, RESTORE, MONITOR, OBJECT_FREQ |
+| 服务器 | 27 | DBSIZE, FLUSHDB, FLUSHALL, PING, ECHO, INFO, TIME, COMMAND, COMMAND_INFO, OBJECT_ENCODING, OBJECT_REFCOUNT, OBJECT_IDLETIME, MULTI, EXEC, DISCARD, WATCH, UNWATCH, AUTH, CLIENT, CONFIG, SLOWLOG, SELECT, MOVE, DUMP, RESTORE, MONITOR, OBJECT_FREQ |
 
 **Key 过期机制**：
 - EXPIRE / PEXPIRE / EXPIREAT / PEXPIREAT — 设置过期时间（秒/毫秒、相对/绝对时间戳）

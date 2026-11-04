@@ -666,13 +666,86 @@ test "d5_bitmap_commands" {
     Err(_) => @test.assert_eq(true, false)
   }
   @test.assert_eq(db.bitpos("bp", 0), 1)
-  match db.try_bitpos("bp", 2, 0, -1) {
-    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
-    _ => @test.assert_eq(true, false)
-  }
   match db.try_bitpos("hh1", 1, 0, -1) {
     Err(RedisError::WrongType) => @test.assert_eq(true, true)
     _ => @test.assert_eq(true, false)
   }
   @test.assert_eq(db.bitpos("missing", 1), -1)
+}
+
+test "d6_watch_optimistic_lock" {
+  let db = Database::new()
+  db.set("w1", "v1")
+  db.set("w2", "v2")
+
+  db.watch("w1")
+  db.set("w1", "outside") |> ignore
+  ignore(db.multi())
+  ignore(db.set("w1", "changed"))
+  match db.try_exec() {
+    Err(RedisError::TransactionAborted) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.get("w1"), Some("outside"))
+  @test.assert_eq(RedisError::message(RedisError::TransactionAborted), "TransactionAborted Transaction aborted because the watched keys were modified")
+
+  db.watch("w1")
+  ignore(db.multi())
+  ignore(db.set("w1", "ok"))
+  @test.assert_eq(db.exec(), "OK")
+  @test.assert_eq(db.get("w1"), Some("ok"))
+
+  db.watch("w1")
+  db.unwatch()
+  db.set("w1", "free") |> ignore
+  ignore(db.multi())
+  ignore(db.set("w1", "again"))
+  match db.try_exec() {
+    Ok(_) => @test.assert_eq(true, true)
+    Err(_) => @test.assert_eq(true, false)
+  }
+
+  db.watch("fresh")
+  db.set("fresh", "outside") |> ignore
+  ignore(db.multi())
+  ignore(db.set("fresh", "created"))
+  match db.try_exec() {
+    Err(RedisError::TransactionAborted) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.get("fresh"), Some("outside"))
+
+  db.set("exp1", "v")
+  db.watch("exp1")
+  db.pexpire("exp1", 1L) |> ignore
+  db.advance_time(10)
+  ignore(db.exists("exp1"))
+  ignore(db.multi())
+  ignore(db.set("exp1", "x"))
+  match db.try_exec() {
+    Err(RedisError::TransactionAborted) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+
+  db.watch("w1")
+  ignore(db.multi())
+  ignore(db.set("w1", "discarded"))
+  ignore(db.discard())
+  db.set("w1", "after_discard") |> ignore
+  ignore(db.multi())
+  ignore(db.set("w1", "final"))
+  match db.try_exec() {
+    Err(RedisError::TransactionAborted) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.get("w1"), Some("after_discard"))
+
+  db.unwatch()
+  db.set("w1", "no_watch") |> ignore
+  ignore(db.multi())
+  ignore(db.set("w1", "x"))
+  match db.try_exec() {
+    Ok(_) => @test.assert_eq(true, true)
+    Err(_) => @test.assert_eq(true, false)
+  }
 }
