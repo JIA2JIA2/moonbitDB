@@ -239,6 +239,32 @@ fn main {
   }
   println("  GETDEL order:lock:1001（一次性取走锁）= \{lock_text}")
 
+  println("\n--- WATCH 乐观锁下单 ---")
+  db.set("stock:sku-1", "1")
+  db.watch("stock:sku-1")
+  let other = @lib.Database::new()
+  ignore(other.set("stock:sku-1", "0"))
+  ignore(db.multi())
+  ignore(db.decrby("stock:sku-1", 1))
+  match db.try_exec() {
+    Err(@lib.RedisError::TransactionAborted) => println("  下单失败：库存被并发修改（乐观锁生效）")
+    _ => println("  下单成功")
+  }
+  ignore(db.set("stock:sku-2", "5"))
+  db.watch("stock:sku-2")
+  ignore(db.multi())
+  ignore(db.decrby("stock:sku-2", 1))
+  match db.try_exec() {
+    Err(@lib.RedisError::TransactionAborted) => println("  sku-2 下单失败")
+    _ => {
+      let remain = match db.get("stock:sku-2") {
+        Some(v) => v
+        None => "0"
+      }
+      println("  sku-2 下单成功，剩余库存 = \{remain}")
+    }
+  }
+
   println("  ✅ 购物车 & 缓存系统示例完成！")
   println("========================================")
 }

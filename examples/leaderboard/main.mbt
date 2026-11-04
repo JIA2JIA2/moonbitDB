@@ -162,6 +162,18 @@ fn main {
   println("  支持命令数: \{@lib.Database::command().length()}")
 
   println("\n========================================")
+  println("\n--- ZPOPMAX / SORT / WATCH ---")
+  let top = db.zpopmax("leaderboard")
+  let top_text = match top {
+    Some((m, s)) => m + " = " + "\{s}"
+    None => "(nil)"
+  }
+  println("  ZPOPMAX: \{top_text}")
+  let all = db.sort("leaderboard", false, false, 0, 0, None)
+  println("  SORT (member order): \{all.length()} members")
+  let zr = db.zrevrange("leaderboard", 0, 2)
+  println("  ZREVRANGE top3: \{zr.length()} members")
+
   println("  ✅ 排行榜系统示例运行完成！")
   println("========================================")
 }

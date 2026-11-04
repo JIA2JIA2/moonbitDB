@@ -122,3 +122,88 @@ test "blackbox sort and modifiers" {
     _ => @test.assert_eq(true, false)
   }
 }
+
+
+test "blackbox scan and stores" {
+  let db = @lib.Database::new()
+  ignore(db.sadd_all("s", ["one", "two", "three"]))
+  let (c1, batch1) = db.sscan("s", 0, 10)
+  @test.assert_eq(batch1.length(), 3)
+  @test.assert_eq(c1, 0)
+  ignore(db.zadd("z", 1.0, "a"))
+  ignore(db.zadd("z", 2.0, "b"))
+  let (_, zbatch) = db.zscan("z", 0, 10)
+  @test.assert_eq(zbatch.length(), 2)
+  @test.assert_eq(db.zrangestore("zdst", "z", 0, 0), 1)
+  @test.assert_eq(db.zcard("zdst"), 1)
+  @test.assert_eq(db.zunionstore("zu", ["z", "z"]), 2)
+  @test.assert_eq(db.zdiffstore("zd", ["z", "z"]), 0)
+}
+
+test "blackbox config and client" {
+  let db = @lib.Database::new()
+  @test.assert_eq(db.config_set("maxmemory", "64mb"), "OK")
+  @test.assert_eq(db.config_get("maxmemory"), ["maxmemory", "64mb"])
+  @test.assert_eq(db.client_setname("cli-1"), "OK")
+  @test.assert_eq(db.client_getname(), "cli-1")
+  @test.assert_eq(db.slowlog("LEN"), ["0"])
+  @test.assert_eq(db.lolwut().contains("0.1.4"), true)
+}
+
+test "blackbox bitfield api" {
+  let db = @lib.Database::new()
+  match db.try_bitfield_set("bf", 0, 8, false, 200) {
+    Ok(old) => @test.assert_eq(old, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_get("bf", 0, 8, false) {
+    Ok(v) => @test.assert_eq(v, 200)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_incrby_mode("bf", 0, 8, false, 100, Some("SAT")) {
+    Ok(v) => @test.assert_eq(v, Some(255))
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_incrby_mode("bf", 0, 8, false, 1, Some("FAIL")) {
+    Ok(v) => @test.assert_eq(v, None)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_get("bf", -1, 8, false) {
+    Err(@lib.RedisError::InvalidArgument) => ()
+    _ => @test.assert_eq(true, false)
+  }
+}
+
+test "blackbox getex variants" {
+  let db = @lib.Database::new()
+  db.set("g", "v")
+  @test.assert_eq(db.getex_ex("g", 100), Some("v"))
+  @test.assert_eq(db.pttl("g"), 100000)
+  @test.assert_eq(db.getex_exat("g", 9999999999999), Some("v"))
+  @test.assert_eq(db.getex_pxat("g", 9999999999999), Some("v"))
+  @test.assert_eq(db.getex("g", None), Some("v"))
+  @test.assert_eq(db.ttl("g"), -1)
+}
+
+test "blackbox hscan and lpos" {
+  let db = @lib.Database::new()
+  ignore(db.hmset("h", ["f1", "f2"], ["1", "2"]))
+  let (c, batch) = db.hscan_with_match("h", 0, 10, Some("f*"))
+  @test.assert_eq(batch.length(), 2)
+  @test.assert_eq(c, 0)
+  ignore(db.rpush_all("l", ["a", "b", "a"]))
+  @test.assert_eq(db.lpos_options("l", "a", 1, -1, 0), [0, 2])
+  @test.assert_eq(db.lpos_options("l", "zz", 1, 0, 0), [])
+}
+
+test "blackbox misc commands" {
+  let db = @lib.Database::new()
+  db.set("k", "v")
+  @test.assert_eq(db.memory_usage("k") != None, true)
+  @test.assert_eq(db.command_info(["GET"]).length(), 1)
+  @test.assert_eq(db.command_count() > 150, true)
+  @test.assert_eq(db.wait(1, 100), 0)
+  @test.assert_eq(db.save(), "OK")
+  @test.assert_eq(db.exists_many(["k", "missing"]), 1)
+  @test.assert_eq(db.unlink_many(["k", "missing"]), 1)
+}
