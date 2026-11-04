@@ -177,11 +177,11 @@ moonbitDB/
 
 > **类型安全约定**：对已存在但类型不匹配的 key，写操作**不会覆盖**原数据。失败返回值约定如下：`HSET`/`LPUSH`/`RPUSH`/`APPEND`/`SETRANGE`/`LPUSHX`/`RPUSHX` 返回 `-1`，`SADD`/`ZADD`/`HSETNX`/`HMSET` 返回 `false`，`INCR`/`DECR`/`INCRBY`/`DECRBY`/`HINCRBY` 返回 `None`，`SINTERSTORE`/`SUNIONSTORE`/`SDIFFSTORE` 返回 `-1`。时间相关 API 使用 `Int64` 毫秒，可安全表示真实 Unix 时间戳与超过 24 天的 TTL。
 
-> **与 Redis 的已知差异（精度）**：分数与浮点值为 **Float32**（约 7 位有效数字，Redis 为 Double）：① `0.1+0.2` 类累加误差在 1e-8 量级即暴露，INCRBYFLOAT 连续累加存在双重舍入漂移；② 绝对值 ≥ 2^24（16777216）的整数分数会静默丢失低位；③ `format_float` 输出最多 10 位小数且为截断（非四舍五入）、无科学计数法；④ 计数类数值用 `Int64`（与 Redis 一致）。
+> **与 Redis 的已知差异（精度）**：见 [docs/DIFFERENCES.md](docs/DIFFERENCES.md#与-redis-的已知差异)。
 
-> **与 Redis 的已知差异（字符串索引与 Unicode）**：字符串按 **UTF-16 code unit** 索引（Redis 按字节）。中文/emoji 场景：emoji（代理对）占 2 个 code unit，`GETRANGE`/`SETRANGE`/`SETBIT` 等落在代理对中间会**拆出孤立代理（无效字符）**；`STRLEN` 对 emoji 返回 2（Redis 按字节返回 4）；位命令对 emoji 的一半置位会破坏整个字符。
+> **与 Redis 的已知差异（字符串索引与 Unicode）**：见 [docs/DIFFERENCES.md](docs/DIFFERENCES.md#与-redis-的已知差异)。
 
-> **与 Redis 的已知差异（事务）**：MULTI 期间仅 17 种操作排队（见 `MULTI` 命令行），其余写命令直接执行；WATCH 冲突时 EXEC 返回错误（官方返回 nil 回复）。
+> **与 Redis 的已知差异（事务）**：见 [docs/DIFFERENCES.md](docs/DIFFERENCES.md#与-redis-的已知差异)。
 
 ### String 命令
 
@@ -936,16 +936,6 @@ moon run examples/cli_repl --target native
 |------|------|------|--------|
 | https://github.com/redis/redis | 8.8.0| redis | Redis Source Available License 2.0 (RSALv2) |
 
-## 后续路线图（高成本延后项评估）
+## 后续路线图
 
-以下项经评估为结构性改造，暂列延后（按优先级）：
-
-| 项 | 评估结论 |
-|----|---------|
-| 事务全量排队 | TransactionOp 需扩 30+ 变体、约 50 个写命令补 in_transaction 分支；当前 MULTI 仅 17 种操作排队（已在命令表声明差异） |
-| 多 DB 架构 | data/expires 直接引用约 210 处、11 个附属状态需 per-db 化；解锁 SELECT/SWAPDB/MIGRATE 真实语义 |
-| ZSet 跳表 | 替换 Map+排序缓存（zadd 写穿 O(n)→O(log n)），所有 ZSet 路径改造 |
-| Float→Double | 全链路破坏性签名变更（分数/浮点精度根治，见"已知差异（精度）"） |
-| keyspace 事件通知 | 需事件订阅基础设施 |
-| APPEND rope | 字符串存储模型变更（大值 append 优化） |
-| 随机索引 | 写路径净负收益（sadd O(1)→O(n)），除非读多写少场景强需求，倾向否决 |
+高成本延后项的评估结论已迁移至 [docs/ROADMAP.md](docs/ROADMAP.md)。
