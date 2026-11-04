@@ -60,23 +60,9 @@ pub fn Database::getdel(self : Database, key : String) -> String? {
 }
 
 pub fn Database::getset(self : Database, key : String, value : String) -> String? {
-  if self.check_expired(key) {
-    self.put(key, RedisValue::String(value))
-    None
-  } else {
-    match self.data.get(key) {
-      Some(RedisValue::String(s)) => {
-        self.put(key, RedisValue::String(value))
-        self.expires.remove(key)
-        Some(s)
-      }
-      Some(_) => None
-      None => {
-        self.put(key, RedisValue::String(value))
-        self.expires.remove(key)
-        None
-      }
-    }
+  match self.try_set_get(key, value) {
+    Ok(old_value) => old_value
+    Err(_) => None
   }
 }
 
@@ -276,13 +262,17 @@ pub fn Database::set_with_options(
   } else if has_exat {
     let timestamp = exat.unwrap()
     if timestamp <= self.current_time {
-      return Err(RedisError::InvalidArgument)
+      self.put(key, RedisValue::String(value))
+      self.delete_key(key)
+      return Ok(old_value)
     }
     Some(timestamp)
   } else if has_pxat {
     let timestamp = pxat.unwrap()
     if timestamp <= self.current_time {
-      return Err(RedisError::InvalidArgument)
+      self.put(key, RedisValue::String(value))
+      self.delete_key(key)
+      return Ok(old_value)
     }
     Some(timestamp)
   } else {

@@ -55,7 +55,7 @@ fn main {
   db.hset("user:1", "email", "alice@example.com") |> ignore
   db.hset("user:1", "age", "25") |> ignore
   println("HSETNX username bob: \{db.hsetnx("user:1", "username", "bob")}")
-  db.hmset("user:1", ["city", "nickname"], ["Beijing", "Ally"])
+  db.hmset("user:1", ["city", "nickname"], ["Beijing", "Ally"]) |> ignore
   println("HGET user:1 username: \{show_opt(db.hget("user:1", "username"))}")
   println("HGET user:1 city: \{show_opt(db.hget("user:1", "city"))}")
   println("HLEN user:1: \{db.hlen("user:1")}")

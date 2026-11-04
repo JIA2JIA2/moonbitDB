@@ -81,7 +81,7 @@ fn main {
   println("----------------------------------------")
   for product in products {
     let key = "product:\{product.id}"
-    db.hmset(key, ["name", "price", "stock"], [product.name, "\{product.price}", "\{product.stock}"])
+    db.hmset(key, ["name", "price", "stock"], [product.name, "\{product.price}", "\{product.stock}"]) |> ignore
     db.expire(key, 3600) |> ignore
     println("  缓存商品: \{product.name} (ID: \{product.id}, TTL: 3600s)")
   }

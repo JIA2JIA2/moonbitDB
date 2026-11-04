@@ -204,19 +204,34 @@ pub fn Database::lindex(self : Database, key : String, index : Int) -> String? {
   }
 }
 
-pub fn Database::lset(self : Database, key : String, index : Int, value : String) -> Bool {
+pub fn Database::try_lset(
+  self : Database,
+  key : String,
+  index : Int,
+  value : String,
+) -> Result[Bool, RedisError] {
   if self.check_expired(key) {
-    false
-  } else {
-    match self.data.get(key) {
-      Some(RedisValue::List(deque)) => {
-        let adjusted_idx = if index < 0 { deque.length() + index } else { index }
-        let result = deque.set_at(adjusted_idx, value)
-        self.put(key, RedisValue::List(deque))
-        result
+    return Err(RedisError::NotFound)
+  }
+  match self.data.get(key) {
+    Some(RedisValue::List(deque)) => {
+      let adjusted_idx = if index < 0 { deque.length() + index } else { index }
+      if adjusted_idx < 0 || adjusted_idx >= deque.length() {
+        return Err(RedisError::InvalidArgument)
       }
-      _ => false
+      ignore(deque.set_at(adjusted_idx, value))
+      self.put(key, RedisValue::List(deque))
+      Ok(true)
     }
+    Some(_) => Err(RedisError::WrongType)
+    None => Err(RedisError::NotFound)
+  }
+}
+
+pub fn Database::lset(self : Database, key : String, index : Int, value : String) -> Bool {
+  match self.try_lset(key, index, value) {
+    Ok(_) => true
+    Err(_) => false
   }
 }
 
@@ -318,7 +333,8 @@ pub fn Database::lpushx(self : Database, key : String, value : String) -> Int {
         self.put(key, RedisValue::List(deque))
         deque.length()
       }
-      _ => 0
+      None => 0
+      Some(_) => -1
     }
   }
 }
@@ -333,7 +349,8 @@ pub fn Database::rpushx(self : Database, key : String, value : String) -> Int {
         self.put(key, RedisValue::List(deque))
         deque.length()
       }
-      _ => 0
+      None => 0
+      Some(_) => -1
     }
   }
 }

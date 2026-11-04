@@ -439,7 +439,7 @@ test "mdel_operations" {
 test "hmset_hmget_operations" {
   let db = Database::new()
   
-  db.hmset("user:1", ["name", "email", "age"], ["Alice", "alice@example.com", "30"])
+  db.hmset("user:1", ["name", "email", "age"], ["Alice", "alice@example.com", "30"]) |> ignore
   
   @test.assert_eq(db.hget("user:1", "name"), Some("Alice"))
   @test.assert_eq(db.hget("user:1", "email"), Some("alice@example.com"))
@@ -457,7 +457,7 @@ test "hmset_hmget_operations" {
   @test.assert_eq(mixed[1], None)
   @test.assert_eq(mixed[2], Some("30"))
   
-  db.hmset("user:1", ["age", "city"], ["31", "Beijing"])
+  db.hmset("user:1", ["age", "city"], ["31", "Beijing"]) |> ignore
   @test.assert_eq(db.hget("user:1", "age"), Some("31"))
   @test.assert_eq(db.hget("user:1", "city"), Some("Beijing"))
 }
@@ -483,7 +483,7 @@ test "batch_with_expire" {
   let deleted = db.mdel(["temp1", "temp2"])
   @test.assert_eq(deleted, 1)
   
-  db.hmset("temp_hash", ["a", "b"], ["1", "2"])
+  db.hmset("temp_hash", ["a", "b"], ["1", "2"]) |> ignore
   db.expire("temp_hash", 1) |> ignore
   
   db.advance_time(2000)
@@ -1486,7 +1486,7 @@ test "cross_type_safety" {
 test "hmset_wrong_type_noop" {
   let db = Database::new()
   db.set("k", "v") |> ignore
-  db.hmset("k", ["a"], ["1"])
+  db.hmset("k", ["a"], ["1"]) |> ignore
   @test.assert_eq(db.type_of("k"), "string")
   @test.assert_eq(db.get("k"), Some("v"))
 }
@@ -1646,11 +1646,11 @@ test "batch_extended_edge_cases" {
   let deleted = db.mdel(["k1", "k2", "k3", "nonexistent"])
   @test.assert_eq(deleted, 3)
   
-  db.hmset("hash_batch", ["f1", "f2"], ["v1", "v2"]) |> ignore
-  db.hmset("hash_batch", ["f3", "f4"], ["v3", "v4"]) |> ignore
+  db.hmset("hash_batch", ["f1", "f2"], ["v1", "v2"]) |> ignore |> ignore
+  db.hmset("hash_batch", ["f3", "f4"], ["v3", "v4"]) |> ignore |> ignore
   @test.assert_eq(db.hlen("hash_batch"), 4)
   
-  db.hmset("hash_batch", ["f1"], ["updated"]) |> ignore
+  db.hmset("hash_batch", ["f1"], ["updated"]) |> ignore |> ignore
   @test.assert_eq(db.hget("hash_batch", "f1"), Some("updated"))
   @test.assert_eq(db.hlen("hash_batch"), 4)
 }
@@ -1862,11 +1862,11 @@ test "ttl_rounding" {
 
   db.set("key3", "value3")
   db.pexpire("key3", 1) |> ignore
-  @test.assert_eq(db.ttl("key3"), 0)
+  @test.assert_eq(db.ttl("key3"), 1)
 
   db.set("key4", "value4")
   db.pexpire("key4", 499) |> ignore
-  @test.assert_eq(db.ttl("key4"), 0)
+  @test.assert_eq(db.ttl("key4"), 1)
 
   db.set("key5", "value5")
   db.pexpire("key5", 500) |> ignore
@@ -2645,7 +2645,7 @@ test "mset_hmset_length_validation" {
   )
   @test.assert_eq(db.exists("h"), false)
 
-  db.hmset("h", ["f1"], ["v1"]) |> ignore
+  db.hmset("h", ["f1"], ["v1"]) |> ignore |> ignore
   @test.assert_eq(db.hget("h", "f1"), Some("v1"))
 
   db.set("str", "v") |> ignore
@@ -3215,7 +3215,7 @@ test "zset_extended_commands" {
 test "scan_variants" {
   let db = Database::new()
   db.set("str", "v") |> ignore
-  db.hmset("h", ["f1", "f2", "f3"], ["v1", "v2", "v3"])
+  db.hmset("h", ["f1", "f2", "f3"], ["v1", "v2", "v3"]) |> ignore
   db.rpush_all("list", ["a", "b"]) |> ignore
   db.sadd_all("set", ["a", "b", "c"]) |> ignore
   db.zadd("zset", 1.0, "a") |> ignore
@@ -3275,7 +3275,7 @@ test "zrangebylex_binary_bounds" {
 
 test "scan_snapshot_cache_invalidation" {
   let db = Database::new()
-  db.hmset("h", ["f1", "f2", "f3", "f4"], ["v1", "v2", "v3", "v4"])
+  db.hmset("h", ["f1", "f2", "f3", "f4"], ["v1", "v2", "v3", "v4"]) |> ignore
   let (h_cursor, h_batch) = db.hscan("h", 0, 2)
   @test.assert_eq(h_cursor, 2)
   @test.assert_eq(h_batch.length(), 2)
@@ -3332,7 +3332,7 @@ test "try_api_r3_commands" {
     },
     true,
   )
-  db.hmset("h", ["f"], ["v"])
+  db.hmset("h", ["f"], ["v"]) |> ignore
   @test.assert_eq(
     match db.try_hscan("h", 0, 10) {
       Ok((_, pairs)) => pairs.length()
@@ -3571,7 +3571,7 @@ test "count_and_random_extensions" {
   @test.assert_eq(db.srandmember_count("s", 10).length(), 4)
   @test.assert_eq(db.srandmember_count("s", -5).length(), 5)
 
-  db.hmset("h", ["f1", "f2", "f3"], ["v1", "v2", "v3"])
+  db.hmset("h", ["f1", "f2", "f3"], ["v1", "v2", "v3"]) |> ignore
   @test.assert_eq(db.hrandfield("h", 2).length(), 2)
   @test.assert_eq(db.hrandfield("h", 10).length(), 3)
 
@@ -3802,7 +3802,7 @@ test "coverage_edge_cases" {
   db.zadd("z1", 2.0, "b") |> ignore
   @test.assert_eq(db.zrangebylex("z1", "bad", "+").length(), 0)
 
-  db.hmset("h", ["a", "b"], ["1", "2"])
+  db.hmset("h", ["a", "b"], ["1", "2"]) |> ignore
   @test.assert_eq(db.hrandfield("h", -3).length(), 3)
   db.sadd_all("s", ["a"]) |> ignore
   @test.assert_eq(db.srandmember_count("s", -3).length(), 3)

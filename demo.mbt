@@ -62,7 +62,7 @@ fn main() -> Unit {
   db.hset("user:1001", "level", "42") |> ignore
   println("  HSET user:1001 {username, email, level}")
   println("  HSETNX username bob = \{db.hsetnx("user:1001", "username", "bob")} (已存在，不覆盖)")
-  db.hmset("user:1001", ["nickname", "city"], ["Ally", "Beijing"])
+  db.hmset("user:1001", ["nickname", "city"], ["Ally", "Beijing"]) |> ignore
   println("  HMSET user:1001 {nickname, city}")
   println("  HGET user:1001 username = \{show_opt(db.hget("user:1001", "username"))}")
   println("  HGET user:1001 city = \{show_opt(db.hget("user:1001", "city"))}")

@@ -173,7 +173,7 @@ moonbitDB/
 
 共支持 **141 个命令**，覆盖 Redis 核心功能。
 
-> **类型安全约定**：对已存在但类型不匹配的 key，写操作**不会覆盖**原数据。失败返回值约定如下：`HSET`/`LPUSH`/`RPUSH`/`APPEND`/`SETRANGE` 返回 `-1`，`SADD`/`ZADD`/`HSETNX` 返回 `false`，`INCR`/`DECR`/`INCRBY`/`DECRBY`/`HINCRBY` 返回 `None`，`HMSET` 为空操作，`SINTERSTORE`/`SUNIONSTORE`/`SDIFFSTORE` 返回 `-1`。时间相关 API 使用 `Int64` 毫秒，可安全表示真实 Unix 时间戳与超过 24 天的 TTL。
+> **类型安全约定**：对已存在但类型不匹配的 key，写操作**不会覆盖**原数据。失败返回值约定如下：`HSET`/`LPUSH`/`RPUSH`/`APPEND`/`SETRANGE`/`LPUSHX`/`RPUSHX` 返回 `-1`，`SADD`/`ZADD`/`HSETNX`/`HMSET` 返回 `false`，`INCR`/`DECR`/`INCRBY`/`DECRBY`/`HINCRBY` 返回 `None`，`SINTERSTORE`/`SUNIONSTORE`/`SDIFFSTORE` 返回 `-1`。时间相关 API 使用 `Int64` 毫秒，可安全表示真实 Unix 时间戳与超过 24 天的 TTL。
 
 ### String 命令
 
@@ -209,9 +209,9 @@ moonbitDB/
 | `TYPE` | `(key) -> String` | 返回值类型（string/hash/list/set/zset/none） |
 | `EXPIRE` | `(key, seconds) -> Bool` | 设置过期时间（秒） |
 | `PEXPIRE` | `(key, ms) -> Bool` | 设置过期时间（毫秒） |
-| `EXPIREAT` | `(key, unix_seconds) -> Bool` | 设置过期时间戳（秒） |
-| `PEXPIREAT` | `(key, unix_ms) -> Bool` | 设置过期时间戳（毫秒） |
-| `TTL` | `(key) -> Int64` | 剩余生存时间（秒，四舍五入），-1 永久，-2 不存在 |
+| `EXPIREAT` | `(key, unix_seconds) -> Bool` | 设置过期时间戳（秒，过去时间戳立即删除 key） |
+| `PEXPIREAT` | `(key, unix_ms) -> Bool` | 设置过期时间戳（毫秒，过去时间戳立即删除 key） |
+| `TTL` | `(key) -> Int64` | 剩余生存时间（秒，向上取整），-1 永久，-2 不存在 |
 | `PTTL` | `(key) -> Int64` | 剩余生存时间（毫秒） |
 | `PERSIST` | `(key) -> Bool` | 移除过期时间 |
 | `RENAME` | `(old_key, new_key) -> Bool` | 重命名 key（含 TTL 转移） |
@@ -257,7 +257,7 @@ moonbitDB/
 | `LSET` | `(key, index, value) -> Bool` | 索引设置 |
 | `LREM` | `(key, count, value) -> Int` | 按值删除（count>0 从头，<0 从尾，=0 全部） |
 | `LINSERT` | `(key, before, pivot, value) -> Int` | 在 pivot 前/后插入 |
-| `LPUSHX` | `(key, value) -> Int` | 仅当列表存在时左端插入 |
+| `LPUSHX` | `(key, value) -> Int` | 仅当列表存在时左端插入（key 不存在返回 0，类型错误返回 -1） |
 | `RPUSHX` | `(key, value) -> Int` | 仅当列表存在时右端插入 |
 | `RPOPLPUSH` | `(source, dest) -> String?` | source 右端弹出插入 dest 左端 |
 | `LMOVE` | `(source, dest, from_left, to_left) -> String?` | 从 source 指定端弹出并插入 dest 指定端 |
@@ -501,6 +501,9 @@ match db.try_incrby("name", 1) {
 | `lrange` | `(self : Database, key : String, start : Int, end : Int) -> Array[String]` | 范围获取 |
 | `lindex` | `(self : Database, key : String, index : Int) -> String?` | 索引获取 |
 | `lset` | `(self : Database, key : String, index : Int, value : String) -> Bool` | 索引设置 |
+| `try_lset` | `(self : Database, key : String, index : Int, value : String) -> Result[Bool, RedisError]` | 精确错误版 LSET（越界返回 InvalidArgument） |
+| `expireat_with_options` | `(self : Database, key : String, unix_seconds : Int64, nx : Bool, xx : Bool, gt : Bool, lt : Bool) -> Bool` | 绝对时间戳版 EXPIRE NX/XX/GT/LT |
+| `pexpireat_with_options` | `(self : Database, key : String, unix_milliseconds : Int64, nx : Bool, xx : Bool, gt : Bool, lt : Bool) -> Bool` | 毫秒版 EXPIREAT NX/XX/GT/LT |
 | `lrem` | `(self : Database, key : String, count : Int, value : String) -> Int` | 按值删除 |
 | `linsert` | `(self : Database, key : String, before : Bool, pivot : String, value : String) -> Int` | 在 pivot 前/后插入 |
 | `lpushx` | `(self : Database, key : String, value : String) -> Int` | 仅当列表存在时左端插入 |

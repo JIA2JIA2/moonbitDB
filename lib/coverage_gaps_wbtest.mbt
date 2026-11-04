@@ -97,7 +97,7 @@ test "coverage_hash_gaps" {
     _ => @test.assert_eq(true, false)
   }
 
-  db.hmset("scan1", ["one", "two", "three"], ["1", "2", "3"])
+  db.hmset("scan1", ["one", "two", "three"], ["1", "2", "3"]) |> ignore
   @test.assert_eq(db.hscan_with_match("scan1", 0, 10, Some("*e")).1.length(), 2)
   @test.assert_eq(db.hscan_with_match("scan1", 0, 10, Some("t*")).1.length(), 2)
   @test.assert_eq(db.hscan_with_match("scan1", 0, 10, Some("one")).1.length(), 1)
@@ -124,8 +124,8 @@ test "coverage_list_gaps" {
   }
   @test.assert_eq(db.lpushx("missing", "v"), 0)
   @test.assert_eq(db.rpushx("missing", "v"), 0)
-  @test.assert_eq(db.lpushx("str", "v"), 0)
-  @test.assert_eq(db.rpushx("str", "v"), 0)
+  @test.assert_eq(db.lpushx("str", "v"), -1)
+  @test.assert_eq(db.rpushx("str", "v"), -1)
 
   db.rpush_all("l1", ["a", "b", "c"]) |> ignore
   @test.assert_eq(db.lindex("l1", -1), Some("c"))
@@ -436,8 +436,8 @@ test "coverage_string_exat_pxat" {
   @test.assert_eq(db.ttl("e1"), 1)
   @test.assert_eq(
     match db.set_with_options("e2", "v", false, false, false, None, None, Some(0), None, false) {
-      Err(RedisError::InvalidArgument) => true
-      _ => false
+      Ok(_) => true
+      Err(_) => false
     },
     true,
   )
@@ -451,11 +451,12 @@ test "coverage_string_exat_pxat" {
   @test.assert_eq(db.pttl("p1"), 2000)
   @test.assert_eq(
     match db.set_with_options("p2", "v", false, false, false, None, None, None, Some(0), false) {
-      Err(RedisError::InvalidArgument) => true
-      _ => false
+      Ok(_) => true
+      Err(_) => false
     },
     true,
   )
+  @test.assert_eq(db.exists("p2"), false)
   @test.assert_eq(
     match db.set_with_options("x1", "v", false, false, false, Some(10), None, Some(1000), None, false) {
       Err(RedisError::InvalidArgument) => true

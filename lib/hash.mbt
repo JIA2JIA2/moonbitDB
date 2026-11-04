@@ -20,8 +20,11 @@ pub fn Database::try_hmset(
   Ok(())
 }
 
-pub fn Database::hmset(self : Database, key : String, fields : Array[String], values : Array[String]) -> Unit {
-  self.try_hmset(key, fields, values) |> ignore
+pub fn Database::hmset(self : Database, key : String, fields : Array[String], values : Array[String]) -> Bool {
+  match self.try_hmset(key, fields, values) {
+    Ok(_) => true
+    Err(_) => false
+  }
 }
 
 pub fn Database::hmget(self : Database, key : String, fields : Array[String]) -> Array[String?] {

@@ -5,6 +5,10 @@ pub fn Database::expire(self : Database, key : String, seconds : Int) -> Bool {
   if self.data.contains(key) {
     match checked_add_i64(self.current_time, seconds.to_int64() * 1000) {
       Some(expire_time) => {
+        if expire_time <= self.current_time {
+          self.delete_key(key)
+          return true
+        }
         self.set_expire(key, expire_time)
         true
       }
@@ -22,6 +26,10 @@ pub fn Database::pexpire(self : Database, key : String, milliseconds : Int64) ->
   if self.data.contains(key) {
     match checked_add_i64(self.current_time, milliseconds) {
       Some(expire_time) => {
+        if expire_time <= self.current_time {
+          self.delete_key(key)
+          return true
+        }
         self.set_expire(key, expire_time)
         true
       }
@@ -42,7 +50,12 @@ pub fn Database::expireat(self : Database, key : String, unix_seconds : Int64) -
     return false
   }
   if self.data.contains(key) {
-    self.set_expire(key, unix_seconds * 1000)
+    let expire_time = unix_seconds * 1000
+    if expire_time <= self.current_time {
+      self.delete_key(key)
+      return true
+    }
+    self.set_expire(key, expire_time)
     true
   } else {
     false
@@ -54,6 +67,10 @@ pub fn Database::pexpireat(self : Database, key : String, unix_milliseconds : In
     return false
   }
   if self.data.contains(key) {
+    if unix_milliseconds <= self.current_time {
+      self.delete_key(key)
+      return true
+    }
     self.set_expire(key, unix_milliseconds)
     true
   } else {
@@ -134,6 +151,35 @@ pub fn Database::pexpire_with_options(
   }
 }
 
+pub fn Database::expireat_with_options(
+  self : Database,
+  key : String,
+  unix_seconds : Int64,
+  nx : Bool,
+  xx : Bool,
+  gt : Bool,
+  lt : Bool,
+) -> Bool {
+  let max_seconds = I64_MAX / 1000
+  let min_seconds = I64_MIN / 1000
+  if unix_seconds > max_seconds || unix_seconds < min_seconds {
+    return false
+  }
+  self.set_expire_with_options(key, unix_seconds * 1000, nx, xx, gt, lt)
+}
+
+pub fn Database::pexpireat_with_options(
+  self : Database,
+  key : String,
+  unix_milliseconds : Int64,
+  nx : Bool,
+  xx : Bool,
+  gt : Bool,
+  lt : Bool,
+) -> Bool {
+  self.set_expire_with_options(key, unix_milliseconds, nx, xx, gt, lt)
+}
+
 pub fn Database::ttl(self : Database, key : String) -> Int64 {
   if !self.data.contains(key) {
     -2
@@ -143,7 +189,7 @@ pub fn Database::ttl(self : Database, key : String) -> Int64 {
       self.delete_key(key)
       -2
     } else {
-      (remaining + 500) / 1000
+      (remaining + 999) / 1000
     }
   } else {
     -1

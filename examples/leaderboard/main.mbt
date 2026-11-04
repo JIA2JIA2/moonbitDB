@@ -38,7 +38,7 @@ fn main {
     let player = players[i]
     let score = Float::from_int(i * 100 + 50)
     db.zadd("leaderboard:global", score, player.id) |> ignore
-    db.hmset("player:\{player.id}", ["name", "score"], [player.name, "\{i * 100 + 50}"])
+    db.hmset("player:\{player.id}", ["name", "score"], [player.name, "\{i * 100 + 50}"]) |> ignore
     println("  玩家 \{player.name} (ID: \{player.id}): \{i * 100 + 50} 分")
   }
 
