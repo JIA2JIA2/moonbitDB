@@ -1,7 +1,7 @@
 test "bench zset read paths" (it : @bench.T) {
   let db = @lib.Database::new()
   for i = 0; i < 1000; i = i + 1 {
-    db.zadd("rank", Float::from_int(i), "member:\{i}") |> ignore
+    db.zadd("rank", Double::from_int(i), "member:\{i}") |> ignore
   }
   db.zrange("rank", 0, -1) |> ignore
   db.zrank("rank", "member:500") |> ignore
@@ -37,7 +37,7 @@ test "bench scan" (it : @bench.T) {
 test "bench copy zset" (it : @bench.T) {
   let db = @lib.Database::new()
   for i = 0; i < 500; i = i + 1 {
-    db.zadd("src", Float::from_int(i), "member:\{i}") |> ignore
+    db.zadd("src", Double::from_int(i), "member:\{i}") |> ignore
   }
   it.bench(name="copy zset 500", () => {
     db.copy_with_replace("src", "dst", true) |> ignore
@@ -75,7 +75,7 @@ test "bench write paths" (it : @bench.T) {
   it.bench(name="zadd 1000", () => {
     let db = @lib.Database::new()
     for i = 0; i < 1000; i = i + 1 {
-      db.zadd("z", Float::from_int(i), "member:\{i}") |> ignore
+      db.zadd("z", Double::from_int(i), "member:\{i}") |> ignore
     }
   })
   it.bench(name="expire 1000", () => {
@@ -92,7 +92,7 @@ test "bench write paths" (it : @bench.T) {
 test "bench new feature paths" (it : @bench.T) {
   let db = @lib.Database::new()
   for i = 0; i < 1000; i = i + 1 {
-    ignore(db.zadd("zs", Float::from_int(i), "member:\{i}"))
+    ignore(db.zadd("zs", Double::from_int(i), "member:\{i}"))
     ignore(db.set("s:\{i}", "value-\{i}"))
   }
   ignore(db.hset("weights", "w_member:1", "1.0"))

@@ -77,7 +77,7 @@ test "coverage_hash_gaps" {
     Err(RedisError::NotInteger) => @test.assert_eq(true, true)
     _ => @test.assert_eq(true, false)
   }
-  let zero : Float = 0.0
+  let zero : Double = 0.0
   db.hset("h1", "nan", "1.0") |> ignore
   match db.try_hincrbyfloat("h1", "nan", zero / zero) {
     Err(RedisError::Overflow) => @test.assert_eq(true, true)
@@ -275,7 +275,7 @@ test "coverage_zset_try_range" {
     _ => @test.assert_eq(true, false)
   }
 
-  let zero : Float = 0.0
+  let zero : Double = 0.0
   match db.try_zadd("zz", zero / zero, "m") {
     Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
     _ => @test.assert_eq(true, false)
@@ -314,7 +314,7 @@ test "coverage_zset_try_range" {
 test "coverage_merge_sort_big_zset" {
   let db = Database::new()
   for i = 0; i < 20; i = i + 1 {
-    db.zadd("big", Float::from_int(i), "m\{i}") |> ignore
+    db.zadd("big", Double::from_int(i), "m\{i}") |> ignore
   }
   let u = db.zunion(["big"])
   @test.assert_eq(u.length(), 20)

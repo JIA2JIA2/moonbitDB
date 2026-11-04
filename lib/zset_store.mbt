@@ -25,7 +25,7 @@ pub fn Database::try_zrangestore_byscore(
       let sorted = self.get_sorted_zset(source)
       let lo = lower_bound_incl(sorted, min_parsed.0, !min_parsed.1)
       let hi = upper_bound_incl(sorted, max_parsed.0, !max_parsed.1)
-      let scores : Map[String, Float] = Map([], capacity=hi - lo)
+      let scores : Map[String, Double] = Map([], capacity=hi - lo)
       let mut taken = 0
       let mut skipped = 0
       for i = lo; i < hi; i = i + 1 {
@@ -74,7 +74,7 @@ pub fn Database::try_zrangestore_bylex(
       let members = self.get_sorted_lex(source)
       let start = lex_lower_index(members, min_bound)
       let end = lex_upper_index(members, max_bound)
-      let scores : Map[String, Float] = Map([], capacity=end - start)
+      let scores : Map[String, Double] = Map([], capacity=end - start)
       for i = start; i < end; i = i + 1 {
         match self.zscore(source, members[i]) {
           Some(score) => scores.set(members[i], score)
@@ -123,8 +123,8 @@ pub fn Database::zrandmember(self : Database, key : String) -> String? {
   }
 }
 /// ZUNION：多集合并集（分数相加）
-pub fn Database::zunion(self : Database, keys : Array[String]) -> Array[(String, Float)] {
-  let scores : Map[String, Float] = Map([], capacity=10)
+pub fn Database::zunion(self : Database, keys : Array[String]) -> Array[(String, Double)] {
+  let scores : Map[String, Double] = Map([], capacity=10)
   for key in keys {
     if self.check_expired(key) {
       continue
@@ -141,18 +141,18 @@ pub fn Database::zunion(self : Database, keys : Array[String]) -> Array[(String,
       _ => ()
     }
   }
-  let items : Array[(String, Float)] = []
+  let items : Array[(String, Double)] = []
   for member_val, score in scores {
     items.push((member_val, score))
   }
   sort_by_score(items)
 }
 /// ZINTER：多集合交集（分数相加）
-pub fn Database::zinter(self : Database, keys : Array[String]) -> Array[(String, Float)] {
+pub fn Database::zinter(self : Database, keys : Array[String]) -> Array[(String, Double)] {
   if keys.length() == 0 {
     return []
   }
-  let zsets : Array[Map[String, Float]] = []
+  let zsets : Array[Map[String, Double]] = []
   for key in keys {
     if self.check_expired(key) {
       return []
@@ -171,7 +171,7 @@ pub fn Database::zinter(self : Database, keys : Array[String]) -> Array[(String,
       min_len = len
     }
   }
-  let scores : Map[String, Float] = Map([], capacity=min_len)
+  let scores : Map[String, Double] = Map([], capacity=min_len)
   for member_val, first_score in zsets[min_idx] {
     let mut total = first_score
     let mut present = true
@@ -191,14 +191,14 @@ pub fn Database::zinter(self : Database, keys : Array[String]) -> Array[(String,
       scores.set(member_val, total)
     }
   }
-  let items : Array[(String, Float)] = []
+  let items : Array[(String, Double)] = []
   for member_val, score in scores {
     items.push((member_val, score))
   }
   sort_by_score(items)
 }
 /// ZDIFF WITHSCORES：差集返回 (成员, 分数)
-pub fn Database::zdiff_with_scores(self : Database, keys : Array[String]) -> Array[(String, Float)] {
+pub fn Database::zdiff_with_scores(self : Database, keys : Array[String]) -> Array[(String, Double)] {
   if keys.length() == 0 {
     return []
   }
@@ -210,7 +210,7 @@ pub fn Database::zdiff_with_scores(self : Database, keys : Array[String]) -> Arr
       _ => return []
     }
   }
-  let items : Array[(String, Float)] = []
+  let items : Array[(String, Double)] = []
   for member_val, score in first {
     let mut keep = true
     for i = 1; i < keys.length(); i = i + 1 {
@@ -248,7 +248,7 @@ pub fn Database::zscan_with_match(
   cursor : Int,
   count : Int,
   pattern : String?,
-) -> (Int, Array[(String, Float)]) {
+) -> (Int, Array[(String, Double)]) {
   if self.check_expired(key) {
     return (0, [])
   }
@@ -268,7 +268,7 @@ pub fn Database::zscan_with_match(
       if start >= len {
         return (0, [])
       }
-      let result : Array[(String, Float)] = []
+      let result : Array[(String, Double)] = []
       let mut i = start
       let mut taken = 0
       while i < len && taken < limit {
@@ -291,7 +291,7 @@ pub fn Database::zscan(
   key : String,
   cursor : Int,
   count : Int,
-) -> (Int, Array[(String, Float)]) {
+) -> (Int, Array[(String, Double)]) {
   self.zscan_with_match(key, cursor, count, None)
 }
 /// ZSCAN 精确错误版
@@ -300,7 +300,7 @@ pub fn Database::try_zscan(
   key : String,
   cursor : Int,
   count : Int,
-) -> Result[(Int, Array[(String, Float)]), RedisError] {
+) -> Result[(Int, Array[(String, Double)]), RedisError] {
   if self.check_expired(key) {
     Ok((0, []))
   } else {
@@ -332,7 +332,7 @@ pub fn Database::try_zrandmember(self : Database, key : String) -> Result[String
   }
 }
 /// ZUNION 精确错误版
-pub fn Database::try_zunion(self : Database, keys : Array[String]) -> Result[Array[(String, Float)], RedisError] {
+pub fn Database::try_zunion(self : Database, keys : Array[String]) -> Result[Array[(String, Double)], RedisError] {
   if !self.zsets_valid(keys) {
     Err(RedisError::WrongType)
   } else {
@@ -340,7 +340,7 @@ pub fn Database::try_zunion(self : Database, keys : Array[String]) -> Result[Arr
   }
 }
 /// ZINTER 精确错误版
-pub fn Database::try_zinter(self : Database, keys : Array[String]) -> Result[Array[(String, Float)], RedisError] {
+pub fn Database::try_zinter(self : Database, keys : Array[String]) -> Result[Array[(String, Double)], RedisError] {
   if !self.zsets_valid(keys) {
     Err(RedisError::WrongType)
   } else {
@@ -348,7 +348,7 @@ pub fn Database::try_zinter(self : Database, keys : Array[String]) -> Result[Arr
   }
 }
 /// ZDIFF 精确错误版
-pub fn Database::try_zdiff(self : Database, keys : Array[String]) -> Result[Array[(String, Float)], RedisError] {
+pub fn Database::try_zdiff(self : Database, keys : Array[String]) -> Result[Array[(String, Double)], RedisError] {
   if !self.zsets_valid(keys) {
     Err(RedisError::WrongType)
   } else {
@@ -360,13 +360,13 @@ pub fn Database::try_zunionstore_with_options(
   self : Database,
   destination : String,
   keys : Array[String],
-  weights : Array[Float]?,
+  weights : Array[Double]?,
   aggregate : String?,
 ) -> Result[Int, RedisError] {
   if !self.zsets_valid(keys) {
     return Err(RedisError::WrongType)
   }
-  let zsets : Array[Map[String, Float]] = []
+  let zsets : Array[Map[String, Double]] = []
   for key in keys {
     if self.check_expired(key) {
       return Err(RedisError::WrongType)
@@ -379,7 +379,7 @@ pub fn Database::try_zunionstore_with_options(
   let weights_arr = match weights {
     Some(w) => w
     None => {
-      let default_weights : Array[Float] = []
+      let default_weights : Array[Double] = []
       let mut i = 0
       while i < keys.length() {
         default_weights.push(1.0)
@@ -393,7 +393,7 @@ pub fn Database::try_zunionstore_with_options(
     Some("max") => 2
     _ => 0
   }
-  let scores : Map[String, Float] = Map([], capacity=10)
+  let scores : Map[String, Double] = Map([], capacity=10)
   for i = 0; i < zsets.length(); i = i + 1 {
     let zset = zsets[i]
     let weight = weights_arr[i]
@@ -436,13 +436,13 @@ pub fn Database::try_zinterstore_with_options(
   self : Database,
   destination : String,
   keys : Array[String],
-  weights : Array[Float]?,
+  weights : Array[Double]?,
   aggregate : String?,
 ) -> Result[Int, RedisError] {
   if !self.zsets_valid(keys) {
     return Err(RedisError::WrongType)
   }
-  let zsets : Array[Map[String, Float]] = []
+  let zsets : Array[Map[String, Double]] = []
   for key in keys {
     if self.check_expired(key) {
       return Err(RedisError::WrongType)
@@ -455,7 +455,7 @@ pub fn Database::try_zinterstore_with_options(
   let weights_arr = match weights {
     Some(w) => w
     None => {
-      let default_weights : Array[Float] = []
+      let default_weights : Array[Double] = []
       let mut i = 0
       while i < keys.length() {
         default_weights.push(1.0)
@@ -478,7 +478,7 @@ pub fn Database::try_zinterstore_with_options(
       min_len = len
     }
   }
-  let scores : Map[String, Float] = Map([], capacity=min_len)
+  let scores : Map[String, Double] = Map([], capacity=min_len)
   for member_val, first_score in zsets[min_idx] {
     let mut total = first_score * weights_arr[min_idx]
     let mut present = true
@@ -534,7 +534,7 @@ pub fn Database::try_zdiffstore(
     return Err(RedisError::WrongType)
   }
   let result = self.zdiff_with_scores(keys)
-  let scores : Map[String, Float] = Map([], capacity=result.length())
+  let scores : Map[String, Double] = Map([], capacity=result.length())
   for pair in result {
     scores.set(pair.0, pair.1)
   }
@@ -625,7 +625,7 @@ pub fn Database::try_zrangestore(
   match self.data.get(source) {
     Some(RedisValue::ZSet(_)) => {
       let result = self.zrange_with_scores(source, start, end)
-      let scores : Map[String, Float] = Map([], capacity=result.length())
+      let scores : Map[String, Double] = Map([], capacity=result.length())
       for pair in result {
         scores.set(pair.0, pair.1)
       }
@@ -683,7 +683,7 @@ pub fn Database::try_zmpop(
   keys : Array[String],
   min : Bool,
   count : Int,
-) -> Result[(String, Array[(String, Float)])?, RedisError] {
+) -> Result[(String, Array[(String, Double)])?, RedisError] {
   if keys.length() == 0 || count <= 0 {
     return Err(RedisError::InvalidArgument)
   }
@@ -699,7 +699,7 @@ pub fn Database::try_zmpop(
           continue
         }
         let take = if count > len { len } else { count }
-        let result : Array[(String, Float)] = []
+        let result : Array[(String, Double)] = []
         let removed : Array[String] = []
         if min {
           for i = 0; i < take; i = i + 1 {
@@ -737,7 +737,7 @@ pub fn Database::zmpop(
   keys : Array[String],
   min : Bool,
   count : Int,
-) -> (String, Array[(String, Float)])? {
+) -> (String, Array[(String, Double)])? {
   match self.try_zmpop(keys, min, count) {
     Ok(result) => result
     Err(_) => None
@@ -749,7 +749,7 @@ pub fn Database::zrandmember_with_scores(
   self : Database,
   key : String,
   count : Int,
-) -> Array[(String, Float)] {
+) -> Array[(String, Double)] {
   if self.check_expired(key) {
     return []
   }
@@ -760,7 +760,7 @@ pub fn Database::zrandmember_with_scores(
         members.push(member_val)
       }
       let sampled = self.random_sample(members, count)
-      let result : Array[(String, Float)] = []
+      let result : Array[(String, Double)] = []
       for member_val in sampled {
         match zset.get(member_val) {
           Some(score) => result.push((member_val, score))

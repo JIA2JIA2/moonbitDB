@@ -3,7 +3,7 @@ pub enum RedisValue {
   Hash(Map[String, String])
   List(Deque)
   Set(Map[String, Bool])
-  ZSet(Map[String, Float])
+  ZSet(Map[String, Double])
 }
 
 pub enum TransactionOp {
@@ -16,7 +16,7 @@ pub enum TransactionOp {
   RPush(String, String)
   SAdd(String, String)
   SRem(String, String)
-  ZAdd(String, Float, String)
+  ZAdd(String, Double, String)
   ZRem(String, String)
   Del(String)
   Expire(String, Int)
@@ -44,14 +44,14 @@ pub struct Database {
   mut expires : Map[String, Int64]
   mut current_time : Int64
   mut rand_state : Int
-  mut zset_sorted_cache : Map[String, Array[(String, Float)]]
+  mut zset_sorted_cache : Map[String, Array[(String, Double)]]
   mut zset_rank_cache : Map[String, Map[String, Int]]
   mut zset_lex_cache : Map[String, Array[String]]
   mut zset_cache_lru : Array[String]
   mut scan_snapshot : Array[String]?
   mut hscan_snapshots : Map[String, Array[String]]
   mut sscan_snapshots : Map[String, Array[String]]
-  mut zscan_snapshots : Map[String, Array[(String, Float)]]
+  mut zscan_snapshots : Map[String, Array[(String, Double)]]
   mut expire_heap : Array[(String, Int64)]
   mut in_transaction : Bool
   mut transaction_queue : Array[TransactionOp]

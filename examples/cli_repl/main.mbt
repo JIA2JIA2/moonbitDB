@@ -21,8 +21,8 @@ fn parse_int(s : String) -> Int? {
   if neg { Some(-result) } else { Some(result) }
 }
 
-fn parse_float(s : String) -> Float? {
-  let mut result : Float = 0.0
+fn parse_float(s : String) -> Double? {
+  let mut result : Double = 0.0
   let mut i = 0
   let mut neg = false
   if s.length() > 0 && s[0] == '-' {
@@ -33,13 +33,13 @@ fn parse_float(s : String) -> Float? {
     return None
   }
   let mut has_dot = false
-  let mut decimal_pos : Float = 10.0
+  let mut decimal_pos : Double = 10.0
   let mut has_digit = false
   while i < s.length() {
     let c = s[i]
     if c >= '0' && c <= '9' {
       has_digit = true
-      let digit = Float::from_int(c.to_int() - '0'.to_int())
+      let digit = Double::from_int(c.to_int() - '0'.to_int())
       if has_dot {
         result = result + digit / decimal_pos
         decimal_pos = decimal_pos * 10.0

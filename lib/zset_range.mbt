@@ -49,13 +49,13 @@ pub fn Database::try_zrange(
     None => Ok([])
   }
 }
-fn lower_bound(sorted : Array[(String, Float)], score : Float) -> Int {
+fn lower_bound(sorted : Array[(String, Double)], score : Double) -> Int {
   lower_bound_incl(sorted, score, true)
 }
-fn upper_bound(sorted : Array[(String, Float)], score : Float) -> Int {
+fn upper_bound(sorted : Array[(String, Double)], score : Double) -> Int {
   upper_bound_incl(sorted, score, true)
 }
-fn lower_bound_incl(sorted : Array[(String, Float)], score : Float, inclusive : Bool) -> Int {
+fn lower_bound_incl(sorted : Array[(String, Double)], score : Double, inclusive : Bool) -> Int {
   let mut lo = 0
   let mut hi = sorted.length()
   while lo < hi {
@@ -68,7 +68,7 @@ fn lower_bound_incl(sorted : Array[(String, Float)], score : Float, inclusive : 
   }
   lo
 }
-fn upper_bound_incl(sorted : Array[(String, Float)], score : Float, inclusive : Bool) -> Int {
+fn upper_bound_incl(sorted : Array[(String, Double)], score : Double, inclusive : Bool) -> Int {
   let mut lo = 0
   let mut hi = sorted.length()
   while lo < hi {
@@ -81,16 +81,16 @@ fn upper_bound_incl(sorted : Array[(String, Float)], score : Float, inclusive : 
   }
   lo
 }
-fn float_inf(positive : Bool) -> Float {
-  let zero : Float = 0.0
-  let one : Float = 1.0
+fn float_inf(positive : Bool) -> Double {
+  let zero : Double = 0.0
+  let one : Double = 1.0
   if positive {
     one / zero
   } else {
     -(one / zero)
   }
 }
-fn parse_score_bound(bound : String) -> Result[(Float, Bool), RedisError] {
+fn parse_score_bound(bound : String) -> Result[(Double, Bool), RedisError] {
   if bound.length() == 0 {
     return Err(RedisError::InvalidArgument)
   }
@@ -120,8 +120,8 @@ fn parse_score_bound(bound : String) -> Result[(Float, Bool), RedisError] {
 pub fn Database::zrangebyscore_with_limit(
   self : Database,
   key : String,
-  min_score : Float,
-  max_score : Float,
+  min_score : Double,
+  max_score : Double,
   offset : Int,
   count : Int,
 ) -> Array[String] {
@@ -148,27 +148,27 @@ pub fn Database::zrangebyscore_with_limit(
   result
 }
 /// ZRANGEBYSCORE：按分数区间返回成员
-pub fn Database::zrangebyscore(self : Database, key : String, min_score : Float, max_score : Float) -> Array[String] {
+pub fn Database::zrangebyscore(self : Database, key : String, min_score : Double, max_score : Double) -> Array[String] {
   self.zrangebyscore_with_limit(key, min_score, max_score, 0, 0)
 }
 /// ZRANGEBYSCORE WITHSCORES：分数区间返回 (成员, 分数)
 pub fn Database::zrangebyscore_with_scores(
   self : Database,
   key : String,
-  min_score : Float,
-  max_score : Float,
-) -> Array[(String, Float)] {
+  min_score : Double,
+  max_score : Double,
+) -> Array[(String, Double)] {
   let sorted = self.get_sorted_zset(key)
   let lo = lower_bound(sorted, min_score)
   let hi = upper_bound(sorted, max_score)
-  let result : Array[(String, Float)] = []
+  let result : Array[(String, Double)] = []
   for i = lo; i < hi; i = i + 1 {
     result.push(sorted[i])
   }
   result
 }
 /// ZCOUNT：分数区间成员计数
-pub fn Database::zcount(self : Database, key : String, min_score : Float, max_score : Float) -> Int {
+pub fn Database::zcount(self : Database, key : String, min_score : Double, max_score : Double) -> Int {
   let sorted = self.get_sorted_zset(key)
   let lo = lower_bound(sorted, min_score)
   let hi = upper_bound(sorted, max_score)
@@ -195,7 +195,7 @@ pub fn Database::zrevrange(self : Database, key : String, start : Int, end : Int
   result
 }
 /// ZREVRANGEBYSCORE：分数区间降序返回成员（max 在前）
-pub fn Database::zrevrangebyscore(self : Database, key : String, max_score : Float, min_score : Float) -> Array[String] {
+pub fn Database::zrevrangebyscore(self : Database, key : String, max_score : Double, min_score : Double) -> Array[String] {
   let sorted = self.get_sorted_zset(key)
   let lo = lower_bound(sorted, min_score)
   let hi = upper_bound(sorted, max_score)
@@ -209,8 +209,8 @@ pub fn Database::zrevrangebyscore(self : Database, key : String, max_score : Flo
 pub fn Database::zrevrangebyscore_with_limit(
   self : Database,
   key : String,
-  max_score : Float,
-  min_score : Float,
+  max_score : Double,
+  min_score : Double,
   offset : Int,
   count : Int,
 ) -> Array[String] {
@@ -409,13 +409,13 @@ pub fn Database::try_zremrangebyscore_by_bound(
 pub fn Database::zrevrangebyscore_with_scores(
   self : Database,
   key : String,
-  max_score : Float,
-  min_score : Float,
-) -> Array[(String, Float)] {
+  max_score : Double,
+  min_score : Double,
+) -> Array[(String, Double)] {
   let sorted = self.get_sorted_zset(key)
   let lo = lower_bound(sorted, min_score)
   let hi = upper_bound(sorted, max_score)
-  let result : Array[(String, Float)] = []
+  let result : Array[(String, Double)] = []
   for i = hi - 1; i >= lo; i = i - 1 {
     result.push(sorted[i])
   }
@@ -459,7 +459,7 @@ pub fn Database::zrevrank(self : Database, key : String, member_val : String) ->
   }
 }
 /// ZINCRBY 精确错误版：增加成员分数
-pub fn Database::try_zincrby(self : Database, key : String, increment : Float, member_val : String) -> Result[Float, RedisError] {
+pub fn Database::try_zincrby(self : Database, key : String, increment : Double, member_val : String) -> Result[Double, RedisError] {
   self.check_expired(key) |> ignore
   let zset = match self.data.get(key) {
     Some(RedisValue::ZSet(z)) => z
@@ -489,7 +489,7 @@ pub fn Database::try_zincrby(self : Database, key : String, increment : Float, m
   Ok(new_score)
 }
 /// ZINCRBY：增加成员分数（支持负增量）
-pub fn Database::zincrby(self : Database, key : String, increment : Float, member_val : String) -> Float {
+pub fn Database::zincrby(self : Database, key : String, increment : Double, member_val : String) -> Double {
   match self.try_zincrby(key, increment, member_val) {
     Ok(score) => score
     Err(_) => 0.0
@@ -503,7 +503,7 @@ fn Database::zrangebyscore_by_bound_with_scores_impl(
   rev : Bool,
   offset : Int,
   count : Int,
-) -> Result[Array[(String, Float)], RedisError] {
+) -> Result[Array[(String, Double)], RedisError] {
   let min_parsed = match parse_score_bound(min_bound) {
     Ok(p) => p
     Err(e) => return Err(e)
@@ -520,7 +520,7 @@ fn Database::zrangebyscore_by_bound_with_scores_impl(
       let sorted = self.get_sorted_zset(key)
       let lo = lower_bound_incl(sorted, min_parsed.0, !min_parsed.1)
       let hi = upper_bound_incl(sorted, max_parsed.0, !max_parsed.1)
-      let result : Array[(String, Float)] = []
+      let result : Array[(String, Double)] = []
       let total = hi - lo
       if total <= 0 || offset < 0 {
         return Ok(result)
@@ -568,7 +568,7 @@ fn Database::zrangebylex_with_scores_impl(
   rev : Bool,
   offset : Int,
   count : Int,
-) -> Result[Array[(String, Float)], RedisError] {
+) -> Result[Array[(String, Double)], RedisError] {
   if !lex_bound_valid(min_bound) || !lex_bound_valid(max_bound) {
     return Ok([])
   }
@@ -587,7 +587,7 @@ fn Database::zrangebylex_with_scores_impl(
       let apply_offset = if offset > total { total } else { offset }
       let apply_count = if count <= 0 { total - apply_offset } else { count }
       let apply_end = if apply_offset + apply_count > total { total } else { apply_offset + apply_count }
-      let result : Array[(String, Float)] = []
+      let result : Array[(String, Double)] = []
       if rev {
         let mut i = end - 1 - apply_offset
         let stop = end - apply_end
@@ -614,7 +614,7 @@ fn Database::zrangebylex_with_scores_impl(
     None => Ok([])
   }
 }
-fn pairs_to_flat(pairs : Array[(String, Float)], with_scores : Bool) -> Array[String] {
+fn pairs_to_flat(pairs : Array[(String, Double)], with_scores : Bool) -> Array[String] {
   let out : Array[String] = []
   for p in pairs {
     out.push(p.0)
@@ -731,7 +731,7 @@ pub fn Database::zremrangebyrank(self : Database, key : String, start : Int, end
   }
 }
 /// ZREMRANGEBYSCORE：按分数区间删除，返回删除个数
-pub fn Database::zremrangebyscore(self : Database, key : String, min_score : Float, max_score : Float) -> Int {
+pub fn Database::zremrangebyscore(self : Database, key : String, min_score : Double, max_score : Double) -> Int {
   if self.check_expired(key) {
     0
   } else {
@@ -755,7 +755,7 @@ pub fn Database::zremrangebyscore(self : Database, key : String, min_score : Flo
   }
 }
 /// ZMSCORE：批量取成员分数（缺失为 None）
-pub fn Database::zmscore(self : Database, key : String, members : Array[String]) -> Array[Float?] {
+pub fn Database::zmscore(self : Database, key : String, members : Array[String]) -> Array[Double?] {
   if self.check_expired(key) {
     let result = []
     for _ in members {
@@ -782,7 +782,7 @@ pub fn Database::zmscore(self : Database, key : String, members : Array[String])
   }
 }
 /// ZRANGE WITHSCORES：按排名区间返回 (成员, 分数) 元组
-pub fn Database::zrange_with_scores(self : Database, key : String, start : Int, end : Int) -> Array[(String, Float)] {
+pub fn Database::zrange_with_scores(self : Database, key : String, start : Int, end : Int) -> Array[(String, Double)] {
   if self.check_expired(key) {
     []
   } else {
@@ -790,7 +790,7 @@ pub fn Database::zrange_with_scores(self : Database, key : String, start : Int, 
       Some(RedisValue::ZSet(_)) => {
         let sorted = self.get_sorted_zset(key)
         let len = sorted.length()
-        let result : Array[(String, Float)] = []
+        let result : Array[(String, Double)] = []
         let start_idx = if start < 0 { len + start } else { start }
         let end_idx = if end < 0 { len + end } else { end }
         let s = if start_idx < 0 { 0 } else { start_idx }
@@ -804,7 +804,7 @@ pub fn Database::zrange_with_scores(self : Database, key : String, start : Int, 
   }
 }
 /// ZREVRANGE WITHSCORES：按排名区间降序返回 (成员, 分数)
-pub fn Database::zrevrange_with_scores(self : Database, key : String, start : Int, end : Int) -> Array[(String, Float)] {
+pub fn Database::zrevrange_with_scores(self : Database, key : String, start : Int, end : Int) -> Array[(String, Double)] {
   if self.check_expired(key) {
     []
   } else {
@@ -812,7 +812,7 @@ pub fn Database::zrevrange_with_scores(self : Database, key : String, start : In
       Some(RedisValue::ZSet(_)) => {
         let sorted = self.get_sorted_zset(key)
         let len = sorted.length()
-        let result : Array[(String, Float)] = []
+        let result : Array[(String, Double)] = []
         let start_idx = if start < 0 { len + start } else { start }
         let end_idx = if end < 0 { len + end } else { end }
         let s = if start_idx < 0 { 0 } else { start_idx }

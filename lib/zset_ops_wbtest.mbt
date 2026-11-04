@@ -545,7 +545,7 @@ test "zset_write_through_removals" {
 test "zset_pop_write_through_cache" {
   let db = Database::new()
   for i = 0; i < 6; i = i + 1 {
-    db.zadd("z", Float::from_int(i), "m:\{i}") |> ignore
+    db.zadd("z", Double::from_int(i), "m:\{i}") |> ignore
   }
   @test.assert_eq(db.zrange("z", 0, -1).length(), 6)
   @test.assert_eq(
@@ -600,7 +600,7 @@ test "zset_extended_commands" {
   @test.assert_eq(db.zrangebylex("lex", "-", "+"), ["c"])
 
   for i = 0; i < 6; i = i + 1 {
-    db.zadd("zs", Float::from_int(i), "m:\{i}") |> ignore
+    db.zadd("zs", Double::from_int(i), "m:\{i}") |> ignore
   }
   let (next, batch) = db.zscan("zs", 0, 2)
   @test.assert_eq(batch.length(), 2)

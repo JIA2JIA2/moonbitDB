@@ -602,7 +602,7 @@ pub fn Database::try_sort(
     }
     items
   } else {
-    let pairs : Array[(String, Float)] = []
+    let pairs : Array[(String, Double)] = []
     for item in items {
       match parse_float(item) {
         Some(v) => pairs.push((item, v))
@@ -819,7 +819,7 @@ pub fn Database::try_sort_advanced(
         pairs[j + 1] = item
       }
     } else {
-      let numeric : Array[(String, Float)] = []
+      let numeric : Array[(String, Double)] = []
       for p in pairs {
         if p.1 == "" {
           numeric.push((p.0, 0.0))

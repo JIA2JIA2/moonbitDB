@@ -644,33 +644,33 @@ test "d4_hgetall_entries" {
 }
 
 test "d4_sort_and_sample_direct" {
-  let arr : Array[(String, Float)] = [("m", 5.0), ("a", 3.0), ("z", 9.0), ("b", 3.0), ("c", 1.0)]
+  let arr : Array[(String, Double)] = [("m", 5.0), ("a", 3.0), ("z", 9.0), ("b", 3.0), ("c", 1.0)]
   let sorted = merge_sort(arr)
   @test.assert_eq(sorted.length(), 5)
   @test.assert_eq(sorted[0].0, "c")
   @test.assert_eq(sorted[4].0, "z")
 
-  let arr2 : Array[(String, Float)] = [("e", 5.0), ("d", 4.0), ("c", 3.0), ("b", 2.0), ("a", 1.0)]
+  let arr2 : Array[(String, Double)] = [("e", 5.0), ("d", 4.0), ("c", 3.0), ("b", 2.0), ("a", 1.0)]
   let sorted2 = merge_sort(arr2)
   @test.assert_eq(sorted2[0].0, "a")
   @test.assert_eq(sorted2[4].0, "e")
 
-  let m1 : Array[(String, Float)] = [("a", 1.0), ("c", 3.0)]
-  let m2 : Array[(String, Float)] = [("b", 2.0)]
+  let m1 : Array[(String, Double)] = [("a", 1.0), ("c", 3.0)]
+  let m2 : Array[(String, Double)] = [("b", 2.0)]
   let merged = merge(m1, m2)
   @test.assert_eq(merged.length(), 3)
   @test.assert_eq(merged[0].0, "a")
   @test.assert_eq(merged[1].0, "b")
   @test.assert_eq(merged[2].0, "c")
 
-  let m3 : Array[(String, Float)] = [("x", 2.0)]
-  let m4 : Array[(String, Float)] = [("a", 1.0), ("c", 3.0)]
+  let m3 : Array[(String, Double)] = [("x", 2.0)]
+  let m4 : Array[(String, Double)] = [("a", 1.0), ("c", 3.0)]
   let merged2 = merge(m3, m4)
   @test.assert_eq(merged2[0].0, "a")
   @test.assert_eq(merged2[1].0, "x")
   @test.assert_eq(merged2[2].0, "c")
 
-  let small : Array[(String, Float)] = [("n", 2.0), ("m", 1.0), ("k", 2.0)]
+  let small : Array[(String, Double)] = [("n", 2.0), ("m", 1.0), ("k", 2.0)]
   let sorted3 = sort_by_score(small)
   @test.assert_eq(sorted3[0].0, "m")
   @test.assert_eq(sorted3[1].0, "k")
@@ -1905,7 +1905,7 @@ test "n2_string_error_paths" {
     Err(_) => @test.assert_eq(true, false)
   }
   // INCRBYFLOAT NaN 增量
-  let zero : Float = 0.0
+  let zero : Double = 0.0
   match db.try_incrbyfloat("sci", zero / zero) {
     Err(RedisError::Overflow) => @test.assert_eq(true, true)
     _ => @test.assert_eq(true, false)

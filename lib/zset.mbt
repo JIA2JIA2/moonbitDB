@@ -1,5 +1,5 @@
 /// ZADD 精确错误版：添加/更新成员（NaN 拒绝）
-pub fn Database::try_zadd(self : Database, key : String, score : Float, member_val : String) -> Result[Bool, RedisError] {
+pub fn Database::try_zadd(self : Database, key : String, score : Double, member_val : String) -> Result[Bool, RedisError] {
   if score != score {
     return Err(RedisError::InvalidArgument)
   }
@@ -27,7 +27,7 @@ pub fn Database::try_zadd(self : Database, key : String, score : Float, member_v
   Ok(!existed)
 }
 /// ZADD 便捷版：添加/更新成员（事务中排队）
-pub fn Database::zadd(self : Database, key : String, score : Float, member_val : String) -> Bool {
+pub fn Database::zadd(self : Database, key : String, score : Double, member_val : String) -> Bool {
   if self.in_transaction {
     self.transaction_queue.push(TransactionOp::ZAdd(key, score, member_val))
     false
@@ -42,7 +42,7 @@ pub fn Database::zadd(self : Database, key : String, score : Float, member_val :
 pub fn Database::try_zadd_with_options(
   self : Database,
   key : String,
-  score : Float,
+  score : Double,
   member_val : String,
   nx : Bool,
   xx : Bool,
@@ -109,13 +109,13 @@ pub fn Database::try_zadd_with_options(
 pub fn Database::try_zadd_incr(
   self : Database,
   key : String,
-  increment : Float,
+  increment : Double,
   member_val : String,
   nx : Bool,
   xx : Bool,
   gt : Bool,
   lt : Bool,
-) -> Result[Float?, RedisError] {
+) -> Result[Double?, RedisError] {
   if increment != increment {
     return Err(RedisError::InvalidArgument)
   }
@@ -166,7 +166,7 @@ pub fn Database::try_zadd_incr(
     }
   }
 }
-fn insertion_sort(arr : Array[(String, Float)]) -> Array[(String, Float)] {
+fn insertion_sort(arr : Array[(String, Double)]) -> Array[(String, Double)] {
   for i = 1; i < arr.length(); i = i + 1 {
     let item = arr[i]
     let mut j = i - 1
@@ -182,26 +182,26 @@ fn insertion_sort(arr : Array[(String, Float)]) -> Array[(String, Float)] {
   }
   arr
 }
-pub fn sort_by_score(items : Array[(String, Float)]) -> Array[(String, Float)] {
+pub fn sort_by_score(items : Array[(String, Double)]) -> Array[(String, Double)] {
   if items.length() <= 16 {
     insertion_sort(items)
   } else {
     merge_sort(items)
   }
 }
-pub fn merge_sort(arr : Array[(String, Float)]) -> Array[(String, Float)] {
+pub fn merge_sort(arr : Array[(String, Double)]) -> Array[(String, Double)] {
   let len = arr.length()
   if len <= 1 {
     return arr
   }
-  let tmp : Array[(String, Float)] = []
+  let tmp : Array[(String, Double)] = []
   for i = 0; i < len; i = i + 1 {
     tmp.push(arr[i])
   }
   merge_sort_range(arr, tmp, 0, len)
   arr
 }
-fn merge_sort_range(arr : Array[(String, Float)], tmp : Array[(String, Float)], lo : Int, hi : Int) -> Unit {
+fn merge_sort_range(arr : Array[(String, Double)], tmp : Array[(String, Double)], lo : Int, hi : Int) -> Unit {
   if hi - lo <= 1 {
     return
   }
@@ -235,8 +235,8 @@ fn merge_sort_range(arr : Array[(String, Float)], tmp : Array[(String, Float)], 
     arr[idx] = tmp[idx]
   }
 }
-pub fn merge(left : Array[(String, Float)], right : Array[(String, Float)]) -> Array[(String, Float)] {
-  let result : Array[(String, Float)] = []
+pub fn merge(left : Array[(String, Double)], right : Array[(String, Double)]) -> Array[(String, Double)] {
+  let result : Array[(String, Double)] = []
   let mut i = 0
   let mut j = 0
   while i < left.length() && j < right.length() {
@@ -270,7 +270,7 @@ pub fn Database::zcard(self : Database, key : String) -> Int {
   }
 }
 /// ZSCORE 精确错误版：取成员分数
-pub fn Database::try_zscore(self : Database, key : String, member_val : String) -> Result[Float, RedisError] {
+pub fn Database::try_zscore(self : Database, key : String, member_val : String) -> Result[Double, RedisError] {
   if self.check_expired(key) {
     Err(RedisError::NotFound)
   } else {
@@ -286,7 +286,7 @@ pub fn Database::try_zscore(self : Database, key : String, member_val : String) 
   }
 }
 /// ZSCORE 便捷版：取成员分数
-pub fn Database::zscore(self : Database, key : String, member_val : String) -> Float? {
+pub fn Database::zscore(self : Database, key : String, member_val : String) -> Double? {
   match self.try_zscore(key, member_val) {
     Ok(score) => Some(score)
     Err(_) => None
@@ -319,7 +319,7 @@ pub fn Database::zrem(self : Database, key : String, member_val : String) -> Boo
     }
   }
 }
-fn Database::get_sorted_zset(self : Database, key : String) -> Array[(String, Float)] {
+fn Database::get_sorted_zset(self : Database, key : String) -> Array[(String, Double)] {
   if self.check_expired(key) {
     return []
   }
@@ -331,7 +331,7 @@ fn Database::get_sorted_zset(self : Database, key : String) -> Array[(String, Fl
           cached
         }
         None => {
-          let items : Array[(String, Float)] = []
+          let items : Array[(String, Double)] = []
           for m, s in zset {
             items.push((m, s))
           }
@@ -388,11 +388,11 @@ fn Database::get_sorted_lex(self : Database, key : String) -> Array[String] {
   }
 }
 fn update_sorted_items(
-  items : Array[(String, Float)],
+  items : Array[(String, Double)],
   member_val : String,
-  new_score : Float?,
-) -> Array[(String, Float)] {
-  let result : Array[(String, Float)] = []
+  new_score : Double?,
+) -> Array[(String, Double)] {
+  let result : Array[(String, Double)] = []
   let mut inserted = match new_score {
     Some(_) => false
     None => true
@@ -419,10 +419,10 @@ fn update_sorted_items(
   result
 }
 fn remove_sorted_members(
-  items : Array[(String, Float)],
+  items : Array[(String, Double)],
   removed : Map[String, Bool],
-) -> Array[(String, Float)] {
-  let result : Array[(String, Float)] = []
+) -> Array[(String, Double)] {
+  let result : Array[(String, Double)] = []
   for item in items {
     if !removed.contains(item.0) {
       result.push(item)
@@ -488,7 +488,7 @@ fn Database::write_through_remove_zset_members(
 fn Database::remove_zset_collected(
   self : Database,
   key : String,
-  zset : Map[String, Float],
+  zset : Map[String, Double],
   members : Array[String],
 ) -> Int {
   for m in members {
@@ -503,7 +503,7 @@ fn Database::remove_zset_collected(
   }
   members.length()
 }
-fn Database::zpop_extreme(self : Database, key : String, from_min : Bool) -> (String, Float)? {
+fn Database::zpop_extreme(self : Database, key : String, from_min : Bool) -> (String, Double)? {
   if self.check_expired(key) {
     return None
   }
@@ -522,11 +522,11 @@ fn Database::zpop_extreme(self : Database, key : String, from_min : Bool) -> (St
   }
 }
 /// ZPOPMIN：弹出最低分成员
-pub fn Database::zpopmin(self : Database, key : String) -> (String, Float)? {
+pub fn Database::zpopmin(self : Database, key : String) -> (String, Double)? {
   self.zpop_extreme(key, true)
 }
 /// ZPOPMAX：弹出最高分成员
-pub fn Database::zpopmax(self : Database, key : String) -> (String, Float)? {
+pub fn Database::zpopmax(self : Database, key : String) -> (String, Double)? {
   self.zpop_extreme(key, false)
 }
 /// ZPOPMIN count：弹出多个最低分成员
@@ -534,7 +534,7 @@ pub fn Database::zpopmin_count(
   self : Database,
   key : String,
   count : Int,
-) -> Array[(String, Float)] {
+) -> Array[(String, Double)] {
   if self.check_expired(key) || count <= 0 {
     return []
   }
@@ -542,7 +542,7 @@ pub fn Database::zpopmin_count(
     Some(RedisValue::ZSet(zset)) => {
       let sorted = self.get_sorted_zset(key)
       let take = if count > sorted.length() { sorted.length() } else { count }
-      let result : Array[(String, Float)] = []
+      let result : Array[(String, Double)] = []
       let removed : Array[String] = []
       for i = 0; i < take; i = i + 1 {
         result.push(sorted[i])
@@ -568,7 +568,7 @@ pub fn Database::zpopmax_count(
   self : Database,
   key : String,
   count : Int,
-) -> Array[(String, Float)] {
+) -> Array[(String, Double)] {
   if self.check_expired(key) || count <= 0 {
     return []
   }
@@ -577,7 +577,7 @@ pub fn Database::zpopmax_count(
       let sorted = self.get_sorted_zset(key)
       let len = sorted.length()
       let take = if count > len { len } else { count }
-      let result : Array[(String, Float)] = []
+      let result : Array[(String, Double)] = []
       let removed : Array[String] = []
       for i = 0; i < take; i = i + 1 {
         let item = sorted[len - 1 - i]

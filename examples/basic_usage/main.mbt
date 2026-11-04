@@ -19,7 +19,7 @@ fn show_opt_int64(opt : Int64?) -> String {
   }
 }
 
-fn show_opt_float(opt : Float?) -> String {
+fn show_opt_float(opt : Double?) -> String {
   match opt {
     Some(v) => "\{v}"
     None => "(nil)"

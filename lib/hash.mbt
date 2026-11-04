@@ -305,8 +305,8 @@ pub fn Database::try_hincrbyfloat(
   self : Database,
   key : String,
   field : String,
-  increment : Float,
-) -> Result[Float, RedisError] {
+  increment : Double,
+) -> Result[Double, RedisError] {
   self.check_expired(key) |> ignore
   let hash = match self.data.get(key) {
     Some(RedisValue::Hash(h)) => h
@@ -329,7 +329,7 @@ pub fn Database::try_hincrbyfloat(
   Ok(new_value)
 }
 
-pub fn Database::hincrbyfloat(self : Database, key : String, field : String, increment : Float) -> Float? {
+pub fn Database::hincrbyfloat(self : Database, key : String, field : String, increment : Double) -> Double? {
   match self.try_hincrbyfloat(key, field, increment) {
     Ok(value) => Some(value)
     Err(_) => None

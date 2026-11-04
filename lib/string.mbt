@@ -974,8 +974,8 @@ pub fn Database::incrby(self : Database, key : String, increment : Int64) -> Int
 pub fn Database::try_incrbyfloat(
   self : Database,
   key : String,
-  increment : Float,
-) -> Result[Float, RedisError] {
+  increment : Double,
+) -> Result[Double, RedisError] {
   if self.check_expired(key) {
     return Err(RedisError::NotFound)
   }
@@ -1008,7 +1008,7 @@ pub fn Database::try_incrbyfloat(
 }
 
 /// INCRBYFLOAT 便捷版
-pub fn Database::incrbyfloat(self : Database, key : String, increment : Float) -> Float? {
+pub fn Database::incrbyfloat(self : Database, key : String, increment : Double) -> Double? {
   match self.try_incrbyfloat(key, increment) {
     Ok(value) => Some(value)
     Err(_) => None

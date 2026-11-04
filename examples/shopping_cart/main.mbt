@@ -23,8 +23,8 @@ fn parse_int(s : String) -> Int {
   if neg { -result } else { result }
 }
 
-fn parse_float(s : String) -> Float {
-  let mut result : Float = 0.0
+fn parse_float(s : String) -> Double {
+  let mut result : Double = 0.0
   let mut i = 0
   let mut neg = false
   if s.length() > 0 && s[0] == '-' {
@@ -32,11 +32,11 @@ fn parse_float(s : String) -> Float {
     i = 1
   }
   let mut has_dot = false
-  let mut decimal_pos : Float = 10.0
+  let mut decimal_pos : Double = 10.0
   while i < s.length() {
     let c = s[i]
     if c >= '0' && c <= '9' {
-      let digit = Float::from_int(c.to_int() - '0'.to_int())
+      let digit = Double::from_int(c.to_int() - '0'.to_int())
       if has_dot {
         result = result + digit / decimal_pos
         decimal_pos = decimal_pos * 10.0
@@ -54,11 +54,11 @@ fn parse_float(s : String) -> Float {
 struct Product {
   id : String
   name : String
-  price : Float
+  price : Double
   stock : Int
 }
 
-fn Product::new(id : String, name : String, price : Float, stock : Int) -> Product {
+fn Product::new(id : String, name : String, price : Double, stock : Int) -> Product {
   { id, name, price, stock }
 }
 
@@ -95,12 +95,12 @@ fn main {
   db.hset(cart_key, "p1005", "3") |> ignore
   println("  用户 user:1001 的购物车:")
   let cart_items = db.hgetall(cart_key)
-  let mut total : Float = 0.0
+  let mut total : Double = 0.0
   for pid, qty_str in cart_items {
     let qty = parse_int(qty_str)
     let price = parse_float(show_opt(db.hget("product:\{pid}", "price")))
     let name = show_opt(db.hget("product:\{pid}", "name"))
-    let subtotal = price * Float::from_int(qty)
+    let subtotal = price * Double::from_int(qty)
     total = total + subtotal
     println("    \{name} x \{qty} = ¥\{subtotal}")
   }
@@ -269,7 +269,7 @@ fn main {
   println("========================================")
 }
 
-fn show_opt_float(opt : Float?) -> String {
+fn show_opt_float(opt : Double?) -> String {
   match opt {
     Some(v) => "\{v}"
     None => "0"

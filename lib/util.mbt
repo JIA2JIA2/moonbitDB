@@ -245,7 +245,7 @@ pub fn int_to_string(n : Int) -> String {
   }
 }
 
-pub fn parse_float(s : String) -> Float? {
+pub fn parse_float(s : String) -> Double? {
   if s.length() == 0 {
     None
   } else {
@@ -295,7 +295,7 @@ pub fn parse_float(s : String) -> Float? {
       }
       signed
     }
-    let mut result : Float = 0.0
+    let mut result : Double = 0.0
     let mut negative = false
     let mut start = 0
     if base_str.length() == 0 {
@@ -311,7 +311,7 @@ pub fn parse_float(s : String) -> Float? {
       return None
     }
     let mut has_dot = false
-    let mut divisor : Float = 1.0
+    let mut divisor : Double = 1.0
     let mut base_digits = 0
     let mut base_valid = true
     let mut bi = start
@@ -319,7 +319,7 @@ pub fn parse_float(s : String) -> Float? {
       match uint16_to_digit(base_str[bi]) {
         Some(digit) => {
           base_digits = base_digits + 1
-          let digit_f = Float::from_int(digit)
+          let digit_f = Double::from_int(digit)
           if has_dot {
             divisor = divisor * 10.0
             result = result + digit_f / divisor
@@ -362,7 +362,7 @@ pub fn parse_float(s : String) -> Float? {
   }
 }
 
-pub fn format_float(n : Float) -> String {
+pub fn format_float(n : Double) -> String {
   if n == 0.0 {
     "0"
   } else {
@@ -371,7 +371,7 @@ pub fn format_float(n : Float) -> String {
       num = -num
     }
     let int_part = num.to_int()
-    let int_part_f = Float::from_int(int_part)
+    let int_part_f = Double::from_int(int_part)
     let mut frac_part = num - int_part_f
     let mut result = int_to_string(int_part)
     if frac_part > 0.0 {
@@ -380,7 +380,7 @@ pub fn format_float(n : Float) -> String {
       while frac_part > 0.0 && precision < 10 {
         frac_part = frac_part * 10.0
         let digit = frac_part.to_int()
-        let digit_f = Float::from_int(digit)
+        let digit_f = Double::from_int(digit)
         result = result + digit_to_string(digit)
         frac_part = frac_part - digit_f
         precision = precision + 1

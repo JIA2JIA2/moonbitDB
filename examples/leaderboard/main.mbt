@@ -1,4 +1,4 @@
-fn show_opt_float(opt : Float?) -> String {
+fn show_opt_float(opt : Double?) -> String {
   match opt {
     Some(v) => "\{v}"
     None => "N/A"
@@ -36,7 +36,7 @@ fn main {
   println("----------------------------------------")
   for i = 0; i < players.length(); i = i + 1 {
     let player = players[i]
-    let score = Float::from_int(i * 100 + 50)
+    let score = Double::from_int(i * 100 + 50)
     db.zadd("leaderboard:global", score, player.id) |> ignore
     db.hmset("player:\{player.id}", ["name", "score"], [player.name, "\{i * 100 + 50}"]) |> ignore
     println("  玩家 \{player.name} (ID: \{player.id}): \{i * 100 + 50} 分")
@@ -58,7 +58,7 @@ fn main {
 
   println("\n🔄 阶段3：模拟游戏对局更新分数")
   println("----------------------------------------")
-  let updates : Array[(String, Float)] = [("p1", 250.0), ("p3", 180.0), ("p5", 320.0), ("p7", 410.0)]
+  let updates : Array[(String, Double)] = [("p1", 250.0), ("p3", 180.0), ("p5", 320.0), ("p7", 410.0)]
   for i = 0; i < updates.length(); i = i + 1 {
     let (pid, add_score) = updates[i]
     let new_score = db.zincrby("leaderboard:global", add_score, pid)
