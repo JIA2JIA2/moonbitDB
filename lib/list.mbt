@@ -692,14 +692,14 @@ pub fn Database::rpop_count(self : Database, key : String, count : Int) -> Array
   }
 }
 
-pub fn Database::lmpop(
+pub fn Database::try_lmpop(
   self : Database,
   keys : Array[String],
   left : Bool,
   count : Int,
-) -> (String, Array[String])? {
+) -> Result[(String, Array[String])?, RedisError] {
   if keys.length() == 0 || count <= 0 {
-    return None
+    return Err(RedisError::InvalidArgument)
   }
   for key in keys {
     if self.check_expired(key) {
@@ -732,11 +732,23 @@ pub fn Database::lmpop(
         } else {
           self.put(key, RedisValue::List(deque))
         }
-        return Some((key, result))
+        return Ok(Some((key, result)))
       }
       _ => ()
     }
   }
-  None
+  Ok(None)
+}
+
+pub fn Database::lmpop(
+  self : Database,
+  keys : Array[String],
+  left : Bool,
+  count : Int,
+) -> (String, Array[String])? {
+  match self.try_lmpop(keys, left, count) {
+    Ok(result) => result
+    Err(_) => None
+  }
 }
 

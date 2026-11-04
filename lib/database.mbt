@@ -51,10 +51,12 @@ pub struct Database {
   mut watched_keys : Map[String, Bool]
   mut watched_dirty : Map[String, Bool]
   mut start_time : Int64
+  mut client_name : String
+  config_overrides : Map[String, String]
 }
 
 pub fn Database::new() -> Database {
-  Database::{ data: Map([], capacity=1000), expires: Map([], capacity=1000), current_time: 0, rand_state: 123456789, zset_sorted_cache: Map([], capacity=100), zset_rank_cache: Map([], capacity=100), zset_lex_cache: Map([], capacity=100), zset_cache_lru: [], scan_snapshot: None, hscan_snapshots: Map([], capacity=10), sscan_snapshots: Map([], capacity=10), zscan_snapshots: Map([], capacity=10), expire_heap: [], in_transaction: false, transaction_queue: [], watched_keys: Map([], capacity=10), watched_dirty: Map([], capacity=10), start_time: 0 }
+  Database::{ data: Map([], capacity=1000), expires: Map([], capacity=1000), current_time: 0, rand_state: 123456789, zset_sorted_cache: Map([], capacity=100), zset_rank_cache: Map([], capacity=100), zset_lex_cache: Map([], capacity=100), zset_cache_lru: [], scan_snapshot: None, hscan_snapshots: Map([], capacity=10), sscan_snapshots: Map([], capacity=10), zscan_snapshots: Map([], capacity=10), expire_heap: [], in_transaction: false, transaction_queue: [], watched_keys: Map([], capacity=10), watched_dirty: Map([], capacity=10), start_time: 0, client_name: "", config_overrides: Map([], capacity=10) }
 }
 
 pub fn Database::set_time(self : Database, time_ms : Int64) -> Unit {

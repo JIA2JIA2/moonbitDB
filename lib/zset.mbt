@@ -2116,14 +2116,14 @@ pub fn Database::zpopmax_count(
 }
 
 
-pub fn Database::zmpop(
+pub fn Database::try_zmpop(
   self : Database,
   keys : Array[String],
   min : Bool,
   count : Int,
-) -> (String, Array[(String, Float)])? {
+) -> Result[(String, Array[(String, Float)])?, RedisError] {
   if keys.length() == 0 || count <= 0 {
-    return None
+    return Err(RedisError::InvalidArgument)
   }
   for key in keys {
     if self.check_expired(key) {
@@ -2161,12 +2161,24 @@ pub fn Database::zmpop(
             self.write_through_remove_zset_members(key, removed)
           }
         }
-        return Some((key, result))
+        return Ok(Some((key, result)))
       }
       _ => ()
     }
   }
-  None
+  Ok(None)
+}
+
+pub fn Database::zmpop(
+  self : Database,
+  keys : Array[String],
+  min : Bool,
+  count : Int,
+) -> (String, Array[(String, Float)])? {
+  match self.try_zmpop(keys, min, count) {
+    Ok(result) => result
+    Err(_) => None
+  }
 }
 
 pub fn Database::zrandmember_with_scores(

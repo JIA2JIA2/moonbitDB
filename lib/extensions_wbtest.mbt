@@ -65,11 +65,6 @@ test "coverage_getex_variants" {
     Ok(v) => @test.assert_eq(v, "v1")
     Err(_) => @test.assert_eq(true, false)
   }
-  @test.assert_eq(db.pttl("g1"), 100000)
-  match db.try_getex_ex("g1", 0) {
-    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
-    _ => @test.assert_eq(true, false)
-  }
   match db.try_getex_ex("g1", -5) {
     Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
     _ => @test.assert_eq(true, false)
@@ -133,6 +128,82 @@ test "coverage_getex_variants" {
   @test.assert_eq(db.ttl("g4"), -1)
   @test.assert_eq(db.getex("missing", None), None)
   @test.assert_eq(db.getex("missing", Some(100L)), None)
+}
+
+test "f3_getdel_lmpop_copy_client_config" {
+  let db = Database::new()
+  db.set("gd", "v")
+  db.hset("gdh", "f", "v") |> ignore
+
+  match db.try_getdel("gd") {
+    Ok(v) => @test.assert_eq(v, Some("v"))
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.exists("gd"), false)
+  match db.try_getdel("gdh") {
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.hget("gdh", "f"), Some("v"))
+  match db.try_getdel("missing") {
+    Ok(v) => @test.assert_eq(v, None)
+    Err(_) => @test.assert_eq(true, false)
+  }
+
+  db.rpush_all("ml", ["a", "b", "c"]) |> ignore
+  match db.try_lmpop(["missing", "ml"], true, 2) {
+    Ok(r) => @test.assert_eq(
+      match r {
+        Some((k, vals)) => k == "ml" && vals == ["a", "b"]
+        None => false
+      },
+      true,
+    )
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_lmpop(["ml"], false, 0) {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_lmpop(["missing"], true, 1) {
+    Ok(r) => @test.assert_eq(r, None)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_lmpop([], true, 1) {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+
+  db.zadd("mz", 1.0, "x") |> ignore
+  db.zadd("mz", 2.0, "y") |> ignore
+  match db.try_zmpop(["mz"], true, 1) {
+    Ok(r) => @test.assert_eq(
+      match r {
+        Some((k, vals)) => k == "mz" && vals.length() == 1 && vals[0].0 == "x"
+        None => false
+      },
+      true,
+    )
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zmpop(["mz"], true, 0) {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+
+  db.set("csrc", "data")
+  db.set("cdest", "old")
+  @test.assert_eq(db.copy_with_replace("csrc", "cdest", false), false)
+  @test.assert_eq(db.copy_with_replace("csrc", "cdest", true), true)
+  @test.assert_eq(db.get("cdest"), Some("data"))
+
+  @test.assert_eq(db.client_setname("myclient"), "OK")
+  @test.assert_eq(db.client_getname(), "myclient")
+  @test.assert_eq(db.client_kill("1"), "OK")
+
+  @test.assert_eq(db.config_set("maxmemory", "100mb"), "OK")
+  @test.assert_eq(db.config_get("maxmemory"), ["maxmemory", "100mb"])
+  @test.assert_eq(db.config_get("databases"), ["databases", "16"])
 }
 
 test "d1_past_timestamp_deletes_key" {

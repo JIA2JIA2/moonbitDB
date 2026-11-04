@@ -67,7 +67,7 @@ moon run . --target native
 moon test
 ```
 
-当前测试覆盖：**195 个测试用例，全部通过**。
+当前测试覆盖：**196 个测试用例，全部通过**。
 
 ### 运行基准与覆盖率
 
@@ -371,8 +371,8 @@ moonbitDB/
 | `WATCH` | `(key) -> Unit` | 监视 key（EXEC 前被修改则事务中止；差异：官方 EXEC 冲突返回 nil 回复，本库返回 TransactionAborted 错误） |
 | `UNWATCH` | `() -> Unit` | 取消所有监视 |
 | `AUTH` | `(password) -> String` | 认证（始终返回 "OK"） |
-| `CLIENT` | `(subcommand) -> String` | 客户端信息（INFO/LIST 连接描述、ID 返回 "1"、GETNAME 返回空） |
-| `CONFIG` | `(subcommand, parameter) -> Array[String]` | 配置查询（GET 返回 [参数, 值] 键值对） |
+| `CLIENT` | `(subcommand) -> String` | 客户端信息（INFO/LIST 连接描述、ID 返回 "1"、GETNAME/Setname 存取客户端名、KILL 占位） |
+| `CONFIG` | `(subcommand, parameter[, value]) -> Array[String]` | 配置查询/设置（GET 返回 [参数, 值] 键值对，SET 存储 override 并返回 "OK"） |
 | `SLOWLOG` | `(subcommand) -> Array[String]` | 慢查询日志（LEN 返回 ["0"]、RESET 返回 ["OK"]、GET 空数组） |
 | `SELECT` | `(index) -> String` | 选择数据库（始终返回 "OK"） |
 | `MOVE` | `(key, db_index) -> Bool` | 移动 key 到其他数据库（仅支持 db 0） |
@@ -454,6 +454,13 @@ match db.try_incrby("name", 1) {
 | `set_with_options` | `(self : Database, key : String, value : String, nx : Bool, xx : Bool, ex_seconds : Int?, px_milliseconds : Int64?, keep_ttl : Bool) -> Result[Bool, RedisError]` | 完整 SET 选项 |
 | `setex` | `(self : Database, key : String, seconds : Int, value : String) -> Bool` | 设置值并指定过期时间 |
 | `getdel` | `(self : Database, key : String) -> String?` | 获取值并删除 key |
+| `try_getdel` | `(self : Database, key : String) -> Result[String?, RedisError]` | 精确错误版 GETDEL（类型错返回 WrongType，不删除） |
+| `try_lmpop` | `(self : Database, keys : Array[String], left : Bool, count : Int) -> Result[(String, Array[String])?, RedisError]` | 精确错误版 LMPOP（count<=0 返回 InvalidArgument） |
+| `try_zmpop` | `(self : Database, keys : Array[String], min : Bool, count : Int) -> Result[(String, Array[(String, Float)])?, RedisError]` | 精确错误版 ZMPOP |
+| `client_getname` | `(self : Database) -> String` | CLIENT GETNAME |
+| `client_setname` | `(self : Database, name : String) -> String` | CLIENT SETNAME |
+| `client_kill` | `(self : Database, target : String) -> String` | CLIENT KILL（占位返回 "OK"） |
+| `config_set` | `(self : Database, parameter : String, value : String) -> String` | CONFIG SET（覆盖默认配置） |
 | `getset` | `(self : Database, key : String, value : String) -> String?` | 设置新值并返回旧值 |
 | `getex` | `(self : Database, key : String, expire_ms : Int64?) -> String?` | 获取值并设置/移除 TTL |
 | `getex_ex` | `(self : Database, key : String, seconds : Int) -> String?` | GETEX EX（秒） |

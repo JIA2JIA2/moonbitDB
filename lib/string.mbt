@@ -50,13 +50,25 @@ pub fn Database::psetex(self : Database, key : String, milliseconds : Int64, val
   }
 }
 
-pub fn Database::getdel(self : Database, key : String) -> String? {
-  let value = self.get(key)
-  match value {
-    Some(_) => self.delete_key(key)
-    None => ()
+pub fn Database::try_getdel(self : Database, key : String) -> Result[String?, RedisError] {
+  if self.check_expired(key) {
+    return Ok(None)
   }
-  value
+  match self.data.get(key) {
+    Some(RedisValue::String(s)) => {
+      self.delete_key(key)
+      Ok(Some(s))
+    }
+    Some(_) => Err(RedisError::WrongType)
+    None => Ok(None)
+  }
+}
+
+pub fn Database::getdel(self : Database, key : String) -> String? {
+  match self.try_getdel(key) {
+    Ok(value) => value
+    Err(_) => None
+  }
 }
 
 pub fn Database::getset(self : Database, key : String, value : String) -> String? {

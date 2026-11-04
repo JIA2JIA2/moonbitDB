@@ -214,9 +214,27 @@ pub fn Database::client_list(_self : Database, subcommand : String) -> String {
   }
 }
 
-pub fn Database::config_get(_self : Database, parameter : String) -> Array[String] {
+pub fn Database::client_getname(self : Database) -> String {
+  self.client_name
+}
+
+pub fn Database::client_setname(self : Database, name : String) -> String {
+  self.client_name = name
+  "OK"
+}
+
+pub fn Database::client_kill(_self : Database, _target : String) -> String {
+  "OK"
+}
+
+pub fn Database::config_set(self : Database, parameter : String, value : String) -> String {
+  self.config_overrides.set(parameter.to_lower(), value)
+  "OK"
+}
+
+pub fn Database::config_get(self : Database, parameter : String) -> Array[String] {
   let param = parameter.to_lower()
-  let value = if param == "maxmemory" {
+  let default_value = if param == "maxmemory" {
     "0"
   } else if param == "databases" {
     "16"
@@ -228,6 +246,10 @@ pub fn Database::config_get(_self : Database, parameter : String) -> Array[Strin
     "0"
   } else {
     ""
+  }
+  let value = match self.config_overrides.get(param) {
+    Some(v) => v
+    None => default_value
   }
   [param, value]
 }
