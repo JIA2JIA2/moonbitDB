@@ -559,11 +559,14 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
     }
     "CLIENT" => {
       if parts.length() < 2 { ["ERR wrong number"] }
-      else { [@lib.Database::client_list(db)] }
+      else { [@lib.Database::client_list(db, parts[1])] }
     }
     "CONFIG" => {
       if parts.length() < 3 { ["ERR wrong number"] }
-      else { [@lib.Database::config_get(db, parts[2])] }
+      else {
+        let pair = @lib.Database::config_get(db, parts[2])
+        ["  \{pair[0]} = \"\{pair[1]}\""]
+      }
     }
     "SLOWLOG" => {
       if parts.length() < 2 { ["ERR wrong number"] }

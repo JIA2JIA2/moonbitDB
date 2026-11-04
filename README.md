@@ -356,7 +356,7 @@ moonbitDB/
 | `FLUSHALL` | `() -> Unit` | 清空所有数据 |
 | `PING` | `() -> String` | 返回 "PONG" |
 | `ECHO` | `(message) -> String` | 回显消息 |
-| `INFO` | `() -> String` | 服务器信息（版本、key 数、过期数等） |
+| `INFO` | `(section?) -> String` | 服务器信息（无参返回 Server/Memory/Keyspace/Stats 四节；`info_section` API 按 server/memory/keyspace/stats 过滤） |
 | `TIME` | `() -> (Int64, Int64)` | 当前时间（秒, 微秒） |
 | `COMMAND` | `() -> Array[String]` | 支持的命令列表 |
 | `OBJECT_ENCODING` | `(key) -> String?` | 对象内部编码（embstr/listpack/hashtable/skiplist/quicklist） |
@@ -369,9 +369,9 @@ moonbitDB/
 | `WATCH` | `(key) -> Unit` | 监视 key（EXEC 前被修改则事务中止） |
 | `UNWATCH` | `() -> Unit` | 取消所有监视 |
 | `AUTH` | `(password) -> String` | 认证（始终返回 "OK"） |
-| `CLIENT` | `(subcommand) -> String` | 客户端信息（LIST 返回连接描述） |
-| `CONFIG` | `(subcommand, parameter) -> String` | 配置查询（GET 返回 "0"） |
-| `SLOWLOG` | `(subcommand) -> Array[String]` | 慢查询日志（当前为空） |
+| `CLIENT` | `(subcommand) -> String` | 客户端信息（INFO/LIST 连接描述、ID 返回 "1"、GETNAME 返回空） |
+| `CONFIG` | `(subcommand, parameter) -> Array[String]` | 配置查询（GET 返回 [参数, 值] 键值对） |
+| `SLOWLOG` | `(subcommand) -> Array[String]` | 慢查询日志（LEN 返回 ["0"]、RESET 返回 ["OK"]、GET 空数组） |
 | `SELECT` | `(index) -> String` | 选择数据库（始终返回 "OK"） |
 | `MOVE` | `(key, db_index) -> Bool` | 移动 key 到其他数据库（仅支持 db 0） |
 | `DUMP` | `(key) -> String?` | 序列化字符串值（仅 String 类型） |
@@ -454,6 +454,7 @@ match db.try_incrby("name", 1) {
 | `watch` | `(self : Database, key : String) -> Unit` | WATCH 监视 key |
 | `unwatch` | `(self : Database) -> Unit` | UNWATCH 取消监视 |
 | `try_exec` | `(self : Database) -> Result[String, RedisError]` | 精确错误版 EXEC（监视冲突返回 TransactionAborted） |
+| `info_section` | `(self : Database, section : String) -> String` | INFO 按节查询（server/memory/keyspace/stats） |
 | `try_getex` | `(self : Database, key : String, expire_ms : Int64?) -> Result[String, RedisError]` | 精确错误版 GETEX |
 | `set_get` | `(self : Database, key : String, value : String) -> String?` | 设置新值并返回旧值（SET ... GET） |
 | `try_set_get` | `(self : Database, key : String, value : String) -> Result[String?, RedisError]` | 精确错误版 SET ... GET |

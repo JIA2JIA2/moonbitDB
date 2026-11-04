@@ -749,3 +749,45 @@ test "d6_watch_optimistic_lock" {
     Err(_) => @test.assert_eq(true, false)
   }
 }
+
+test "e1_info_sections_and_placeholders" {
+  let db = Database::new()
+  let server = db.info_section("server")
+  @test.assert_eq(server.contains("# Server"), true)
+  @test.assert_eq(server.contains("uptime_in_ms:0"), true)
+  @test.assert_eq(db.info_section("keyspace").contains("db0:keys=0"), true)
+  @test.assert_eq(db.info_section("memory").contains("# Memory"), true)
+  @test.assert_eq(db.info_section("stats").contains("# Stats"), true)
+  @test.assert_eq(db.info_section("unknown"), "")
+
+  let full = db.info()
+  @test.assert_eq(full.contains("# Server"), true)
+  @test.assert_eq(full.contains("# Memory"), true)
+  @test.assert_eq(full.contains("# Keyspace"), true)
+  @test.assert_eq(full.contains("# Stats"), true)
+
+  db.advance_time(5000)
+  @test.assert_eq(db.info_section("server").contains("uptime_in_ms:5000"), true)
+  db.set_time(1000000L)
+  @test.assert_eq(db.info_section("server").contains("uptime_in_ms:0"), true)
+
+  db.set("m1", "hello")
+  @test.assert_eq(db.info_section("memory").contains("keys:1"), true)
+  db.pexpire("m1", 1000L) |> ignore
+  @test.assert_eq(db.info_section("keyspace").contains("expires=1"), true)
+
+  db.hset("mh", "f", "v") |> ignore
+  db.sadd("ms", "member") |> ignore
+  db.zadd("mz", 1.0, "zm") |> ignore
+  db.rpush("ml", "item") |> ignore
+  let mem = db.info_section("memory")
+  @test.assert_eq(mem.contains("keys:5"), true)
+  ignore(db.zrange("mz", 0, -1))
+  @test.assert_eq(db.info_section("stats").contains("zset_sorted_cache_entries:1"), true)
+  @test.assert_eq(db.client_list("GETNAME"), "")
+  @test.assert_eq(db.client_list("INFO").has_prefix("id=1"), true)
+  @test.assert_eq(db.config_get("appendonly"), ["appendonly", "no"])
+  @test.assert_eq(db.config_get("save"), ["save", ""])
+  @test.assert_eq(db.config_get("timeout"), ["timeout", "0"])
+  @test.assert_eq(db.config_get("weird_param"), ["weird_param", ""])
+}

@@ -27,8 +27,44 @@ pub fn Database::echo(_ : Database, message : String) -> String {
   message
 }
 
-pub fn Database::info(self : Database) -> String {
-  self.collect_expired()
+fn Database::info_server_section(self : Database) -> Array[String] {
+  [
+    "# Server",
+    "moonbit_db_version:0.1.4",
+    "uptime_in_ms:\{self.current_time - self.start_time}"
+  ]
+}
+
+fn Database::info_memory_section(self : Database) -> Array[String] {
+  let mut value_bytes : Int = 0
+  for key, value in self.data {
+    value_bytes = value_bytes + key.length() * 2
+    match value {
+      RedisValue::String(s) => value_bytes = value_bytes + s.length() * 2
+      RedisValue::Hash(h) =>
+        for f, v in h {
+          value_bytes = value_bytes + (f.length() + v.length()) * 2
+        }
+      RedisValue::Set(s) =>
+        for m, _ in s {
+          value_bytes = value_bytes + m.length() * 2
+        }
+      RedisValue::ZSet(z) =>
+        for m, _ in z {
+          value_bytes = value_bytes + m.length() * 2 + 8
+        }
+      RedisValue::List(d) => value_bytes = value_bytes + d.length() * 16
+    }
+  }
+  [
+    "# Memory",
+    "used_memory:\{value_bytes}",
+    "keys:\{self.data.length()}",
+    "expires:\{self.expires.length()}"
+  ]
+}
+
+fn Database::info_keyspace_section(self : Database) -> Array[String] {
   let key_count = self.data.length()
   let mut expire_count = 0
   let mut total_ttl : Int64 = 0
@@ -44,15 +80,53 @@ pub fn Database::info(self : Database) -> String {
   } else {
     total_ttl / expire_count.to_int64()
   }
-  let info_arr : Array[String] = [
-    "# Server",
-    "moonbit_db_version:0.1.4",
-    "uptime_in_ms:\{self.current_time}",
-    "",
-    "# Keyspace",
-    "db0:keys=\{key_count},expires=\{expire_count},avg_ttl=\{avg_ttl}"
+  ["# Keyspace", "db0:keys=\{key_count},expires=\{expire_count},avg_ttl=\{avg_ttl}"]
+}
+
+fn Database::info_stats_section(self : Database) -> Array[String] {
+  let mut zset_cached = 0
+  for _key, _items in self.zset_sorted_cache {
+    zset_cached = zset_cached + 1
+  }
+  ["# Stats", "zset_sorted_cache_entries:\{zset_cached}", "expire_heap_size:\{self.expire_heap.length()}"]
+}
+
+pub fn Database::info_section(self : Database, section : String) -> String {
+  self.collect_expired()
+  let cmd = section.to_lower()
+  let sections : Array[String] = if cmd == "server" {
+    self.info_server_section()
+  } else if cmd == "memory" {
+    self.info_memory_section()
+  } else if cmd == "keyspace" {
+    self.info_keyspace_section()
+  } else if cmd == "stats" {
+    self.info_stats_section()
+  } else {
+    []
+  }
+  sections.join("\n")
+}
+
+pub fn Database::info(self : Database) -> String {
+  self.collect_expired()
+  let parts : Array[Array[String]] = [
+    self.info_server_section(),
+    self.info_memory_section(),
+    self.info_keyspace_section(),
+    self.info_stats_section()
   ]
-  info_arr.join("\n")
+  let joined : Array[String] = []
+  for part in parts {
+    for line in part {
+      joined.push(line)
+    }
+    joined.push("")
+  }
+  if joined.length() > 0 {
+    ignore(joined.remove(joined.length() - 1))
+  }
+  joined.join("\n")
 }
 
 pub fn Database::time(self : Database) -> (Int64, Int64) {
@@ -124,16 +198,44 @@ pub fn Database::auth(_ : Database, _password : String) -> String {
   "OK"
 }
 
-pub fn Database::client_list(_ : Database) -> String {
-  "id=1 addr=127.0.0.1:12345 fd=1 name= age=0 flags=N db=0 sub=0 psub=0 multi=-1 qbuf=0 qbuf-free=0 obl=0 oll=0 omem=0 events=r cmd=client"
+pub fn Database::client_list(_self : Database, subcommand : String) -> String {
+  let cmd = subcommand.to_upper()
+  if cmd == "ID" {
+    "1"
+  } else if cmd == "GETNAME" {
+    ""
+  } else {
+    "id=1 addr=127.0.0.1:12345 fd=1 name= age=0 flags=N db=0 sub=0 psub=0 multi=-1 qbuf=0 qbuf-free=0 obl=0 oll=0 omem=0 events=r cmd=client"
+  }
 }
 
-pub fn Database::config_get(_ : Database, _parameter : String) -> String {
-  "0"
+pub fn Database::config_get(_self : Database, parameter : String) -> Array[String] {
+  let param = parameter.to_lower()
+  let value = if param == "maxmemory" {
+    "0"
+  } else if param == "databases" {
+    "16"
+  } else if param == "appendonly" {
+    "no"
+  } else if param == "save" {
+    ""
+  } else if param == "timeout" {
+    "0"
+  } else {
+    ""
+  }
+  [param, value]
 }
 
-pub fn Database::slowlog(_ : Database, _subcommand : String) -> Array[String] {
-  []
+pub fn Database::slowlog(_self : Database, subcommand : String) -> Array[String] {
+  let cmd = subcommand.to_upper()
+  if cmd == "LEN" {
+    ["0"]
+  } else if cmd == "RESET" {
+    ["OK"]
+  } else {
+    []
+  }
 }
 
 pub fn Database::object_idletime(self : Database, key : String) -> Int? {
