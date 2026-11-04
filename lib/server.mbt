@@ -82,7 +82,8 @@ pub fn Database::command() -> Array[String] {
     "DBSIZE", "FLUSHDB", "FLUSHALL", "RANDOMKEY", "RENAME", "RENAMENX", "COPY", "TOUCH", "UNLINK",
     "MULTI", "EXEC", "DISCARD",
     "LMPOP", "ZMPOP",
-    "PING", "ECHO", "INFO", "TIME", "COMMAND", "OBJECT_ENCODING"
+    "PING", "ECHO", "INFO", "TIME", "COMMAND", "OBJECT_ENCODING",
+    "AUTH", "CLIENT", "CONFIG", "SLOWLOG"
   ]
 }
 
@@ -114,6 +115,22 @@ pub fn Database::object_refcount(self : Database, key : String) -> Int? {
       None => None
     }
   }
+}
+
+pub fn Database::auth(_ : Database, _password : String) -> String {
+  "OK"
+}
+
+pub fn Database::client_list(_ : Database) -> String {
+  "id=1 addr=127.0.0.1:12345 fd=1 name= age=0 flags=N db=0 sub=0 psub=0 multi=-1 qbuf=0 qbuf-free=0 obl=0 oll=0 omem=0 events=r cmd=client"
+}
+
+pub fn Database::config_get(_ : Database, _parameter : String) -> String {
+  "0"
+}
+
+pub fn Database::slowlog(_ : Database, _subcommand : String) -> Array[String] {
+  []
 }
 
 pub fn Database::object_idletime(self : Database, key : String) -> Int? {
