@@ -1204,22 +1204,73 @@ pub fn Database::try_zdiff(self : Database, keys : Array[String]) -> Result[Arra
   }
 }
 
+pub fn Database::try_zunionstore_with_options(
+  self : Database,
+  destination : String,
+  keys : Array[String],
+  weights : Array[Float]?,
+  aggregate : String?,
+) -> Result[Int, RedisError] {
+  if !self.zsets_valid(keys) {
+    return Err(RedisError::WrongType)
+  }
+  let zsets : Array[Map[String, Float]] = []
+  for key in keys {
+    if self.check_expired(key) {
+      return Err(RedisError::WrongType)
+    }
+    match self.data.get(key) {
+      Some(RedisValue::ZSet(zset)) => zsets.push(zset)
+      _ => return Err(RedisError::WrongType)
+    }
+  }
+  let weights_arr = match weights {
+    Some(w) => w
+    None => {
+      let default_weights : Array[Float] = []
+      let mut i = 0
+      while i < keys.length() {
+        default_weights.push(1.0)
+        i = i + 1
+      }
+      default_weights
+    }
+  }
+  let aggregate_mode = match aggregate {
+    Some("min") => 1
+    Some("max") => 2
+    _ => 0
+  }
+  let scores : Map[String, Float] = Map([], capacity=10)
+  for i = 0; i < zsets.length(); i = i + 1 {
+    let zset = zsets[i]
+    let weight = weights_arr[i]
+    for member_val, score in zset {
+      let weighted_score = score * weight
+      match scores.get(member_val) {
+        Some(current) => {
+          let new_score = match aggregate_mode {
+            1 => if weighted_score < current { weighted_score } else { current }
+            2 => if weighted_score > current { weighted_score } else { current }
+            _ => current + weighted_score
+          }
+          scores.set(member_val, new_score)
+        }
+        None => scores.set(member_val, weighted_score)
+      }
+    }
+  }
+  self.put(destination, RedisValue::ZSet(scores))
+  self.expires.remove(destination)
+  Ok(scores.length())
+}
+
 pub fn Database::try_zunionstore(
   self : Database,
   destination : String,
   keys : Array[String],
 ) -> Result[Int, RedisError] {
-  if !self.zsets_valid(keys) {
-    return Err(RedisError::WrongType)
-  }
-  let result = self.zunion(keys)
-  let scores : Map[String, Float] = Map([], capacity=result.length())
-  for pair in result {
-    scores.set(pair.0, pair.1)
-  }
-  self.put(destination, RedisValue::ZSet(scores))
-  self.expires.remove(destination)
-  Ok(result.length())
+  self.try_zunionstore_with_options(destination, keys, None, None)
 }
 
 pub fn Database::zunionstore(self : Database, destination : String, keys : Array[String]) -> Int {
@@ -1229,22 +1280,90 @@ pub fn Database::zunionstore(self : Database, destination : String, keys : Array
   }
 }
 
+pub fn Database::try_zinterstore_with_options(
+  self : Database,
+  destination : String,
+  keys : Array[String],
+  weights : Array[Float]?,
+  aggregate : String?,
+) -> Result[Int, RedisError] {
+  if !self.zsets_valid(keys) {
+    return Err(RedisError::WrongType)
+  }
+  let zsets : Array[Map[String, Float]] = []
+  for key in keys {
+    if self.check_expired(key) {
+      return Err(RedisError::WrongType)
+    }
+    match self.data.get(key) {
+      Some(RedisValue::ZSet(zset)) => zsets.push(zset)
+      _ => return Err(RedisError::WrongType)
+    }
+  }
+  let weights_arr = match weights {
+    Some(w) => w
+    None => {
+      let default_weights : Array[Float] = []
+      let mut i = 0
+      while i < keys.length() {
+        default_weights.push(1.0)
+        i = i + 1
+      }
+      default_weights
+    }
+  }
+  let aggregate_mode = match aggregate {
+    Some("min") => 1
+    Some("max") => 2
+    _ => 0
+  }
+  let mut min_idx = 0
+  let mut min_len = zsets[0].length()
+  for i = 1; i < zsets.length(); i = i + 1 {
+    let len = zsets[i].length()
+    if len < min_len {
+      min_idx = i
+      min_len = len
+    }
+  }
+  let scores : Map[String, Float] = Map([], capacity=min_len)
+  for member_val, first_score in zsets[min_idx] {
+    let mut total = first_score * weights_arr[min_idx]
+    let mut present = true
+    for i = 0; i < zsets.length(); i = i + 1 {
+      if i == min_idx {
+        continue
+      }
+      match zsets[i].get(member_val) {
+        Some(score) => {
+          let weighted = score * weights_arr[i]
+          total = match aggregate_mode {
+            1 => if weighted < total { weighted } else { total }
+            2 => if weighted > total { weighted } else { total }
+            _ => total + weighted
+          }
+        }
+        None => {
+          present = false
+          break
+        }
+      }
+    }
+    if present {
+      scores.set(member_val, total)
+    }
+  }
+  self.put(destination, RedisValue::ZSet(scores))
+  self.expires.remove(destination)
+  Ok(scores.length())
+}
+
 pub fn Database::try_zinterstore(
   self : Database,
   destination : String,
   keys : Array[String],
 ) -> Result[Int, RedisError] {
-  if !self.zsets_valid(keys) {
-    return Err(RedisError::WrongType)
-  }
-  let result = self.zinter(keys)
-  let scores : Map[String, Float] = Map([], capacity=result.length())
-  for pair in result {
-    scores.set(pair.0, pair.1)
-  }
-  self.put(destination, RedisValue::ZSet(scores))
-  self.expires.remove(destination)
-  Ok(result.length())
+  self.try_zinterstore_with_options(destination, keys, None, None)
 }
 
 pub fn Database::zinterstore(self : Database, destination : String, keys : Array[String]) -> Int {
