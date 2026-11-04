@@ -391,12 +391,22 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
       else {
         match (parse_int(parts[2]), parse_int(parts[3])) {
           (Some(sv), Some(ev)) => {
-            let items = db.zrange(parts[1], sv, ev)
-            let result = []
-            for i = 0; i < items.length(); i = i + 1 {
-              result.push("  \{i + 1}) \"\{items[i]}\"")
+            let with_scores = parts.length() > 4 && parts[4] == "WITHSCORES"
+            if with_scores {
+              let items = db.zrange_with_scores(parts[1], sv, ev)
+              let result = []
+              for i = 0; i < items.length(); i = i + 1 {
+                result.push("  \{i + 1}) \"\{items[i].0}\" \{items[i].1}")
+              }
+              result
+            } else {
+              let items = db.zrange(parts[1], sv, ev)
+              let result = []
+              for i = 0; i < items.length(); i = i + 1 {
+                result.push("  \{i + 1}) \"\{items[i]}\"")
+              }
+              result
             }
-            result
           }
           _ => ["ERR value is not an integer"]
         }

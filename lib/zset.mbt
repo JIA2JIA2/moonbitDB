@@ -174,6 +174,35 @@ pub fn Database::zscore(self : Database, key : String, member_val : String) -> F
   }
 }
 
+pub fn Database::try_zrange(
+  self : Database,
+  key : String,
+  start : Int,
+  end : Int,
+  with_scores : Bool,
+) -> Result[Array[String], RedisError] {
+  if self.check_expired(key) {
+    return Ok([])
+  }
+  match self.data.get(key) {
+    Some(RedisValue::ZSet(_)) => {
+      if with_scores {
+        let items = self.zrange_with_scores(key, start, end)
+        let result : Array[String] = []
+        for (m, s) in items {
+          result.push(m)
+          result.push(format_float(s))
+        }
+        Ok(result)
+      } else {
+        Ok(self.zrange(key, start, end))
+      }
+    }
+    Some(_) => Err(RedisError::WrongType)
+    None => Ok([])
+  }
+}
+
 pub fn Database::zrem(self : Database, key : String, member_val : String) -> Bool {
   if self.in_transaction {
     self.transaction_queue.push(TransactionOp::ZRem(key, member_val))
