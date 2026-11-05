@@ -35,7 +35,7 @@ pub fn Database::echo(_ : Database, message : String) -> String {
 fn Database::info_server_section(self : Database) -> Array[String] {
   [
     "# Server",
-    "moonbit_db_version:0.1.4",
+    "moonbit_db_version:0.1.5",
     "uptime_in_ms:\{self.current_time - self.start_time}"
   ]
 }
