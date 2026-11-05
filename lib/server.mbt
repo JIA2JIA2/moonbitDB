@@ -68,6 +68,7 @@ fn value_size_bytes(value : RedisValue) -> Int {
   }
 }
 
+/// MEMORY USAGE：单 key 内存估算（字节）
 pub fn Database::memory_usage(self : Database, key : String) -> Int? {
   if self.check_expired(key) {
     return None
@@ -86,6 +87,7 @@ pub fn Database::shutdown(_self : Database) -> String {
   "OK"
 }
 
+/// CONFIG RESETSTAT：清空统计与配置覆盖
 pub fn Database::config_resetstat(self : Database) -> String {
   self.config_overrides = Map([], capacity=10)
   "OK"
@@ -253,24 +255,29 @@ pub fn Database::client_list(_self : Database, subcommand : String) -> String {
   }
 }
 
+/// CLIENT GETNAME：取连接名
 pub fn Database::client_getname(self : Database) -> String {
   self.client_name
 }
 
+/// CLIENT SETNAME：设置连接名
 pub fn Database::client_setname(self : Database, name : String) -> String {
   self.client_name = name
   "OK"
 }
 
+/// CLIENT KILL（占位返回 OK）
 pub fn Database::client_kill(_self : Database, _target : String) -> String {
   "OK"
 }
 
+/// CONFIG SET：覆盖默认配置
 pub fn Database::config_set(self : Database, parameter : String, value : String) -> String {
   self.config_overrides.set(parameter.to_lower(), value)
   "OK"
 }
 
+/// CONFIG GET：返回 [参数, 值]（override 优先）
 pub fn Database::config_get(self : Database, parameter : String) -> Array[String] {
   let param = parameter.to_lower()
   let default_value = if param == "maxmemory" {
@@ -341,6 +348,7 @@ pub fn Database::multi(self : Database) -> String {
   }
 }
 
+/// EXEC 精确错误版：WATCH 冲突返回 TransactionAborted
 pub fn Database::try_exec(self : Database) -> Result[String, RedisError] {
   if !self.in_transaction {
     return Err(RedisError::InvalidArgument)
@@ -358,6 +366,7 @@ pub fn Database::try_exec(self : Database) -> Result[String, RedisError] {
   }
 }
 
+/// EXEC 便捷版（冲突返回错误文本）
 pub fn Database::exec(self : Database) -> String {
   if !self.in_transaction {
     "ERR EXEC without MULTI"
@@ -383,6 +392,7 @@ pub fn Database::discard(self : Database) -> String {
 }
 
 
+/// COMMAND INFO：查询命令详情（未收录返回空串）
 pub fn Database::command_info(_ : Database, commands : Array[String]) -> Array[String] {
   let all_commands = Database::command()
   let result : Array[String] = []
@@ -431,6 +441,7 @@ pub fn Database::dump(self : Database, key : String) -> String? {
   }
 }
 
+/// RESTORE 兼容版（直接覆盖目标）
 pub fn Database::restore(self : Database, key : String, ttl_ms : Int64, value : String) -> Bool {
   self.put(key, RedisValue::String(value))
   if ttl_ms > 0 {
@@ -442,6 +453,7 @@ pub fn Database::restore(self : Database, key : String, ttl_ms : Int64, value : 
   true
 }
 
+/// RESTORE 精确错误版：REPLACE（目标存在默认 BusyKey）与 ABSTTL 支持
 pub fn Database::try_restore(
   self : Database,
   key : String,
@@ -537,6 +549,7 @@ pub fn Database::lastsave(self : Database) -> Int64 {
   self.current_time / 1000
 }
 
+/// COMMAND COUNT：命令总数
 pub fn Database::command_count(_self : Database) -> Int {
   Database::command().length()
 }
@@ -547,6 +560,7 @@ pub fn Database::reset(self : Database) -> String {
   "RESET"
 }
 
+/// SORT 基础版：ALPHA/DESC/LIMIT/STORE
 pub fn Database::try_sort(
   self : Database,
   key : String,
@@ -729,6 +743,7 @@ fn Database::resolve_get_pattern(self : Database, pattern : String, element : St
   }
 }
 
+/// SORT 完整版：BY hash 权重/nosort、GET 展开
 pub fn Database::try_sort_advanced(
   self : Database,
   key : String,
@@ -904,6 +919,7 @@ pub fn Database::try_sort_advanced(
   }
 }
 
+/// SORT 完整版便捷版
 pub fn Database::sort_advanced(
   self : Database,
   key : String,

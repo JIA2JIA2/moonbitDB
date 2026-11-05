@@ -207,3 +207,100 @@ test "blackbox misc commands" {
   @test.assert_eq(db.exists_many(["k", "missing"]), 1)
   @test.assert_eq(db.unlink_many(["k", "missing"]), 1)
 }
+
+
+test "blackbox zrange modifiers" {
+  let db = @lib.Database::new()
+  ignore(db.zadd("z", 1.0, "a"))
+  ignore(db.zadd("z", 2.0, "b"))
+  @test.assert_eq(db.zrange_modifiers("z", "0", "-1", None, false, true, 0, 0), ["a", "1", "b", "2"])
+  @test.assert_eq(db.zrange_modifiers("z", "-inf", "+inf", Some("byscore"), true, false, 0, 0), ["b", "a"])
+  @test.assert_eq(db.zrange_modifiers("z", "-", "+", Some("bylex"), false, false, 0, 0), ["a", "b"])
+}
+
+test "blackbox zrangestore variants" {
+  let db = @lib.Database::new()
+  ignore(db.zadd("src", 1.0, "a"))
+  match db.try_zrangestore("d1", "src", 0, -1) {
+    Ok(n) => @test.assert_eq(n, 1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrangestore_byscore("d2", "src", "-inf", "+inf", 0, 0) {
+    Ok(n) => @test.assert_eq(n, 1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrangestore_bylex("d3", "src", "-", "+") {
+    Ok(n) => @test.assert_eq(n, 1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zrangestore("d1", "missing", 0, -1) {
+    Ok(n) => @test.assert_eq(n, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(db.exists("d1"), false)
+}
+
+test "blackbox restore busykey" {
+  let db = @lib.Database::new()
+  db.set("r", "old")
+  match db.try_restore("r", 1000L, "v", false, false) {
+    Err(@lib.RedisError::BusyKey) => ()
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_restore("r", 1000L, "v", true, false) {
+    Ok(v) => @test.assert_eq(v, true)
+    Err(_) => @test.assert_eq(true, false)
+  }
+}
+
+test "blackbox setex family" {
+  let db = @lib.Database::new()
+  match db.try_setex("a", 10, "v") {
+    Ok(v) => @test.assert_eq(v, true)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_psetex("b", 1000, "v") {
+    Ok(v) => @test.assert_eq(v, true)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_setnx("c", "v") {
+    Ok(v) => @test.assert_eq(v, true)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_setex("a", 0, "v") {
+    Err(@lib.RedisError::InvalidArgument) => ()
+    _ => @test.assert_eq(true, false)
+  }
+}
+
+test "blackbox hmget and exists_many" {
+  let db = @lib.Database::new()
+  ignore(db.hmset("h", ["a", "b"], ["1", "2"]))
+  @test.assert_eq(db.hmget("h", ["a", "b", "c"]), [Some("1"), Some("2"), None])
+  @test.assert_eq(db.exists_many(["h", "c"]), 1)
+  @test.assert_eq(db.unlink_many(["h", "c"]), 1)
+  @test.assert_eq(db.exists("h"), false)
+}
+
+test "blackbox bitop and bitcount" {
+  let db = @lib.Database::new()
+  ignore(db.set("s1", "\u{f}"))
+  @test.assert_eq(db.bitop("NOT", "d", ["s1"]), 1)
+  @test.assert_eq(db.bitcount("d"), 12)
+  @test.assert_eq(db.bitop("NOOP", "d", ["s1"]), -1)
+  match db.try_bitop("AND", "d", ["missing"]) {
+    Ok(len) => @test.assert_eq(len, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+}
+
+test "blackbox glob patterns" {
+  let db = @lib.Database::new()
+  ignore(db.set("user:1", "a"))
+  ignore(db.set("user:2", "b"))
+  ignore(db.set("admin:1", "c"))
+  @test.assert_eq(db.keys_pattern("user:*").length(), 2)
+  @test.assert_eq(db.keys_pattern("user:?").length(), 2)
+  @test.assert_eq(db.keys_pattern("[au]*").length(), 3)
+  @test.assert_eq(db.keys_pattern("user:\\*").length(), 0)
+}

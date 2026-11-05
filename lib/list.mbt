@@ -1,3 +1,4 @@
+/// LPUSH 精确错误版：左端插入
 pub fn Database::try_lpush(self : Database, key : String, value : String) -> Result[Int, RedisError] {
   self.check_expired(key) |> ignore
   let deque = match self.data.get(key) {
@@ -10,6 +11,7 @@ pub fn Database::try_lpush(self : Database, key : String, value : String) -> Res
   Ok(deque.length())
 }
 
+/// LPUSH 便捷版（事务中排队）
 pub fn Database::lpush(self : Database, key : String, value : String) -> Int {
   if self.in_transaction {
     self.transaction_queue.push(TransactionOp::LPush(key, value))
@@ -22,6 +24,7 @@ pub fn Database::lpush(self : Database, key : String, value : String) -> Int {
   }
 }
 
+/// RPUSH 精确错误版：右端插入
 pub fn Database::try_rpush(self : Database, key : String, value : String) -> Result[Int, RedisError] {
   self.check_expired(key) |> ignore
   let deque = match self.data.get(key) {
@@ -34,6 +37,7 @@ pub fn Database::try_rpush(self : Database, key : String, value : String) -> Res
   Ok(deque.length())
 }
 
+/// RPUSH 便捷版（事务中排队）
 pub fn Database::rpush(self : Database, key : String, value : String) -> Int {
   if self.in_transaction {
     self.transaction_queue.push(TransactionOp::RPush(key, value))
@@ -94,6 +98,7 @@ pub fn Database::rpush_all(self : Database, key : String, values : Array[String]
   }
 }
 
+/// LPOP 精确错误版：左端弹出（事务中排队）
 pub fn Database::try_lpop(self : Database, key : String) -> Result[String, RedisError] {
   if self.in_transaction {
     self.transaction_queue.push(TransactionOp::LPop(key))
@@ -128,6 +133,7 @@ pub fn Database::lpop(self : Database, key : String) -> String? {
   }
 }
 
+/// RPOP 精确错误版：右端弹出（事务中排队）
 pub fn Database::try_rpop(self : Database, key : String) -> Result[String, RedisError] {
   if self.in_transaction {
     self.transaction_queue.push(TransactionOp::RPop(key))
@@ -243,6 +249,7 @@ pub fn Database::lset(self : Database, key : String, index : Int, value : String
   }
 }
 
+/// LREM 精确错误版：按计数移除元素
 pub fn Database::try_lrem(self : Database, key : String, count : Int, value : String) -> Result[Int, RedisError] {
   if self.check_expired(key) {
     return Ok(0)
@@ -321,6 +328,7 @@ pub fn Database::lrem(self : Database, key : String, count : Int, value : String
   }
 }
 
+/// LINSERT 精确错误版：pivot 前后插入（pivot 缺失返回 -1）
 pub fn Database::try_linsert(self : Database, key : String, before : Bool, pivot : String, value : String) -> Result[Int, RedisError] {
   if self.check_expired(key) {
     return Ok(-1)
@@ -425,6 +433,7 @@ pub fn Database::rpoplpush(self : Database, source : String, destination : Strin
   }
 }
 
+/// LMOVE 精确错误版：跨列表原子移动
 pub fn Database::try_lmove(
   self : Database,
   source : String,
@@ -454,6 +463,7 @@ pub fn Database::try_lmove(
   }
 }
 
+/// LMOVE 便捷版
 pub fn Database::lmove(
   self : Database,
   source : String,
@@ -524,6 +534,7 @@ pub fn Database::lmove(
   }
 }
 
+/// LTRIM 精确错误版：区间裁剪
 pub fn Database::try_ltrim(self : Database, key : String, start : Int, end : Int) -> Result[Bool, RedisError] {
   if self.check_expired(key) {
     return Ok(false)
@@ -593,6 +604,7 @@ pub fn Database::lpos(self : Database, key : String, value : String) -> Int? {
   }
 }
 
+/// LPOS RANK/COUNT/MAXLEN 完整版（count 0=单个/-1=全部/N=上限）
 pub fn Database::try_lpos_options(
   self : Database,
   key : String,
@@ -657,6 +669,7 @@ pub fn Database::try_lpos_options(
   }
 }
 
+/// LPOS 选项便捷版（错误返回空）
 pub fn Database::lpos_options(
   self : Database,
   key : String,
@@ -671,6 +684,7 @@ pub fn Database::lpos_options(
   }
 }
 
+/// LPOP count：左端弹出多个
 pub fn Database::lpop_count(self : Database, key : String, count : Int) -> Array[String] {
   if self.check_expired(key) || count <= 0 {
     return []
@@ -696,6 +710,7 @@ pub fn Database::lpop_count(self : Database, key : String, count : Int) -> Array
   }
 }
 
+/// RPOP count：右端弹出多个
 pub fn Database::rpop_count(self : Database, key : String, count : Int) -> Array[String] {
   if self.check_expired(key) || count <= 0 {
     return []

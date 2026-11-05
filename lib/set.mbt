@@ -1,3 +1,4 @@
+/// SADD 精确错误版：添加成员
 pub fn Database::try_sadd(self : Database, key : String, value : String) -> Result[Bool, RedisError] {
   self.check_expired(key) |> ignore
   let set = match self.data.get(key) {
@@ -14,6 +15,7 @@ pub fn Database::try_sadd(self : Database, key : String, value : String) -> Resu
   }
 }
 
+/// SADD 便捷版（事务中排队）
 pub fn Database::sadd(self : Database, key : String, value : String) -> Bool {
   if self.in_transaction {
     self.transaction_queue.push(TransactionOp::SAdd(key, value))
@@ -49,6 +51,7 @@ pub fn Database::try_sadd_all(self : Database, key : String, values : Array[Stri
   Ok(added)
 }
 
+/// SADD 多成员批量
 pub fn Database::sadd_all(self : Database, key : String, values : Array[String]) -> Int {
   match self.try_sadd_all(key, values) {
     Ok(added) => added
@@ -86,6 +89,7 @@ pub fn Database::try_srem_all(self : Database, key : String, values : Array[Stri
   }
 }
 
+/// SREM 多成员批量
 pub fn Database::srem_all(self : Database, key : String, values : Array[String]) -> Int {
   match self.try_srem_all(key, values) {
     Ok(removed) => removed
@@ -145,6 +149,7 @@ pub fn Database::smismember(
   result
 }
 
+/// SREM 便捷版
 pub fn Database::srem(self : Database, key : String, value : String) -> Bool {
   if self.in_transaction {
     self.transaction_queue.push(TransactionOp::SRem(key, value))
@@ -210,6 +215,7 @@ pub fn Database::try_sinter(self : Database, keys : Array[String]) -> Result[Arr
   }
 }
 
+/// SINTER：多集合交集
 pub fn Database::sinter(self : Database, keys : Array[String]) -> Array[String] {
   if keys.length() == 0 {
     return []
@@ -303,6 +309,7 @@ pub fn Database::try_sinterstore(self : Database, destination : String, keys : A
   Ok(result.length())
 }
 
+/// SINTERSTORE：交集存入 destination
 pub fn Database::sinterstore(self : Database, destination : String, keys : Array[String]) -> Int {
   match self.try_sinterstore(destination, keys) {
     Ok(count) => count
@@ -318,6 +325,7 @@ pub fn Database::try_sunion(self : Database, keys : Array[String]) -> Result[Arr
   }
 }
 
+/// SUNION：多集合并集
 pub fn Database::sunion(self : Database, keys : Array[String]) -> Array[String] {
   let result = Map([], capacity=10)
   for key in keys {
@@ -347,6 +355,7 @@ pub fn Database::try_sunionstore(self : Database, destination : String, keys : A
   Ok(result.length())
 }
 
+/// SUNIONSTORE：并集存入 destination
 pub fn Database::sunionstore(self : Database, destination : String, keys : Array[String]) -> Int {
   match self.try_sunionstore(destination, keys) {
     Ok(count) => count
@@ -362,6 +371,7 @@ pub fn Database::try_sdiff(self : Database, keys : Array[String]) -> Result[Arra
   }
 }
 
+/// SDIFF：首集合相对差集
 pub fn Database::sdiff(self : Database, keys : Array[String]) -> Array[String] {
   if keys.length() == 0 {
     return []
@@ -404,6 +414,7 @@ pub fn Database::try_sdiffstore(self : Database, destination : String, keys : Ar
   Ok(result.length())
 }
 
+/// SDIFFSTORE：差集存入 destination
 pub fn Database::sdiffstore(self : Database, destination : String, keys : Array[String]) -> Int {
   match self.try_sdiffstore(destination, keys) {
     Ok(count) => count
@@ -425,6 +436,7 @@ pub fn Database::try_smove(self : Database, source : String, destination : Strin
   Ok(self.smove(source, destination, member_val))
 }
 
+/// SMOVE：跨集合移动成员（类型错不移动）
 pub fn Database::smove(self : Database, source : String, destination : String, value : String) -> Bool {
   if self.check_expired(source) || self.check_expired(destination) {
     return false
@@ -545,6 +557,7 @@ pub fn Database::srandmember(self : Database, key : String) -> String? {
   }
 }
 
+/// SSCAN MATCH：游标遍历（MATCH 支持 glob 全语法）
 pub fn Database::sscan_with_match(
   self : Database,
   key : String,
@@ -596,6 +609,7 @@ pub fn Database::sscan_with_match(
   }
 }
 
+/// SSCAN：游标遍历成员
 pub fn Database::sscan(
   self : Database,
   key : String,
@@ -622,6 +636,7 @@ pub fn Database::try_sscan(
   }
 }
 
+/// SINTERCARD：交集计数（limit 短路）
 pub fn Database::try_sintercard(
   self : Database,
   keys : Array[String],

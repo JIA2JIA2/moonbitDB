@@ -1,3 +1,4 @@
+/// HMSET 精确错误版：批量设置（长度不一致报 WrongArgumentCount）
 pub fn Database::try_hmset(
   self : Database,
   key : String,
@@ -20,6 +21,7 @@ pub fn Database::try_hmset(
   Ok(())
 }
 
+/// HMSET 便捷版：批量设置（类型错返回 false）
 pub fn Database::hmset(self : Database, key : String, fields : Array[String], values : Array[String]) -> Bool {
   match self.try_hmset(key, fields, values) {
     Ok(_) => true
@@ -54,6 +56,7 @@ pub fn Database::hmget(self : Database, key : String, fields : Array[String]) ->
   }
 }
 
+/// HSET 精确错误版：设置字段（返回新增字段数语义与 HSET 一致）
 pub fn Database::try_hset(self : Database, key : String, field : String, value : String) -> Result[Int, RedisError] {
   self.check_expired(key) |> ignore
   let hash = match self.data.get(key) {
@@ -71,6 +74,7 @@ pub fn Database::try_hset(self : Database, key : String, field : String, value :
   }
 }
 
+/// HSET 便捷版：设置字段
 pub fn Database::hset(self : Database, key : String, field : String, value : String) -> Int {
   if self.in_transaction {
     self.transaction_queue.push(TransactionOp::HSet(key, field, value))
@@ -83,6 +87,7 @@ pub fn Database::hset(self : Database, key : String, field : String, value : Str
   }
 }
 
+/// HSET 多字段批量：返回新建字段数
 pub fn Database::try_hset_all(
   self : Database,
   key : String,
@@ -109,6 +114,7 @@ pub fn Database::try_hset_all(
   Ok(created)
 }
 
+/// HSET 多字段便捷版（长度不一致/类型错返回 -1）
 pub fn Database::hset_all(self : Database, key : String, fields : Array[String], values : Array[String]) -> Int {
   match self.try_hset_all(key, fields, values) {
     Ok(count) => count
@@ -116,6 +122,7 @@ pub fn Database::hset_all(self : Database, key : String, fields : Array[String],
   }
 }
 
+/// HGET 精确错误版：取字段值
 pub fn Database::try_hget(self : Database, key : String, field : String) -> Result[String, RedisError] {
   if self.check_expired(key) {
     Err(RedisError::NotFound)
@@ -132,6 +139,7 @@ pub fn Database::try_hget(self : Database, key : String, field : String) -> Resu
   }
 }
 
+/// HGET 便捷版：取字段值
 pub fn Database::hget(self : Database, key : String, field : String) -> String? {
   match self.try_hget(key, field) {
     Ok(value) => Some(value)
@@ -260,6 +268,7 @@ pub fn Database::hstrlen(self : Database, key : String, field : String) -> Int {
   }
 }
 
+/// HINCRBY 精确错误版：字段整数自增
 pub fn Database::try_hincrby(
   self : Database,
   key : String,
@@ -290,6 +299,7 @@ pub fn Database::try_hincrby(
   }
 }
 
+/// HINCRBY 便捷版
 pub fn Database::hincrby(self : Database, key : String, field : String, increment : Int64) -> Int64? {
   if self.in_transaction {
     self.transaction_queue.push(TransactionOp::HIncrBy(key, field, increment))
@@ -301,6 +311,7 @@ pub fn Database::hincrby(self : Database, key : String, field : String, incremen
   }
 }
 
+/// HINCRBYFLOAT 精确错误版：字段浮点自增（NaN 拒绝）
 pub fn Database::try_hincrbyfloat(
   self : Database,
   key : String,
@@ -329,6 +340,7 @@ pub fn Database::try_hincrbyfloat(
   Ok(new_value)
 }
 
+/// HINCRBYFLOAT 便捷版
 pub fn Database::hincrbyfloat(self : Database, key : String, field : String, increment : Double) -> Double? {
   match self.try_hincrbyfloat(key, field, increment) {
     Ok(value) => Some(value)
@@ -363,6 +375,7 @@ fn pattern_match(text : String, pattern : String?) -> Bool {
   }
 }
 
+/// HSCAN MATCH：游标遍历（独立快照，MATCH 支持 glob 全语法）
 pub fn Database::hscan_with_match(
   self : Database,
   key : String,
@@ -417,6 +430,7 @@ pub fn Database::hscan_with_match(
   }
 }
 
+/// HSCAN：游标遍历字段与值
 pub fn Database::hscan(
   self : Database,
   key : String,
