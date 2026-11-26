@@ -36,7 +36,7 @@ pub fn Database::echo(_ : Database, message : String) -> String {
 fn Database::info_server_section(self : Database) -> Array[String] {
   [
     "# Server",
-    "moonbit_db_version:0.1.5",
+    "moonbit_db_version:0.1.6",
     "uptime_in_ms:\{self.current_time - self.start_time}"
   ]
 }
@@ -95,7 +95,7 @@ pub fn Database::config_resetstat(self : Database) -> String {
 }
 
 pub fn Database::lolwut(_self : Database) -> String {
-  "moonbitDB ver. 0.1.5 (MoonBit flavor)\n"
+  "moonbitDB ver. 0.1.6 (MoonBit flavor)\n"
 }
 
 fn Database::info_memory_section(self : Database) -> Array[String] {

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — 2026-11-26（W1-W5 + S1-S3）
+## 0.1.6 — 2026-11-27（W1-W5 + S1-S5 + CI 修复）
 
 ### Fixed
 - 事务回放 INCR/DECR 的 Int64→Int32 截断（MULTI 内 INCR 突破 2^31 不再回绕）；ZINCRBY 补 NaN 拒绝
