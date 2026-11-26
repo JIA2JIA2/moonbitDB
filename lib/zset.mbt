@@ -1,3 +1,27 @@
+fn Database::zset_apply_score(
+  self : Database,
+  key : String,
+  zset : Map[String, Double],
+  member_val : String,
+  new_score : Double,
+  added : Bool,
+) -> Unit {
+  zset.set(member_val, new_score)
+  self.mark_dirty(key)
+  self.data.set(key, RedisValue::ZSet(zset))
+  self.zset_rank_cache.remove(key)
+  if added {
+    match self.zset_lex_cache.get(key) {
+      Some(cached) => self.zset_lex_cache.set(key, add_lex_member(cached, member_val))
+      None => ()
+    }
+  }
+  match self.zset_sorted_cache.get(key) {
+    Some(cached) => self.zset_sorted_cache.set(key, update_sorted_items(cached, member_val, Some(new_score)))
+    None => ()
+  }
+}
+
 /// ZADD 精确错误版：添加/更新成员（NaN 拒绝）
 pub fn Database::try_zadd(self : Database, key : String, score : Double, member_val : String) -> Result[Bool, RedisError] {
   if score != score {
@@ -10,20 +34,7 @@ pub fn Database::try_zadd(self : Database, key : String, score : Double, member_
     Some(_) => return Err(RedisError::WrongType)
   }
   let existed = zset.contains(member_val)
-  zset.set(member_val, score)
-  self.mark_dirty(key)
-  self.data.set(key, RedisValue::ZSet(zset))
-  self.zset_rank_cache.remove(key)
-  if !existed {
-    match self.zset_lex_cache.get(key) {
-      Some(cached) => self.zset_lex_cache.set(key, add_lex_member(cached, member_val))
-      None => ()
-    }
-  }
-  match self.zset_sorted_cache.get(key) {
-    Some(cached) => self.zset_sorted_cache.set(key, update_sorted_items(cached, member_val, Some(score)))
-    None => ()
-  }
+  self.zset_apply_score(key, zset, member_val, score, !existed)
   Ok(!existed)
 }
 /// ZADD 便捷版：添加/更新成员（事务中排队）
@@ -76,7 +87,6 @@ pub fn Database::try_zadd_with_options(
         return Ok(0)
       }
       if score != current {
-        zset.set(member_val, score)
         changed = 1
       }
     }
@@ -84,24 +94,11 @@ pub fn Database::try_zadd_with_options(
       if xx {
         return Ok(0)
       }
-      zset.set(member_val, score)
       added = 1
     }
   }
   if added + changed > 0 {
-    self.mark_dirty(key)
-    self.data.set(key, RedisValue::ZSet(zset))
-    self.zset_rank_cache.remove(key)
-    if added > 0 {
-      match self.zset_lex_cache.get(key) {
-        Some(cached) => self.zset_lex_cache.set(key, add_lex_member(cached, member_val))
-        None => ()
-      }
-    }
-    match self.zset_sorted_cache.get(key) {
-      Some(cached) => self.zset_sorted_cache.set(key, update_sorted_items(cached, member_val, Some(score)))
-      None => ()
-    }
+    self.zset_apply_score(key, zset, member_val, score, added > 0)
   }
   Ok(if ch { added + changed } else { added })
 }
@@ -140,28 +137,14 @@ pub fn Database::try_zadd_incr(
       if lt && new_score >= current {
         return Ok(None)
       }
-      zset.set(member_val, new_score)
-      self.mark_dirty(key)
-      self.data.set(key, RedisValue::ZSet(zset))
-      self.zset_rank_cache.remove(key)
-      match self.zset_sorted_cache.get(key) {
-        Some(cached) => self.zset_sorted_cache.set(key, update_sorted_items(cached, member_val, Some(new_score)))
-        None => ()
-      }
+      self.zset_apply_score(key, zset, member_val, new_score, false)
       Ok(Some(new_score))
     }
     None => {
       if xx {
         return Ok(None)
       }
-      zset.set(member_val, increment)
-      self.mark_dirty(key)
-      self.data.set(key, RedisValue::ZSet(zset))
-      self.zset_rank_cache.remove(key)
-      match self.zset_lex_cache.get(key) {
-        Some(cached) => self.zset_lex_cache.set(key, add_lex_member(cached, member_val))
-        None => ()
-      }
+      self.zset_apply_score(key, zset, member_val, increment, true)
       Ok(Some(increment))
     }
   }
@@ -371,7 +354,10 @@ fn Database::get_rank_map(self : Database, key : String) -> Map[String, Int] {
 }
 fn Database::get_sorted_lex(self : Database, key : String) -> Array[String] {
   match self.zset_lex_cache.get(key) {
-    Some(cached) => cached
+    Some(cached) => {
+      self.touch_zset_cache(key)
+      cached
+    }
     None => {
       let members : Array[String] = []
       match self.data.get(key) {
@@ -383,6 +369,7 @@ fn Database::get_sorted_lex(self : Database, key : String) -> Array[String] {
       }
       members.sort_by((a, b) => a.lexical_compare(b))
       self.zset_lex_cache.set(key, members)
+      self.touch_zset_cache(key)
       members
     }
   }

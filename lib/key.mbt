@@ -442,30 +442,10 @@ pub fn Database::renamenx(self : Database, old_key : String, new_key : String) -
 }
 
 pub fn Database::scan(self : Database, cursor : Int, count : Int) -> (Int, Array[String]) {
-  let all_keys = if cursor == 0 {
-    self.collect_expired()
-    let keys : Array[String] = []
-    for key, _ in self.data {
-      keys.push(key)
-    }
-    keys.sort_by((a, b) => a.lexical_compare(b))
-    self.scan_snapshot = Some(keys)
-    keys
-  } else {
-    match self.scan_snapshot {
-      Some(keys) => keys
-      None => {
-        self.collect_expired()
-        let keys : Array[String] = []
-        for key, _ in self.data {
-          keys.push(key)
-        }
-        keys.sort_by((a, b) => a.lexical_compare(b))
-        self.scan_snapshot = Some(keys)
-        keys
-      }
-    }
+  if cursor == 0 {
+    self.scan_snapshot = None
   }
+  let all_keys = self.sorted_keys_snapshot()
   let len = all_keys.length()
   let limit = if count <= 0 { 10 } else { count }
   let start = if cursor < 0 { 0 } else { cursor }

@@ -147,7 +147,7 @@ test "blackbox config and client" {
   @test.assert_eq(db.client_setname("cli-1"), "OK")
   @test.assert_eq(db.client_getname(), "cli-1")
   @test.assert_eq(db.slowlog("LEN"), ["0"])
-  @test.assert_eq(db.lolwut().contains("0.1.4"), true)
+  @test.assert_eq(db.lolwut().contains("0.1.5"), true)
 }
 
 test "blackbox bitfield api" {

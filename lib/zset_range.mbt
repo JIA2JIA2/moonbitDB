@@ -460,26 +460,14 @@ pub fn Database::try_zincrby(self : Database, key : String, increment : Double, 
     None => Map([], capacity=10)
     Some(_) => return Err(RedisError::WrongType)
   }
-  let existed = zset.contains(member_val)
-  let current_score = match zset.get(member_val) {
+  let existing = zset.get(member_val)
+  let existed = existing is Some(_)
+  let current_score = match existing {
     Some(s) => s
     None => 0.0
   }
   let new_score = current_score + increment
-  zset.set(member_val, new_score)
-  self.mark_dirty(key)
-  self.data.set(key, RedisValue::ZSet(zset))
-  self.zset_rank_cache.remove(key)
-  if !existed {
-    match self.zset_lex_cache.get(key) {
-      Some(cached) => self.zset_lex_cache.set(key, add_lex_member(cached, member_val))
-      None => ()
-    }
-  }
-  match self.zset_sorted_cache.get(key) {
-    Some(cached) => self.zset_sorted_cache.set(key, update_sorted_items(cached, member_val, Some(new_score)))
-    None => ()
-  }
+  self.zset_apply_score(key, zset, member_val, new_score, !existed)
   Ok(new_score)
 }
 /// ZINCRBY：增加成员分数（支持负增量）

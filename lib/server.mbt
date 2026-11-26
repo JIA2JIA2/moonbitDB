@@ -94,7 +94,7 @@ pub fn Database::config_resetstat(self : Database) -> String {
 }
 
 pub fn Database::lolwut(_self : Database) -> String {
-  "moonbitDB ver. 0.1.4 (MoonBit flavor)\n"
+  "moonbitDB ver. 0.1.5 (MoonBit flavor)\n"
 }
 
 fn Database::info_memory_section(self : Database) -> Array[String] {
@@ -395,17 +395,15 @@ pub fn Database::discard(self : Database) -> String {
 /// COMMAND INFO：查询命令详情（未收录返回空串）
 pub fn Database::command_info(_ : Database, commands : Array[String]) -> Array[String] {
   let all_commands = Database::command()
+  let known : Map[String, Bool] = Map([], capacity=all_commands.length())
+  for all_cmd in all_commands {
+    known.set(all_cmd, true)
+  }
   let result : Array[String] = []
   for cmd in commands {
-    let mut found = false
-    for all_cmd in all_commands {
-      if all_cmd == cmd {
-        result.push(cmd)
-        found = true
-        break
-      }
-    }
-    if !found {
+    if known.contains(cmd) {
+      result.push(cmd)
+    } else {
       result.push("")
     }
   }
@@ -558,6 +556,7 @@ pub fn Database::reset(self : Database) -> String {
 }
 
 /// SORT 基础版：ALPHA/DESC/LIMIT/STORE
+/// SORT 基础版：ALPHA/DESC/LIMIT/STORE（委托 try_sort_advanced）
 pub fn Database::try_sort(
   self : Database,
   key : String,
@@ -567,98 +566,7 @@ pub fn Database::try_sort(
   count : Int,
   store : String?,
 ) -> Result[Array[String], RedisError] {
-  if offset < 0 {
-    return Err(RedisError::InvalidArgument)
-  }
-  if self.check_expired(key) {
-    return match store {
-      Some(dest) => {
-        self.delete_key(dest)
-        Ok([])
-      }
-      None => Ok([])
-    }
-  }
-  let items : Array[String] = match self.data.get(key) {
-    Some(RedisValue::List(d)) => d.to_array()
-    Some(RedisValue::Set(s)) => {
-      let a : Array[String] = []
-      for m, _ in s {
-        a.push(m)
-      }
-      a
-    }
-    Some(RedisValue::ZSet(z)) => {
-      let a : Array[String] = []
-      for m, _ in z {
-        a.push(m)
-      }
-      a
-    }
-    Some(_) => return Err(RedisError::WrongType)
-    None => []
-  }
-  let sorted : Array[String] = if alpha {
-    items.sort_by((a, b) => a.lexical_compare(b))
-    items
-  } else {
-    let pairs : Array[(String, Double)] = []
-    for item in items {
-      match parse_float(item) {
-        Some(v) => pairs.push((item, v))
-        None => return Err(RedisError::NotInteger)
-      }
-    }
-    let sorted_pairs = sort_by_score(pairs)
-    let out : Array[String] = []
-    for p in sorted_pairs {
-      out.push(p.0)
-    }
-    out
-  }
-  if desc {
-    let left = 0
-    let right = sorted.length() - 1
-    let mut l = left
-    let mut r = right
-    while l < r {
-      let tmp = sorted[l]
-      sorted[l] = sorted[r]
-      sorted[r] = tmp
-      l = l + 1
-      r = r - 1
-    }
-  }
-  let limited : Array[String] = if count <= 0 {
-    sorted
-  } else {
-    let out : Array[String] = []
-    let mut i = offset
-    while i < sorted.length() && out.length() < count {
-      out.push(sorted[i])
-      i = i + 1
-    }
-    out
-  }
-  match store {
-    Some(dest) => {
-      if limited.length() == 0 {
-        self.delete_key(dest)
-      } else {
-        match self.data.get(dest) {
-          Some(RedisValue::List(_)) | None => ()
-          Some(_) => return Err(RedisError::WrongType)
-        }
-        let deque = Deque::new()
-        for item in limited {
-          deque.push_back(item)
-        }
-        self.put(dest, RedisValue::List(deque))
-      }
-      Ok(limited)
-    }
-    None => Ok(limited)
-  }
+  self.try_sort_advanced(key, None, [], alpha, desc, offset, count, store)
 }
 
 pub fn Database::sort(

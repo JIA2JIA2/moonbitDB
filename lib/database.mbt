@@ -35,6 +35,7 @@ pub enum TransactionOp {
 
 const MAX_CACHE_SIZE : Int = 100
 const DEFAULT_SCAN_COUNT : Int = 10
+const SET_CAP_UNLIMITED : Int = 2147483647
 const EMBSTR_MAX_SIZE : Int = 44
 const HASHTABLE_MAX_ENTRIES : Int = 512
 const LISTPACK_MAX_ENTRIES : Int = 128
@@ -309,46 +310,10 @@ fn Database::run_transaction(self : Database) -> Bool {
         self.expires.remove(key)
       }
       TransactionOp::Incr(key) => {
-        match self.data.get(key) {
-          Some(RedisValue::String(s)) => {
-            match parse_int64(s) {
-              Some(n) => {
-                match checked_add_i64(n, 1) {
-                  Some(new_value) => {
-                    self.put(key, RedisValue::String(new_value.to_string()))
-                  }
-                  None => ()
-                }
-              }
-              None => ()
-            }
-          }
-          Some(_) => ()
-          None => {
-            self.put(key, RedisValue::String("1"))
-          }
-        }
+        ignore(self.try_incrby(key, 1L))
       }
       TransactionOp::Decr(key) => {
-        match self.data.get(key) {
-          Some(RedisValue::String(s)) => {
-            match parse_int64(s) {
-              Some(n) => {
-                match checked_add_i64(n, -1) {
-                  Some(new_value) => {
-                    self.put(key, RedisValue::String(new_value.to_string()))
-                  }
-                  None => ()
-                }
-              }
-              None => ()
-            }
-          }
-          Some(_) => ()
-          None => {
-            self.put(key, RedisValue::String("-1"))
-          }
-        }
+        ignore(self.try_incrby(key, -1L))
       }
       TransactionOp::HSet(key, field, value) => {
         self.hset(key, field, value) |> ignore
@@ -378,47 +343,19 @@ fn Database::run_transaction(self : Database) -> Bool {
         self.delete_key(key)
       }
       TransactionOp::Expire(key, seconds) => {
-        match checked_add_i64(self.current_time, seconds.to_int64() * 1000) {
-          Some(expire_time) => {
-            if expire_time <= self.current_time {
-              self.delete_key(key)
-            } else {
-              self.set_expire(key, expire_time)
-            }
-          }
-          None => ()
-        }
+        self.expire(key, seconds) |> ignore
       }
       TransactionOp::Persist(key) => {
-        self.expires.remove(key)
-        self.maybe_compact_expire_heap()
+        self.persist(key) |> ignore
       }
       TransactionOp::LPop(key) => {
-        match self.data.get(key) {
-          Some(RedisValue::List(deque)) => {
-            ignore(deque.pop_front())
-            self.remove_if_empty(key, deque.length())
-          }
-          _ => ()
-        }
+        ignore(self.try_lpop(key))
       }
       TransactionOp::RPop(key) => {
-        match self.data.get(key) {
-          Some(RedisValue::List(deque)) => {
-            ignore(deque.pop_back())
-            self.remove_if_empty(key, deque.length())
-          }
-          _ => ()
-        }
+        ignore(self.try_rpop(key))
       }
       TransactionOp::GetSet(key, value) => {
-        match self.data.get(key) {
-          Some(RedisValue::String(_)) | None => {
-            self.put(key, RedisValue::String(value))
-            self.expires.remove(key)
-          }
-          Some(_) => ()
-        }
+        self.getset(key, value) |> ignore
       }
       TransactionOp::Append(key, value) => {
         ignore(self.try_append(key, value))
@@ -436,42 +373,10 @@ fn Database::run_transaction(self : Database) -> Bool {
         ignore(self.try_getdel(key))
       }
       TransactionOp::HSetNx(key, field, value) => {
-        match self.data.get(key) {
-          Some(RedisValue::Hash(h)) => {
-            if !h.contains(field) {
-              h.set(field, value)
-              self.put(key, RedisValue::Hash(h))
-            }
-          }
-          None => {
-            let h : Map[String, String] = Map([], capacity=10)
-            h.set(field, value)
-            self.put(key, RedisValue::Hash(h))
-          }
-          Some(_) => ()
-        }
+        self.hsetnx(key, field, value) |> ignore
       }
       TransactionOp::HIncrBy(key, field, n) => {
-        match self.data.get(key) {
-          Some(RedisValue::Hash(h)) => {
-            let current : Int64 = match h.get(field) {
-              Some(v) => match parse_int64(v) {
-                Some(nv) => nv
-                None => 0
-              }
-              None => 0
-            }
-            match checked_add_i64(current, n) {
-              Some(new_value) => {
-                h.set(field, new_value.to_string())
-                self.put(key, RedisValue::Hash(h))
-              }
-              None => ()
-            }
-          }
-          Some(_) => ()
-          None => ()
-        }
+        ignore(self.try_hincrby(key, field, n))
       }
     }
   }

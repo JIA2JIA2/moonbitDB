@@ -275,7 +275,7 @@ pub fn Database::sintercard(self : Database, keys : Array[String], limit : Int) 
     sets.push(self.get_set_members(key))
   }
   let first = sets[0]
-  let cap = if limit <= 0 { 2147483647 } else { limit }
+  let cap = if limit <= 0 { SET_CAP_UNLIMITED } else { limit }
   let mut count = 0
   for member_val, _ in first {
     let mut present = true

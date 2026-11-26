@@ -70,13 +70,13 @@ pub fn Database::try_zrangestore_bylex(
     return Ok(0)
   }
   match self.data.get(source) {
-    Some(RedisValue::ZSet(_)) => {
+    Some(RedisValue::ZSet(zset)) => {
       let members = self.get_sorted_lex(source)
       let start = lex_lower_index(members, min_bound)
       let end = lex_upper_index(members, max_bound)
       let scores : Map[String, Double] = Map([], capacity=end - start)
       for i = start; i < end; i = i + 1 {
-        match self.zscore(source, members[i]) {
+        match zset.get(members[i]) {
           Some(score) => scores.set(members[i], score)
           None => ()
         }
@@ -124,7 +124,14 @@ pub fn Database::zrandmember(self : Database, key : String) -> String? {
 }
 /// ZUNION：多集合并集（分数相加）
 pub fn Database::zunion(self : Database, keys : Array[String]) -> Array[(String, Double)] {
-  let scores : Map[String, Double] = Map([], capacity=10)
+  let mut cap = 10
+  if keys.length() > 0 {
+    match self.data.get(keys[0]) {
+      Some(RedisValue::ZSet(z)) => cap = z.length()
+      _ => ()
+    }
+  }
+  let scores : Map[String, Double] = Map([], capacity=cap)
   for key in keys {
     if self.check_expired(key) {
       continue

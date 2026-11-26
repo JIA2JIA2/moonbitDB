@@ -1580,7 +1580,7 @@ test "h2_placeholder_commands" {
   @test.assert_eq(db.config_resetstat(), "OK")
   @test.assert_eq(db.config_get("maxmemory"), ["maxmemory", "0"])
   let lwut = db.lolwut()
-  @test.assert_eq(lwut.contains("moonbitDB ver. 0.1.4"), true)
+  @test.assert_eq(lwut.contains("moonbitDB ver. 0.1.5"), true)
 }
 
 
