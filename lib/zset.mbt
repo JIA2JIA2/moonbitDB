@@ -5,10 +5,14 @@ fn Database::zset_apply_score(
   member_val : String,
   new_score : Double,
   added : Bool,
+  new_key : Bool,
 ) -> Unit {
   zset.set(member_val, new_score)
   self.mark_dirty(key)
   self.data.set(key, RedisValue::ZSet(zset))
+  if new_key {
+    self.scan_snapshot = None
+  }
   self.zset_rank_cache.remove(key)
   if added {
     match self.zset_lex_cache.get(key) {
@@ -28,13 +32,17 @@ pub fn Database::try_zadd(self : Database, key : String, score : Double, member_
     return Err(RedisError::InvalidArgument)
   }
   self.check_expired(key) |> ignore
+  let mut new_key = false
   let zset = match self.data.get(key) {
     Some(RedisValue::ZSet(z)) => z
-    None => Map([], capacity=10)
+    None => {
+      new_key = true
+      Map([], capacity=10)
+    }
     Some(_) => return Err(RedisError::WrongType)
   }
   let existed = zset.contains(member_val)
-  self.zset_apply_score(key, zset, member_val, score, !existed)
+  self.zset_apply_score(key, zset, member_val, score, !existed, new_key)
   Ok(!existed)
 }
 /// ZADD 便捷版：添加/更新成员（事务中排队）
@@ -68,9 +76,13 @@ pub fn Database::try_zadd_with_options(
     return Err(RedisError::InvalidArgument)
   }
   self.check_expired(key) |> ignore
+  let mut new_key = false
   let zset = match self.data.get(key) {
     Some(RedisValue::ZSet(z)) => z
-    None => Map([], capacity=10)
+    None => {
+      new_key = true
+      Map([], capacity=10)
+    }
     Some(_) => return Err(RedisError::WrongType)
   }
   let mut added = 0
@@ -98,7 +110,7 @@ pub fn Database::try_zadd_with_options(
     }
   }
   if added + changed > 0 {
-    self.zset_apply_score(key, zset, member_val, score, added > 0)
+    self.zset_apply_score(key, zset, member_val, score, added > 0, new_key)
   }
   Ok(if ch { added + changed } else { added })
 }
@@ -120,9 +132,13 @@ pub fn Database::try_zadd_incr(
     return Err(RedisError::InvalidArgument)
   }
   self.check_expired(key) |> ignore
+  let mut new_key = false
   let zset = match self.data.get(key) {
     Some(RedisValue::ZSet(z)) => z
-    None => Map([], capacity=10)
+    None => {
+      new_key = true
+      Map([], capacity=10)
+    }
     Some(_) => return Err(RedisError::WrongType)
   }
   match zset.get(member_val) {
@@ -137,14 +153,14 @@ pub fn Database::try_zadd_incr(
       if lt && new_score >= current {
         return Ok(None)
       }
-      self.zset_apply_score(key, zset, member_val, new_score, false)
+      self.zset_apply_score(key, zset, member_val, new_score, false, new_key)
       Ok(Some(new_score))
     }
     None => {
       if xx {
         return Ok(None)
       }
-      self.zset_apply_score(key, zset, member_val, increment, true)
+      self.zset_apply_score(key, zset, member_val, increment, true, new_key)
       Ok(Some(increment))
     }
   }
@@ -458,6 +474,7 @@ fn Database::write_through_remove_zset_members(
   key : String,
   members : Array[String],
 ) -> Unit {
+  self.mark_dirty(key)
   let removed = Map([], capacity=members.length())
   for member_val in members {
     removed.set(member_val, true)

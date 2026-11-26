@@ -25,7 +25,8 @@ pub fn Database::try_zrangestore_byscore(
       let sorted = self.get_sorted_zset(source)
       let lo = lower_bound_incl(sorted, min_parsed.0, !min_parsed.1)
       let hi = upper_bound_incl(sorted, max_parsed.0, !max_parsed.1)
-      let scores : Map[String, Double] = Map([], capacity=hi - lo)
+      let cap : Int = if hi > lo { hi - lo } else { 0 }
+      let scores : Map[String, Double] = Map([], capacity=cap)
       let mut taken = 0
       let mut skipped = 0
       for i = lo; i < hi; i = i + 1 {
@@ -74,7 +75,8 @@ pub fn Database::try_zrangestore_bylex(
       let members = self.get_sorted_lex(source)
       let start = lex_lower_index(members, min_bound)
       let end = lex_upper_index(members, max_bound)
-      let scores : Map[String, Double] = Map([], capacity=end - start)
+      let cap : Int = if end > start { end - start } else { 0 }
+      let scores : Map[String, Double] = Map([], capacity=cap)
       for i = start; i < end; i = i + 1 {
         match zset.get(members[i]) {
           Some(score) => scores.set(members[i], score)
@@ -273,6 +275,7 @@ pub fn Database::zscan_with_match(
       let limit = if count <= 0 { DEFAULT_SCAN_COUNT } else { count }
       let start = if cursor < 0 { 0 } else { cursor }
       if start >= len {
+        self.zscan_snapshots.remove(key)
         return (0, [])
       }
       let result : Array[(String, Double)] = []
@@ -287,6 +290,9 @@ pub fn Database::zscan_with_match(
         i = i + 1
       }
       let next = if i >= len { 0 } else { i }
+      if next == 0 {
+        self.zscan_snapshots.remove(key)
+      }
       (next, result)
     }
     _ => (0, [])

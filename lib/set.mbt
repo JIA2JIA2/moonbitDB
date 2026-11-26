@@ -162,6 +162,7 @@ pub fn Database::srem(self : Database, key : String, value : String) -> Bool {
         Some(RedisValue::Set(set)) => {
           let existed = set.contains(value)
           if existed {
+            self.mark_dirty(key)
             set.remove(value)
             self.sscan_snapshots.remove(key)
             self.remove_if_empty(key, set.length())
@@ -475,6 +476,7 @@ pub fn Database::smove(self : Database, source : String, destination : String, v
       if !src_set.contains(value) {
         return false
       }
+      self.mark_dirty(source)
       src_set.remove(value)
       self.sscan_snapshots.remove(source)
       self.remove_if_empty(source, src_set.length())
@@ -507,6 +509,7 @@ pub fn Database::spop(self : Database, key : String) -> String? {
         }
         match popped {
           Some(v) => {
+            self.mark_dirty(key)
             set.remove(v)
             self.sscan_snapshots.remove(key)
             self.remove_if_empty(key, set.length())
@@ -538,6 +541,7 @@ pub fn Database::spop_count(self : Database, key : String, count : Int) -> Array
       }
       let take = if count > members.length() { members.length() } else { count }
       let sampled = self.random_sample(members, take)
+      self.mark_dirty(key)
       for m in sampled {
         set.remove(m)
       }

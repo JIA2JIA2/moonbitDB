@@ -159,6 +159,7 @@ pub fn Database::hdel(self : Database, key : String, field : String) -> Bool {
         Some(RedisValue::Hash(h)) => {
           let existed = h.contains(field)
           if existed {
+            self.mark_dirty(key)
             h.remove(field)
             self.hscan_snapshots.remove(key)
             self.remove_if_empty(key, h.length())

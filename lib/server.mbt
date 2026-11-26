@@ -447,6 +447,9 @@ pub fn Database::restore(self : Database, key : String, ttl_ms : Int64, value : 
       Some(expire_time) => self.set_expire(key, expire_time)
       None => ()
     }
+  } else {
+    self.expires.remove(key)
+    self.maybe_compact_expire_heap()
   }
   true
 }
@@ -485,7 +488,10 @@ pub fn Database::try_restore(
         self.set_expire(key, t)
       }
     }
-    None => ()
+    None => {
+      self.expires.remove(key)
+      self.maybe_compact_expire_heap()
+    }
   }
   Ok(true)
 }

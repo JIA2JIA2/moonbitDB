@@ -255,6 +255,7 @@ pub fn Database::persist(self : Database, key : String) -> Bool {
     return false
   }
   if self.data.contains(key) && self.expires.contains(key) {
+    self.mark_dirty(key)
     self.expires.remove(key)
     self.maybe_compact_expire_heap()
     true
@@ -415,6 +416,7 @@ pub fn Database::rename(self : Database, old_key : String, new_key : String) -> 
       self.invalidate_zset_cache(old_key)
       self.hscan_snapshots.remove(old_key)
       self.sscan_snapshots.remove(old_key)
+      self.zscan_snapshots.remove(old_key)
       match self.expires.get(old_key) {
         Some(expire_time) => {
           self.set_expire(new_key, expire_time)

@@ -229,6 +229,12 @@ pub fn int_to_string(n : Int) -> String {
 }
 
 pub fn parse_float(s : String) -> Double? {
+  if s == "inf" || s == "+inf" {
+    return Some(float_inf(true))
+  }
+  if s == "-inf" {
+    return Some(float_inf(false))
+  }
   if s.length() == 0 {
     None
   } else {

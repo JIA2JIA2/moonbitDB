@@ -455,9 +455,13 @@ pub fn Database::try_zincrby(self : Database, key : String, increment : Double, 
     return Err(RedisError::InvalidArgument)
   }
   self.check_expired(key) |> ignore
+  let mut new_key = false
   let zset = match self.data.get(key) {
     Some(RedisValue::ZSet(z)) => z
-    None => Map([], capacity=10)
+    None => {
+      new_key = true
+      Map([], capacity=10)
+    }
     Some(_) => return Err(RedisError::WrongType)
   }
   let existing = zset.get(member_val)
@@ -467,7 +471,7 @@ pub fn Database::try_zincrby(self : Database, key : String, increment : Double, 
     None => 0.0
   }
   let new_score = current_score + increment
-  self.zset_apply_score(key, zset, member_val, new_score, !existed)
+  self.zset_apply_score(key, zset, member_val, new_score, !existed, new_key)
   Ok(new_score)
 }
 /// ZINCRBY：增加成员分数（支持负增量）

@@ -523,7 +523,7 @@ pub fn Database::getbit(self : Database, key : String, offset : Int) -> Int {
 
 /// SETBIT 精确错误版：写位返回原位值
 pub fn Database::try_setbit(self : Database, key : String, offset : Int, value : Int) -> Result[Int, RedisError] {
-  if offset < 0 {
+  if offset < 0 || offset.to_int64() > MAX_STRING_SIZE {
     return Err(RedisError::InvalidArgument)
   }
   if value != 0 && value != 1 {
@@ -637,7 +637,7 @@ pub fn Database::try_bitfield_get(
   width : Int,
   signed : Bool,
 ) -> Result[Int64, RedisError] {
-  if offset < 0 || width < 1 || width > 32 {
+  if offset < 0 || offset.to_int64() > MAX_STRING_SIZE || width < 1 || width > 32 {
     return Err(RedisError::InvalidArgument)
   }
   if self.check_expired(key) {
@@ -659,7 +659,7 @@ pub fn Database::try_bitfield_set(
   signed : Bool,
   value : Int,
 ) -> Result[Int64, RedisError] {
-  if offset < 0 || width < 1 || width > 32 {
+  if offset < 0 || offset.to_int64() > MAX_STRING_SIZE || width < 1 || width > 32 {
     return Err(RedisError::InvalidArgument)
   }
   self.check_expired(key) |> ignore
@@ -690,12 +690,12 @@ pub fn Database::try_bitfield_incrby(
   signed : Bool,
   increment : Int,
 ) -> Result[Int64, RedisError] {
-  if offset < 0 || width < 1 || width > 32 {
+  if offset < 0 || offset.to_int64() > MAX_STRING_SIZE || width < 1 || width > 32 {
     return Err(RedisError::InvalidArgument)
   }
   self.check_expired(key) |> ignore
   let current = match self.data.get(key) {
-    Some(RedisValue::String(s)) => bitfield_read_units(s, offset, width, false)
+    Some(RedisValue::String(s)) => bitfield_read_units(s, offset, width, signed)
     Some(_) => return Err(RedisError::WrongType)
     None => 0L
   }
@@ -720,7 +720,7 @@ pub fn Database::try_bitfield_incrby_mode(
   increment : Int,
   overflow : String?,
 ) -> Result[Int64?, RedisError] {
-  if offset < 0 || width < 1 || width > 32 {
+  if offset < 0 || offset.to_int64() > MAX_STRING_SIZE || width < 1 || width > 32 {
     return Err(RedisError::InvalidArgument)
   }
   let mode = match overflow {
@@ -732,7 +732,7 @@ pub fn Database::try_bitfield_incrby_mode(
   }
   self.check_expired(key) |> ignore
   let current = match self.data.get(key) {
-    Some(RedisValue::String(s)) => bitfield_read_units(s, offset, width, false)
+    Some(RedisValue::String(s)) => bitfield_read_units(s, offset, width, signed)
     Some(_) => return Err(RedisError::WrongType)
     None => 0L
   }

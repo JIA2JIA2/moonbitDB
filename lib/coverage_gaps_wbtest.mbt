@@ -377,10 +377,49 @@ test "w1_transaction_i64_boundary" {
 test "w1_clear_scan_caches_zscan" {
   let db = Database::new()
   db.zadd("zs", 1.0, "a") |> ignore
-  let _ = db.zscan_with_match("zs", 0, 10, None)
+  db.zadd("zs", 2.0, "b") |> ignore
+  let (_, items) = db.zscan_with_match("zs", 0, 1, None)
+  @test.assert_eq(items.length(), 1)
   @test.assert_eq(db.zscan_snapshots.length(), 1)
   db.clear_scan_caches()
   @test.assert_eq(db.zscan_snapshots.length(), 0)
+}
+
+test "s1_zscan_cleanup_on_finish" {
+  let db = Database::new()
+  db.zadd("zs", 1.0, "a") |> ignore
+  let _ = db.zscan_with_match("zs", 0, 10, None)
+  @test.assert_eq(db.zscan_snapshots.length(), 0)
+}
+
+test "s1_watch_dirty_on_inplace_writes" {
+  let db = Database::new()
+  db.hset("h", "f", "v") |> ignore
+  db.sadd("s", "m") |> ignore
+  db.zadd("z", 1.0, "m") |> ignore
+  db.expire("h", 100) |> ignore
+  db.watch("h") |> ignore
+  db.watch("s") |> ignore
+  db.watch("z") |> ignore
+  db.hdel("h", "f") |> ignore
+  @test.assert_eq(db.try_exec() is Err(_), true)
+  db.unwatch() |> ignore
+  db.hset("h", "f", "v") |> ignore
+  db.watch("s") |> ignore
+  db.srem("s", "m") |> ignore
+  @test.assert_eq(db.try_exec() is Err(_), true)
+  db.unwatch() |> ignore
+  db.sadd("s", "m") |> ignore
+  db.watch("z") |> ignore
+  ignore(db.zpopmin("z"))
+  @test.assert_eq(db.try_exec() is Err(_), true)
+  db.unwatch() |> ignore
+  ignore(db.zadd("z", 1.0, "m"))
+  db.set("k", "v")
+  db.expire("k", 100) |> ignore
+  db.watch("k") |> ignore
+  ignore(db.persist("k"))
+  @test.assert_eq(db.try_exec() is Err(_), true)
 }
 
 test "w3_bitfield_u32_boundary" {
