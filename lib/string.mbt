@@ -7,12 +7,11 @@ pub fn Database::set(self : Database, key : String, value : String) -> Unit {
   }
 }
 
-/// SETNX 精确错误版：仅当不存在时设置（类型错 WRONGTYPE）
+/// SETNX 精确错误版：仅当不存在时设置（已存在任意类型返回 false）
 pub fn Database::try_setnx(self : Database, key : String, value : String) -> Result[Bool, RedisError] {
   self.check_expired(key) |> ignore
   match self.data.get(key) {
-    Some(RedisValue::String(_)) => Ok(false)
-    Some(_) => Err(RedisError::WrongType)
+    Some(_) => Ok(false)
     None => {
       self.put(key, RedisValue::String(value))
       Ok(true)
@@ -662,6 +661,14 @@ pub fn Database::try_bitfield_set(
   if offset < 0 || offset.to_int64() > MAX_STRING_SIZE || width < 1 || width > 32 {
     return Err(RedisError::InvalidArgument)
   }
+  let invalid_value = if signed {
+    width < 32 && (value < -(1 << (width - 1)) || value > (1 << (width - 1)) - 1)
+  } else {
+    width < 32 && (value < 0 || value > (1 << width) - 1)
+  }
+  if invalid_value {
+    return Err(RedisError::InvalidArgument)
+  }
   self.check_expired(key) |> ignore
   match self.data.get(key) {
     Some(RedisValue::String(s)) => {
@@ -781,7 +788,7 @@ pub fn Database::try_bitpos(self : Database, key : String, bit : Int, start : In
     return Err(RedisError::InvalidArgument)
   }
   if self.check_expired(key) {
-    return Ok(-1)
+    return Ok(if bit == 0 { 0 } else { -1 })
   }
   match self.data.get(key) {
     Some(RedisValue::String(s)) => {
@@ -791,6 +798,9 @@ pub fn Database::try_bitpos(self : Database, key : String, bit : Int, start : In
       let from = if s_idx < 0 { 0 } else { s_idx }
       let to = if e_idx > len { len } else { e_idx }
       if from >= to {
+        if bit == 0 && to >= len {
+          return Ok(to * 16)
+        }
         return Ok(-1)
       }
       for cu = from; cu < to; cu = cu + 1 {
@@ -807,10 +817,13 @@ pub fn Database::try_bitpos(self : Database, key : String, bit : Int, start : In
           }
         }
       }
+      if bit == 0 && to >= len {
+        return Ok(to * 16)
+      }
       Ok(-1)
     }
     Some(_) => Err(RedisError::WrongType)
-    None => Ok(-1)
+    None => Ok(if bit == 0 { 0 } else { -1 })
   }
 }
 

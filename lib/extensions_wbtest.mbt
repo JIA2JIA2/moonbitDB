@@ -1717,8 +1717,8 @@ test "k4_try_variants" {
   db.hset("hh", "f", "v") |> ignore
 
   match db.try_setnx("hh", "x") {
-    Err(RedisError::WrongType) => @test.assert_eq(true, true)
-    _ => @test.assert_eq(true, false)
+    Ok(set) => @test.assert_eq(set, false)
+    Err(_) => @test.assert_eq(true, false)
   }
   match db.try_setnx("sx", "v") {
     Ok(set) => @test.assert_eq(set, true)

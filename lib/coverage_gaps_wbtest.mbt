@@ -422,6 +422,50 @@ test "s1_watch_dirty_on_inplace_writes" {
   @test.assert_eq(db.try_exec() is Err(_), true)
 }
 
+test "s2_semantics_alignment" {
+  let db = Database::new()
+  db.set("one", "\u{FFFF}")
+  @test.assert_eq(db.bitpos("one", 1), 0)
+  match db.try_bitpos("missing", 0, 0, -1) {
+    Ok(v) => @test.assert_eq(v, 0)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitpos("missing", 1, 0, -1) {
+    Ok(v) => @test.assert_eq(v, -1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_set("bfv", 0, 8, false, 256) {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_set("bfv", 0, 8, true, 128) {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_set("bfv", 0, 8, true, 127) {
+    Ok(old) => @test.assert_eq(old, 0L)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_set("bfv", 0, 8, false, 255) {
+    Ok(old) => @test.assert_eq(old, 127L)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  db.set("s1n", "x")
+  match db.try_setnx("s1n", "y") {
+    Ok(set) => @test.assert_eq(set, false)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  db.hset("h1n", "f", "v") |> ignore
+  match db.try_setnx("h1n", "y") {
+    Ok(set) => @test.assert_eq(set, false)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_setnx("fresh", "y") {
+    Ok(set) => @test.assert_eq(set, true)
+    Err(_) => @test.assert_eq(true, false)
+  }
+}
+
 test "w3_bitfield_u32_boundary" {
   let db = Database::new()
   db.set("bf", "")
