@@ -732,38 +732,11 @@ pub fn Database::try_zmpop(
       continue
     }
     match self.data.get(key) {
-      Some(RedisValue::ZSet(zset)) => {
-        let sorted = self.get_sorted_zset(key)
-        let len = sorted.length()
-        if len == 0 {
-          continue
+      Some(RedisValue::ZSet(_)) => {
+        let result = self.zpop_take(key, min, count)
+        if result.length() > 0 {
+          return Ok(Some((key, result)))
         }
-        let take = if count > len { len } else { count }
-        let result : Array[(String, Double)] = []
-        let removed : Array[String] = []
-        if min {
-          for i = 0; i < take; i = i + 1 {
-            result.push(sorted[i])
-            removed.push(sorted[i].0)
-          }
-        } else {
-          for i = 0; i < take; i = i + 1 {
-            let item = sorted[len - 1 - i]
-            result.push(item)
-            removed.push(item.0)
-          }
-        }
-        for member_val in removed {
-          zset.remove(member_val)
-        }
-        if take > 0 {
-          if zset.length() == 0 {
-            self.remove_if_empty(key, 0)
-          } else {
-            self.write_through_remove_zset_members(key, removed)
-          }
-        }
-        return Ok(Some((key, result)))
       }
       _ => ()
     }

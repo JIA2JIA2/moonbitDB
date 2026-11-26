@@ -512,22 +512,44 @@ fn Database::remove_zset_collected(
   }
   members.length()
 }
-fn Database::zpop_extreme(self : Database, key : String, from_min : Bool) -> (String, Double)? {
-  if self.check_expired(key) {
-    return None
+fn Database::zpop_take(self : Database, key : String, from_min : Bool, count : Int) -> Array[(String, Double)] {
+  if self.check_expired(key) || count <= 0 {
+    return []
   }
   match self.data.get(key) {
     Some(RedisValue::ZSet(zset)) => {
       let sorted = self.get_sorted_zset(key)
       let len = sorted.length()
       if len == 0 {
-        return None
+        return []
       }
-      let item = if from_min { sorted[0] } else { sorted[len - 1] }
-      ignore(self.remove_zset_collected(key, zset, [item.0]))
-      Some(item)
+      let take = if count > len { len } else { count }
+      let result : Array[(String, Double)] = []
+      let removed : Array[String] = []
+      for i = 0; i < take; i = i + 1 {
+        let item = if from_min { sorted[i] } else { sorted[len - 1 - i] }
+        result.push(item)
+        removed.push(item.0)
+      }
+      for member_val in removed {
+        zset.remove(member_val)
+      }
+      if zset.length() == 0 {
+        self.remove_if_empty(key, 0)
+      } else {
+        self.write_through_remove_zset_members(key, removed)
+      }
+      result
     }
-    _ => None
+    _ => []
+  }
+}
+fn Database::zpop_extreme(self : Database, key : String, from_min : Bool) -> (String, Double)? {
+  let taken = self.zpop_take(key, from_min, 1)
+  if taken.length() > 0 {
+    Some(taken[0])
+  } else {
+    None
   }
 }
 /// ZPOPMIN：弹出最低分成员
@@ -544,33 +566,7 @@ pub fn Database::zpopmin_count(
   key : String,
   count : Int,
 ) -> Array[(String, Double)] {
-  if self.check_expired(key) || count <= 0 {
-    return []
-  }
-  match self.data.get(key) {
-    Some(RedisValue::ZSet(zset)) => {
-      let sorted = self.get_sorted_zset(key)
-      let take = if count > sorted.length() { sorted.length() } else { count }
-      let result : Array[(String, Double)] = []
-      let removed : Array[String] = []
-      for i = 0; i < take; i = i + 1 {
-        result.push(sorted[i])
-        removed.push(sorted[i].0)
-      }
-      for member_val in removed {
-        zset.remove(member_val)
-      }
-      if take > 0 {
-        if zset.length() == 0 {
-          self.remove_if_empty(key, 0)
-        } else {
-          self.write_through_remove_zset_members(key, removed)
-        }
-      }
-      result
-    }
-    _ => []
-  }
+  self.zpop_take(key, true, count)
 }
 /// ZPOPMAX count：弹出多个最高分成员
 pub fn Database::zpopmax_count(
@@ -578,33 +574,5 @@ pub fn Database::zpopmax_count(
   key : String,
   count : Int,
 ) -> Array[(String, Double)] {
-  if self.check_expired(key) || count <= 0 {
-    return []
-  }
-  match self.data.get(key) {
-    Some(RedisValue::ZSet(zset)) => {
-      let sorted = self.get_sorted_zset(key)
-      let len = sorted.length()
-      let take = if count > len { len } else { count }
-      let result : Array[(String, Double)] = []
-      let removed : Array[String] = []
-      for i = 0; i < take; i = i + 1 {
-        let item = sorted[len - 1 - i]
-        result.push(item)
-        removed.push(item.0)
-      }
-      for member_val in removed {
-        zset.remove(member_val)
-      }
-      if take > 0 {
-        if zset.length() == 0 {
-          self.remove_if_empty(key, 0)
-        } else {
-          self.write_through_remove_zset_members(key, removed)
-        }
-      }
-      result
-    }
-    _ => []
-  }
+  self.zpop_take(key, false, count)
 }

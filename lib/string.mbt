@@ -581,16 +581,19 @@ fn setbit_in_string(s : String, offset : Int, bit : Int) -> String {
 }
 
 fn bitfield_read_units(s : String, offset : Int, width : Int, signed : Bool) -> Int64 {
+  let len = s.length()
   let mut value : Int64 = 0
-  for i = 0; i < width; i = i + 1 {
-    let cu = (offset + i) / 16
-    let b = (offset + i) % 16
-    let bit : Int64 = if cu < s.length() && ((s[cu].to_int() >> b) & 1) == 1 {
-      1L
-    } else {
-      0L
-    }
-    value = value | (bit << i)
+  let mut remaining = width
+  let mut pos = offset
+  while remaining > 0 {
+    let cu = pos / 16
+    let b = pos % 16
+    let take = if remaining < 16 - b { remaining } else { 16 - b }
+    let unit : Int64 = if cu < len { (s[cu].to_int() >> b).to_int64() } else { 0L }
+    let mask = (1L << take) - 1L
+    value = value | ((unit & mask) << (width - remaining))
+    remaining = remaining - take
+    pos = pos + take
   }
   if signed {
     let sign_bit = 1L << (width - 1)
@@ -613,15 +616,16 @@ fn bitfield_write_units(s : String, offset : Int, width : Int, raw : Int64) -> S
     let rel_to = offset + width - start_bit
     let lo = if rel_from < 0 { 0 } else { rel_from }
     let hi = if rel_to > 16 { 16 } else { rel_to }
-    let mut b = lo
-    while b < hi {
-      let raw_idx = start_bit + b - offset
-      if ((raw >> raw_idx) & 1L) == 1L {
-        u = u | (1 << b)
+    if hi > lo {
+      let take = hi - lo
+      let raw_idx = start_bit + lo - offset
+      if take == 16 {
+        u = ((raw >> raw_idx) & 0xFFFFL).to_int()
       } else {
-        u = u & (0xFFFF ^ (1 << b))
+        let chunk = ((raw >> raw_idx) & ((1L << take) - 1L)).to_int()
+        let mask = ((1 << take) - 1) << lo
+        u = (u & (0xFFFF ^ mask)) | (chunk << lo)
       }
-      b = b + 1
     }
     chars.push(Int::unsafe_to_char(u))
   }

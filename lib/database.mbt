@@ -91,19 +91,31 @@ fn Database::invalidate_zset_cache(self : Database, key : String) -> Unit {
 fn Database::touch_zset_cache(self : Database, key : String) -> Unit {
   self.lru_clock = self.lru_clock + 1
   self.zset_cache_lru.set(key, self.lru_clock)
-  if self.zset_cache_lru.length() > MAX_CACHE_SIZE {
-    let mut oldest_key = ""
-    let mut oldest_ts = self.lru_clock + 1
+  if self.zset_cache_lru.length() > MAX_CACHE_SIZE * 2 {
+    let entries : Array[(String, Int)] = []
     for k, ts in self.zset_cache_lru {
-      if ts < oldest_ts {
-        oldest_ts = ts
-        oldest_key = k
+      entries.push((k, ts))
+    }
+    entries.sort_by((a, b) => if a.1 > b.1 {
+      -1
+    } else if a.1 < b.1 {
+      1
+    } else {
+      0
+    })
+    let keep : Map[String, Int] = Map([], capacity=MAX_CACHE_SIZE)
+    let mut kept = 0
+    for entry in entries {
+      if kept < MAX_CACHE_SIZE {
+        keep.set(entry.0, entry.1)
+        kept = kept + 1
+      } else {
+        self.zset_sorted_cache.remove(entry.0)
+        self.zset_rank_cache.remove(entry.0)
+        self.zset_lex_cache.remove(entry.0)
       }
     }
-    self.zset_sorted_cache.remove(oldest_key)
-    self.zset_rank_cache.remove(oldest_key)
-    self.zset_lex_cache.remove(oldest_key)
-    self.zset_cache_lru.remove(oldest_key)
+    self.zset_cache_lru = keep
   }
 }
 
