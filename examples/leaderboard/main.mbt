@@ -36,7 +36,7 @@ fn main {
   println("----------------------------------------")
   for i = 0; i < players.length(); i = i + 1 {
     let player = players[i]
-    let score = Double::from_int(i * 100 + 50)
+    let score = (i * 100 + 50).to_double()
     db.zadd("leaderboard:global", score, player.id) |> ignore
     db.hmset("player:\{player.id}", ["name", "score"], [player.name, "\{i * 100 + 50}"]) |> ignore
     println("  玩家 \{player.name} (ID: \{player.id}): \{i * 100 + 50} 分")

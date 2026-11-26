@@ -526,7 +526,7 @@ test "w4_deque_alternating_pops" {
 test "coverage_merge_sort_big_zset" {
   let db = Database::new()
   for i = 0; i < 20; i = i + 1 {
-    db.zadd("big", Double::from_int(i), "m\{i}") |> ignore
+    db.zadd("big", i.to_double(), "m\{i}") |> ignore
   }
   let u = db.zunion(["big"])
   @test.assert_eq(u.length(), 20)

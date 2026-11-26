@@ -328,7 +328,7 @@ pub fn parse_float(s : String) -> Double? {
       match uint16_to_digit(base_str[bi]) {
         Some(digit) => {
           base_digits = base_digits + 1
-          let digit_f = Double::from_int(digit)
+          let digit_f = digit.to_double()
           if has_dot {
             divisor = divisor * 10.0
             result = result + digit_f / divisor
@@ -387,7 +387,7 @@ pub fn format_float(n : Double) -> String {
         while frac_part > 0.0 && precision < 15 {
           frac_part = frac_part * 10.0
           let digit = frac_part.to_int64()
-          let digit_f = Double::from_int(digit.to_int())
+          let digit_f = digit.to_int().to_double()
           result = result + digit.to_string()
           frac_part = frac_part - digit_f
           precision = precision + 1

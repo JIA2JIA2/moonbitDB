@@ -194,14 +194,14 @@ test "property zset ordering matches model" {
     let member_val = "member:\{rng.below(40)}"
     let op = rng.below(10)
     if op < 6 {
-      let score = Double::from_int(rng.below(100)) / 10.0
+      let score = rng.below(100).to_double() / 10.0
       db.zadd("z", score, member_val) |> ignore
       model.set(member_val, score)
     } else if op < 8 {
       db.zrem("z", member_val) |> ignore
       model.remove(member_val)
     } else {
-      let increment = Double::from_int(rng.below(21) - 10)
+      let increment = (rng.below(21) - 10).to_double()
       db.zincrby("z", increment, member_val) |> ignore
       let current = match model.get(member_val) {
         Some(score) => score

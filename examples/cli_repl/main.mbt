@@ -62,7 +62,7 @@ fn parse_float(s : String) -> Double? {
     let c = s[i]
     if c >= '0' && c <= '9' {
       has_digit = true
-      let digit = Double::from_int(c.to_int() - '0'.to_int())
+      let digit = (c.to_int() - '0'.to_int()).to_double()
       if has_dot {
         result = result + digit / decimal_pos
         decimal_pos = decimal_pos * 10.0

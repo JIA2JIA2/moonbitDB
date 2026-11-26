@@ -36,7 +36,7 @@ fn parse_float(s : String) -> Double {
   while i < s.length() {
     let c = s[i]
     if c >= '0' && c <= '9' {
-      let digit = Double::from_int(c.to_int() - '0'.to_int())
+      let digit = (c.to_int() - '0'.to_int()).to_double()
       if has_dot {
         result = result + digit / decimal_pos
         decimal_pos = decimal_pos * 10.0
@@ -100,7 +100,7 @@ fn main {
     let qty = parse_int(qty_str)
     let price = parse_float(show_opt(db.hget("product:\{pid}", "price")))
     let name = show_opt(db.hget("product:\{pid}", "name"))
-    let subtotal = price * Double::from_int(qty)
+    let subtotal = price * qty.to_double()
     total = total + subtotal
     println("    \{name} x \{qty} = ¥\{subtotal}")
   }
