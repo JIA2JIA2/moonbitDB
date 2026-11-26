@@ -296,6 +296,12 @@ pub fn Database::sintercard(self : Database, keys : Array[String], limit : Int) 
 }
 
 pub fn Database::try_sinterstore(self : Database, destination : String, keys : Array[String]) -> Result[Int, RedisError] {
+  self.check_expired(destination) |> ignore
+  match self.data.get(destination) {
+    Some(RedisValue::Set(_)) => ()
+    None => ()
+    Some(_) => return Err(RedisError::DestinationWrongType)
+  }
   if !self.sets_valid(keys) {
     return Err(RedisError::WrongType)
   }
@@ -342,6 +348,12 @@ pub fn Database::sunion(self : Database, keys : Array[String]) -> Array[String] 
 }
 
 pub fn Database::try_sunionstore(self : Database, destination : String, keys : Array[String]) -> Result[Int, RedisError] {
+  self.check_expired(destination) |> ignore
+  match self.data.get(destination) {
+    Some(RedisValue::Set(_)) => ()
+    None => ()
+    Some(_) => return Err(RedisError::DestinationWrongType)
+  }
   if !self.sets_valid(keys) {
     return Err(RedisError::WrongType)
   }
@@ -401,6 +413,12 @@ pub fn Database::sdiff(self : Database, keys : Array[String]) -> Array[String] {
 }
 
 pub fn Database::try_sdiffstore(self : Database, destination : String, keys : Array[String]) -> Result[Int, RedisError] {
+  self.check_expired(destination) |> ignore
+  match self.data.get(destination) {
+    Some(RedisValue::Set(_)) => ()
+    None => ()
+    Some(_) => return Err(RedisError::DestinationWrongType)
+  }
   if !self.sets_valid(keys) {
     return Err(RedisError::WrongType)
   }

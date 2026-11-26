@@ -195,7 +195,7 @@ pub fn Database::expiretime(self : Database, key : String) -> Int64 {
     return -2
   }
   match self.expires.get(key) {
-    Some(expire_time) => (expire_time + 999) / 1000
+    Some(expire_time) => expire_time / 1000
     None => -1
   }
 }
@@ -223,7 +223,7 @@ pub fn Database::ttl(self : Database, key : String) -> Int64 {
       self.delete_key(key)
       -2
     } else {
-      (remaining + 999) / 1000
+      (remaining + 500) / 1000
     }
   } else {
     -1
@@ -611,6 +611,7 @@ pub fn Database::clear_scan_caches(self : Database) -> Unit {
   self.scan_snapshot = None
   self.hscan_snapshots = Map([], capacity=10)
   self.sscan_snapshots = Map([], capacity=10)
+  self.zscan_snapshots = Map([], capacity=10)
 }
 
 pub fn Database::touch(self : Database, keys : Array[String]) -> Int {

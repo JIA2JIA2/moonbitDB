@@ -280,6 +280,10 @@ test "coverage_zset_try_range" {
     Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
     _ => @test.assert_eq(true, false)
   }
+  match db.try_zincrby("zz", zero / zero, "m") {
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
 
   db.zadd("zl", 0.0, "a") |> ignore
   db.zadd("zl", 0.0, "b") |> ignore
@@ -306,9 +310,77 @@ test "coverage_zset_try_range" {
     _ => @test.assert_eq(true, false)
   }
   match db.try_zrangebylex_with_limit("zl", "bad", "+", 0, 1) {
-    Ok(items) => @test.assert_eq(items.length(), 0)
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_zrangebylex_with_limit("zl", "-", "+", 1, 2147483647) {
+    Ok(items) => @test.assert_eq(items, ["b", "c", "d"])
     Err(_) => @test.assert_eq(true, false)
   }
+}
+
+test "w1_store_dest_wrongtype" {
+  let db = Database::new()
+  db.set("s1", "str")
+  db.zadd("z1", 1.0, "a") |> ignore
+  match db.try_zunionstore("s1", ["z1"]) {
+    Err(RedisError::DestinationWrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_zinterstore("s1", ["z1"]) {
+    Err(RedisError::DestinationWrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_zdiffstore("s1", ["z1"]) {
+    Err(RedisError::DestinationWrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_sinterstore("s1", ["nokey"]) {
+    Err(RedisError::DestinationWrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  db.set("e1", "x")
+  db.pexpire("e1", 1) |> ignore
+  db.advance_time(10)
+  match db.try_zunionstore("e1", ["z1"]) {
+    Ok(count) => @test.assert_eq(count, 1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_zunionstore("z1", ["z1"]) {
+    Ok(count) => @test.assert_eq(count, 1)
+    Err(_) => @test.assert_eq(true, false)
+  }
+}
+
+test "w1_transaction_i64_boundary" {
+  let db = Database::new()
+  db.set("k", "9223372036854775806")
+  db.begin_transaction()
+  db.incr("k") |> ignore
+  db.run_transaction() |> ignore
+  @test.assert_eq(db.get("k"), Some("9223372036854775807"))
+  db.begin_transaction()
+  db.incr("k") |> ignore
+  db.run_transaction() |> ignore
+  @test.assert_eq(db.get("k"), Some("9223372036854775807"))
+  db.set("k2", "-9223372036854775807")
+  db.begin_transaction()
+  db.decr("k2") |> ignore
+  db.run_transaction() |> ignore
+  @test.assert_eq(db.get("k2"), Some("-9223372036854775808"))
+  db.begin_transaction()
+  db.decr("k2") |> ignore
+  db.run_transaction() |> ignore
+  @test.assert_eq(db.get("k2"), Some("-9223372036854775808"))
+}
+
+test "w1_clear_scan_caches_zscan" {
+  let db = Database::new()
+  db.zadd("zs", 1.0, "a") |> ignore
+  let _ = db.zscan_with_match("zs", 0, 10, None)
+  @test.assert_eq(db.zscan_snapshots.length(), 1)
+  db.clear_scan_caches()
+  @test.assert_eq(db.zscan_snapshots.length(), 0)
 }
 
 test "coverage_merge_sort_big_zset" {
@@ -368,8 +440,8 @@ test "coverage_set_gaps" {
   @test.assert_eq(db.sdiffstore("dst3", ["a1", "b1"]), 1)
   @test.assert_eq(db.sintercard(["a1", "missing"], 0), 0)
   match db.try_sinterstore("str", ["a1"]) {
-    Ok(count) => @test.assert_eq(count, 2)
-    Err(_) => @test.assert_eq(true, false)
+    Err(RedisError::DestinationWrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
   }
   db.set("str2", "x")
   match db.try_sunion(["str2"]) {
@@ -377,12 +449,12 @@ test "coverage_set_gaps" {
     _ => @test.assert_eq(true, false)
   }
   match db.try_sdiffstore("str2", ["a1"]) {
-    Ok(count) => @test.assert_eq(count, 2)
-    Err(_) => @test.assert_eq(true, false)
+    Err(RedisError::DestinationWrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
   }
   match db.try_sintercard(["str2"], 0) {
-    Ok(count) => @test.assert_eq(count, 2)
-    Err(_) => @test.assert_eq(true, false)
+    Err(RedisError::WrongType) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
   }
 }
 

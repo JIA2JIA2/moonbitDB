@@ -134,10 +134,10 @@ pub fn Database::zrangebyscore_with_limit(
     return result
   }
   if offset > 0 {
-    i = i + offset
-    if i >= hi {
+    if offset >= hi - lo {
       return result
     }
+    i = i + offset
   }
   let mut taken = 0
   while i < hi && (count <= 0 || taken < count) {
@@ -460,6 +460,9 @@ pub fn Database::zrevrank(self : Database, key : String, member_val : String) ->
 }
 /// ZINCRBY 精确错误版：增加成员分数
 pub fn Database::try_zincrby(self : Database, key : String, increment : Double, member_val : String) -> Result[Double, RedisError] {
+  if increment != increment {
+    return Err(RedisError::InvalidArgument)
+  }
   self.check_expired(key) |> ignore
   let zset = match self.data.get(key) {
     Some(RedisValue::ZSet(z)) => z
@@ -570,7 +573,7 @@ fn Database::zrangebylex_with_scores_impl(
   count : Int,
 ) -> Result[Array[(String, Double)], RedisError] {
   if !lex_bound_valid(min_bound) || !lex_bound_valid(max_bound) {
-    return Ok([])
+    return Err(RedisError::InvalidArgument)
   }
   if self.check_expired(key) {
     return Ok([])
@@ -585,8 +588,11 @@ fn Database::zrangebylex_with_scores_impl(
         return Ok([])
       }
       let apply_offset = if offset > total { total } else { offset }
-      let apply_count = if count <= 0 { total - apply_offset } else { count }
-      let apply_end = if apply_offset + apply_count > total { total } else { apply_offset + apply_count }
+      let apply_end = if count <= 0 || count > total - apply_offset {
+        total
+      } else {
+        apply_offset + count
+      }
       let result : Array[(String, Double)] = []
       if rev {
         let mut i = end - 1 - apply_offset
@@ -924,7 +930,7 @@ pub fn Database::try_zrangebylex_with_limit(
   count : Int,
 ) -> Result[Array[String], RedisError] {
   if !lex_bound_valid(min_bound) || !lex_bound_valid(max_bound) {
-    return Ok([])
+    return Err(RedisError::InvalidArgument)
   }
   if self.check_expired(key) {
     return Ok([])
@@ -939,8 +945,11 @@ pub fn Database::try_zrangebylex_with_limit(
         return Ok([])
       }
       let apply_offset = if offset > total { total } else { offset }
-      let apply_count = if count <= 0 { total - apply_offset } else { count }
-      let apply_end = if apply_offset + apply_count > total { total } else { apply_offset + apply_count }
+      let apply_end = if count <= 0 || count > total - apply_offset {
+        total
+      } else {
+        apply_offset + count
+      }
       let result : Array[String] = []
       for i = apply_offset; i < apply_end; i = i + 1 {
         result.push(members[start + i])
@@ -990,7 +999,7 @@ pub fn Database::try_zrevrangebylex_with_limit(
   count : Int,
 ) -> Result[Array[String], RedisError] {
   if !lex_bound_valid(min_bound) || !lex_bound_valid(max_bound) {
-    return Ok([])
+    return Err(RedisError::InvalidArgument)
   }
   if self.check_expired(key) {
     return Ok([])
@@ -1005,8 +1014,11 @@ pub fn Database::try_zrevrangebylex_with_limit(
         return Ok([])
       }
       let apply_offset = if offset > total { total } else { offset }
-      let apply_count = if count <= 0 { total - apply_offset } else { count }
-      let apply_end = if apply_offset + apply_count > total { total } else { apply_offset + apply_count }
+      let apply_end = if count <= 0 || count > total - apply_offset {
+        total
+      } else {
+        apply_offset + count
+      }
       let result : Array[String] = []
       let mut index = end - 1 - apply_offset
       let stop = end - apply_end

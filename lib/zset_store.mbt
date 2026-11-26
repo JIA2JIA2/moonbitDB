@@ -363,6 +363,12 @@ pub fn Database::try_zunionstore_with_options(
   weights : Array[Double]?,
   aggregate : String?,
 ) -> Result[Int, RedisError] {
+  self.check_expired(destination) |> ignore
+  match self.data.get(destination) {
+    Some(RedisValue::ZSet(_)) => ()
+    None => ()
+    Some(_) => return Err(RedisError::DestinationWrongType)
+  }
   if !self.zsets_valid(keys) {
     return Err(RedisError::WrongType)
   }
@@ -439,6 +445,12 @@ pub fn Database::try_zinterstore_with_options(
   weights : Array[Double]?,
   aggregate : String?,
 ) -> Result[Int, RedisError] {
+  self.check_expired(destination) |> ignore
+  match self.data.get(destination) {
+    Some(RedisValue::ZSet(_)) => ()
+    None => ()
+    Some(_) => return Err(RedisError::DestinationWrongType)
+  }
   if !self.zsets_valid(keys) {
     return Err(RedisError::WrongType)
   }
@@ -530,6 +542,12 @@ pub fn Database::try_zdiffstore(
   destination : String,
   keys : Array[String],
 ) -> Result[Int, RedisError] {
+  self.check_expired(destination) |> ignore
+  match self.data.get(destination) {
+    Some(RedisValue::ZSet(_)) => ()
+    None => ()
+    Some(_) => return Err(RedisError::DestinationWrongType)
+  }
   if !self.zsets_valid(keys) {
     return Err(RedisError::WrongType)
   }

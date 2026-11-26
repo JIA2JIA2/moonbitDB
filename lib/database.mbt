@@ -323,7 +323,7 @@ fn Database::run_transaction(self : Database) -> Bool {
               Some(n) => {
                 match checked_add_i64(n, 1) {
                   Some(new_value) => {
-                    self.put(key, RedisValue::String(int_to_string(new_value.to_int())))
+                    self.put(key, RedisValue::String(new_value.to_string()))
                   }
                   None => ()
                 }
@@ -344,7 +344,7 @@ fn Database::run_transaction(self : Database) -> Bool {
               Some(n) => {
                 match checked_add_i64(n, -1) {
                   Some(new_value) => {
-                    self.put(key, RedisValue::String(int_to_string(new_value.to_int())))
+                    self.put(key, RedisValue::String(new_value.to_string()))
                   }
                   None => ()
                 }

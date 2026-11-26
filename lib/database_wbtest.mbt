@@ -733,11 +733,11 @@ test "ttl_rounding" {
 
   db.set("key3", "value3")
   db.pexpire("key3", 1) |> ignore
-  @test.assert_eq(db.ttl("key3"), 1)
+  @test.assert_eq(db.ttl("key3"), 0)
 
   db.set("key4", "value4")
   db.pexpire("key4", 499) |> ignore
-  @test.assert_eq(db.ttl("key4"), 1)
+  @test.assert_eq(db.ttl("key4"), 0)
 
   db.set("key5", "value5")
   db.pexpire("key5", 500) |> ignore

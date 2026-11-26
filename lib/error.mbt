@@ -10,6 +10,7 @@ pub enum RedisError {
   WrongArgumentCount(String)
   Overflow
   TransactionAborted
+  DestinationWrongType
 }
 
 pub fn RedisError::message(self : RedisError) -> String {
@@ -25,5 +26,6 @@ pub fn RedisError::message(self : RedisError) -> String {
     RedisError::WrongArgumentCount(cmd) => "ERR wrong number of arguments for '\{cmd}' command"
     RedisError::Overflow => "ERR increment or decrement would overflow"
     RedisError::TransactionAborted => "TransactionAborted Transaction aborted because the watched keys were modified"
+    RedisError::DestinationWrongType => "WRONGTYPE Destination key wrong type"
   }
 }

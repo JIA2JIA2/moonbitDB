@@ -403,7 +403,11 @@ test "d2_reverse_range_limits" {
     _ => @test.assert_eq(true, false)
   }
   match db.try_zrevrangebylex_with_limit("z", "bad", "-", 0, 1) {
-    Ok(items) => @test.assert_eq(items.length(), 0)
+    Err(RedisError::InvalidArgument) => @test.assert_eq(true, true)
+    _ => @test.assert_eq(true, false)
+  }
+  match db.try_zrevrangebylex_with_limit("z", "+", "-", 1, 2147483647) {
+    Ok(items) => @test.assert_eq(items, ["c", "b", "a"])
     Err(_) => @test.assert_eq(true, false)
   }
 
@@ -417,6 +421,7 @@ test "d2_reverse_range_limits" {
   @test.assert_eq(db.zrevrangebyscore_with_limit("zs", 4.0, 1.0, 10, 2), [])
   @test.assert_eq(db.zrangebyscore_with_limit("zs", 1.0, 4.0, -1, 2), [])
   @test.assert_eq(db.zrangebyscore_with_limit("zs", 1.0, 4.0, 1, 2), ["b", "c"])
+  @test.assert_eq(db.zrangebyscore_with_limit("zs", 1.0, 4.0, 2147483647, 2), [])
 }
 
 test "d2_getex_convenience_spop_hsetall" {
@@ -776,6 +781,7 @@ test "d5_zadd_options_and_expiretime" {
   @test.assert_eq(db.expiretime("et1"), -1)
   @test.assert_eq(db.pexpiretime("et1"), -1)
   db.expire("et1", 100) |> ignore
+  @test.assert_eq(db.expiretime("et1"), 100)
   @test.assert_eq(db.expiretime("et1") > 0, true)
   @test.assert_eq(db.pexpiretime("et1") > 0, true)
   @test.assert_eq(db.pexpiretime("et1") > db.expiretime("et1") * 999, true)
