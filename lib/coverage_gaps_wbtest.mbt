@@ -591,6 +591,11 @@ test "coverage_util_gaps" {
   @test.assert_eq(format_float(3.0), "3")
   @test.assert_eq(format_float(0.25), "0.25")
   @test.assert_eq(format_float(-0.25), "-0.25")
+  @test.assert_eq(format_float(0.1 + 0.2), "0.3")
+  @test.assert_eq(format_float(3000000000.0), "3000000000")
+  @test.assert_eq(format_float(-3000000000.0), "-3000000000")
+  @test.assert_eq(format_float(1.0e300), "inf")
+  @test.assert_eq(format_float(-1.0e300), "-inf")
 }
 
 test "coverage_transaction_replay" {

@@ -1,6 +1,16 @@
 const I64_MAX : Int64 = 9223372036854775807L
 const I64_MIN : Int64 = -9223372036854775807L - 1L
 
+fn float_inf(positive : Bool) -> Double {
+  let zero : Double = 0.0
+  let one : Double = 1.0
+  if positive {
+    one / zero
+  } else {
+    -(one / zero)
+  }
+}
+
 pub fn match_pattern(pattern : String, str : String) -> Bool {
   match_pattern_helper(pattern, str, 0, 0)
 }
@@ -215,57 +225,7 @@ pub fn parse_int64(s : String) -> Int64? {
 }
 
 pub fn int_to_string(n : Int) -> String {
-  if n == 0 {
-    "0"
-  } else {
-    let mut num = n
-    let chars : Array[String] = []
-    let mut is_negative = false
-    if num < 0 {
-      is_negative = true
-    }
-    while num != 0 {
-      let digit = num % 10
-      if is_negative {
-        match -digit {
-          0 => chars.push("0")
-          1 => chars.push("1")
-          2 => chars.push("2")
-          3 => chars.push("3")
-          4 => chars.push("4")
-          5 => chars.push("5")
-          6 => chars.push("6")
-          7 => chars.push("7")
-          8 => chars.push("8")
-          9 => chars.push("9")
-          _ => chars.push("0")
-        }
-      } else {
-        match digit {
-          0 => chars.push("0")
-          1 => chars.push("1")
-          2 => chars.push("2")
-          3 => chars.push("3")
-          4 => chars.push("4")
-          5 => chars.push("5")
-          6 => chars.push("6")
-          7 => chars.push("7")
-          8 => chars.push("8")
-          9 => chars.push("9")
-          _ => chars.push("0")
-        }
-      }
-      num = num / 10
-    }
-    if is_negative {
-      chars.push("-")
-    }
-    let result : Array[String] = []
-    for i = chars.length() - 1; i >= 0; i = i - 1 {
-      result.push(chars[i])
-    }
-    result.join("")
-  }
+  "\{n}"
 }
 
 pub fn parse_float(s : String) -> Double? {
@@ -306,15 +266,21 @@ pub fn parse_float(s : String) -> Double? {
       while j < exp_str.length() {
         match uint16_to_digit(exp_str[j]) {
           Some(d) => {
-            v = v * 10 + d
+            if v <= 1000 {
+              v = v * 10 + d
+            }
             j = j + 1
           }
           None => return None
         }
       }
       let signed = if neg { -v } else { v }
-      if signed > 60 || signed < -60 {
-        return None
+      if signed > 308 || signed < -308 {
+        let base_negative = base_str.length() > 0 && base_str[0] == 45
+        if signed > 308 {
+          return Some(if base_negative { float_inf(false) } else { float_inf(true) })
+        }
+        return Some(if base_negative { -0.0 } else { 0.0 })
       }
       signed
     }
@@ -388,48 +354,48 @@ pub fn parse_float(s : String) -> Double? {
 pub fn format_float(n : Double) -> String {
   if n == 0.0 {
     "0"
+  } else if n != n {
+    "nan"
   } else {
-    let mut num = n
-    if num < 0.0 {
-      num = -num
-    }
-    let int_part = num.to_int()
-    let int_part_f = Double::from_int(int_part)
-    let mut frac_part = num - int_part_f
-    let mut result = int_to_string(int_part)
-    if frac_part > 0.0 {
-      result = result + "."
-      let mut precision = 0
-      while frac_part > 0.0 && precision < 10 {
-        frac_part = frac_part * 10.0
-        let digit = frac_part.to_int()
-        let digit_f = Double::from_int(digit)
-        result = result + digit_to_string(digit)
-        frac_part = frac_part - digit_f
-        precision = precision + 1
+    let neg = n < 0.0
+    let num = if neg { -n } else { n }
+    if num >= 9223372036854775808.0 {
+      if neg {
+        "-inf"
+      } else {
+        "inf"
+      }
+    } else {
+      let int_part = num.to_int64()
+      let mut frac_part = num - num.floor()
+      let mut result = int_part.to_string()
+      if frac_part > 0.0 {
+        let dot_index = result.length()
+        result = result + "."
+        let mut precision = 0
+        while frac_part > 0.0 && precision < 15 {
+          frac_part = frac_part * 10.0
+          let digit = frac_part.to_int64()
+          let digit_f = Double::from_int(digit.to_int())
+          result = result + digit.to_string()
+          frac_part = frac_part - digit_f
+          precision = precision + 1
+        }
+        let mut end = result.length()
+        while end > dot_index + 1 && result[end - 1] == 48 {
+          end = end - 1
+        }
+        if end == dot_index + 1 {
+          end = dot_index
+        }
+        result = result[0:end].to_owned()
+      }
+      if neg {
+        "-" + result
+      } else {
+        result
       }
     }
-    if n < 0.0 {
-      "-" + result
-    } else {
-      result
-    }
-  }
-}
-
-fn digit_to_string(n : Int) -> String {
-  match n {
-    0 => "0"
-    1 => "1"
-    2 => "2"
-    3 => "3"
-    4 => "4"
-    5 => "5"
-    6 => "6"
-    7 => "7"
-    8 => "8"
-    9 => "9"
-    _ => "0"
   }
 }
 

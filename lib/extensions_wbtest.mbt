@@ -1118,7 +1118,15 @@ test "e3_parse_float_scientific" {
   @test.assert_eq(parse_float("e5"), None)
   @test.assert_eq(parse_float("1e5.5"), None)
   @test.assert_eq(parse_float("1e2e3"), None)
-  @test.assert_eq(parse_float("1e999"), None)
+  match parse_float("1e999") {
+    Some(v) => @test.assert_eq(v > 1.0e308, true)
+    None => @test.assert_eq(true, false)
+  }
+  match parse_float("-1e999") {
+    Some(v) => @test.assert_eq(v < -1.0e308, true)
+    None => @test.assert_eq(true, false)
+  }
+  @test.assert_eq(parse_float("1e-999"), Some(0.0))
   @test.assert_eq(parse_float("2.5"), Some(2.5))
   @test.assert_eq(parse_float("abc"), None)
 

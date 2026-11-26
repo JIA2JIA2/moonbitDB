@@ -81,15 +81,6 @@ fn upper_bound_incl(sorted : Array[(String, Double)], score : Double, inclusive 
   }
   lo
 }
-fn float_inf(positive : Bool) -> Double {
-  let zero : Double = 0.0
-  let one : Double = 1.0
-  if positive {
-    one / zero
-  } else {
-    -(one / zero)
-  }
-}
 fn parse_score_bound(bound : String) -> Result[(Double, Bool), RedisError] {
   if bound.length() == 0 {
     return Err(RedisError::InvalidArgument)
