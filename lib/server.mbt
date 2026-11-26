@@ -12,6 +12,7 @@ pub fn Database::flushdb(self : Database) -> String {
   self.zset_sorted_cache = Map([], capacity=100)
   self.zset_rank_cache = Map([], capacity=100)
   self.zset_lex_cache = Map([], capacity=100)
+  self.zset_cache_lru = Map([], capacity=100)
   self.scan_snapshot = None
   self.hscan_snapshots = Map([], capacity=10)
   self.sscan_snapshots = Map([], capacity=10)
@@ -130,11 +131,11 @@ fn Database::info_keyspace_section(self : Database) -> Array[String] {
 }
 
 fn Database::info_stats_section(self : Database) -> Array[String] {
-  let mut zset_cached = 0
-  for _key, _items in self.zset_sorted_cache {
-    zset_cached = zset_cached + 1
-  }
-  ["# Stats", "zset_sorted_cache_entries:\{zset_cached}", "expire_heap_size:\{self.expire_heap.length()}"]
+  [
+    "# Stats",
+    "zset_sorted_cache_entries:\{self.zset_sorted_cache.length()}",
+    "expire_heap_size:\{self.expire_heap.length()}",
+  ]
 }
 
 pub fn Database::info_section(self : Database, section : String) -> String {
@@ -181,8 +182,7 @@ pub fn Database::time(self : Database) -> (Int64, Int64) {
   (seconds, microseconds)
 }
 
-pub fn Database::command() -> Array[String] {
-  [
+let command_table : Array[String] = [
     "SET", "GET", "DEL", "EXISTS", "KEYS", "KEYS_PATTERN", "SCAN", "TYPE", "APPEND", "STRLEN",
     "INCR", "DECR", "INCRBY", "DECRBY", "SETNX", "SETEX", "PSETEX", "GETDEL", "GETSET", "GETEX",
     "GETRANGE", "SUBSTR", "SETRANGE", "GETBIT", "SETBIT", "BITPOS", "BITCOUNT", "BITOP", "BITFIELD",
@@ -207,7 +207,10 @@ pub fn Database::command() -> Array[String] {
     "SELECT", "MOVE", "DUMP", "RESTORE", "MONITOR",
     "OBJECT_FREQ",
     "SAVE", "BGSAVE", "LASTSAVE", "RESET", "SORT", "MEMORY_USAGE", "WAIT", "SHUTDOWN", "CONFIG_RESETSTAT", "LOLWUT"
-  ]
+]
+
+pub fn Database::command() -> Array[String] {
+  command_table
 }
 
 pub fn Database::object_encoding(self : Database, key : String) -> String? {

@@ -449,7 +449,7 @@ pub fn Database::scan(self : Database, cursor : Int, count : Int) -> (Int, Array
   }
   let all_keys = self.sorted_keys_snapshot()
   let len = all_keys.length()
-  let limit = if count <= 0 { 10 } else { count }
+  let limit = if count <= 0 { DEFAULT_SCAN_COUNT } else { count }
   let start = if cursor < 0 { 0 } else { cursor }
   if start >= len {
     self.scan_snapshot = None

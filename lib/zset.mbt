@@ -353,11 +353,16 @@ fn Database::ensure_rank_cache(self : Database, key : String) -> Unit {
     Some(_) => ()
     None => {
       let sorted = self.get_sorted_zset(key)
-      let ranks = Map([], capacity=sorted.length())
-      for i = 0; i < sorted.length(); i = i + 1 {
-        ranks.set(sorted[i].0, i)
+      match self.zset_rank_cache.get(key) {
+        Some(_) => ()
+        None => {
+          let ranks = Map([], capacity=sorted.length())
+          for i = 0; i < sorted.length(); i = i + 1 {
+            ranks.set(sorted[i].0, i)
+          }
+          self.zset_rank_cache.set(key, ranks)
+        }
       }
-      self.zset_rank_cache.set(key, ranks)
     }
   }
 }

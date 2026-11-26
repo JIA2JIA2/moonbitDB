@@ -48,7 +48,7 @@ pub struct Database {
   mut zset_sorted_cache : Map[String, Array[(String, Double)]]
   mut zset_rank_cache : Map[String, Map[String, Int]]
   mut zset_lex_cache : Map[String, Array[String]]
-  zset_cache_lru : Map[String, Int]
+  mut zset_cache_lru : Map[String, Int]
   mut lru_clock : Int
   mut scan_snapshot : Array[String]?
   mut hscan_snapshots : Map[String, Array[String]]

@@ -228,6 +228,20 @@ pub fn int_to_string(n : Int) -> String {
   "\{n}"
 }
 
+fn pow10_int(n : Int) -> Double {
+  let mut result = 1.0
+  let mut base = 10.0
+  let mut k = n
+  while k > 0 {
+    if k % 2 == 1 {
+      result = result * base
+    }
+    base = base * base
+    k = k / 2
+  }
+  result
+}
+
 pub fn parse_float(s : String) -> Double? {
   if s == "inf" || s == "+inf" {
     return Some(float_inf(true))
@@ -336,18 +350,9 @@ pub fn parse_float(s : String) -> Double? {
       return None
     }
     if exp_val > 0 {
-      let mut k = 0
-      while k < exp_val {
-        result = result * 10.0
-        k = k + 1
-      }
+      result = result * pow10_int(exp_val)
     } else if exp_val < 0 {
-      let limit = -exp_val
-      let mut k = 0
-      while k < limit {
-        result = result / 10.0
-        k = k + 1
-      }
+      result = result / pow10_int(-exp_val)
     }
     if negative {
       Some(-result)

@@ -171,6 +171,9 @@ pub fn Database::zinter(self : Database, keys : Array[String]) -> Array[(String,
       _ => return []
     }
   }
+  if zsets.length() == 0 {
+    return []
+  }
   let mut min_idx = 0
   let mut min_len = zsets[0].length()
   for i = 1; i < zsets.length(); i = i + 1 {
@@ -412,7 +415,10 @@ pub fn Database::try_zunionstore_with_options(
     Some("max") => 2
     _ => 0
   }
-  let scores : Map[String, Double] = Map([], capacity=10)
+  if zsets.length() == 0 {
+    return Err(RedisError::InvalidArgument)
+  }
+  let scores : Map[String, Double] = Map([], capacity=zsets[0].length())
   for i = 0; i < zsets.length(); i = i + 1 {
     let zset = zsets[i]
     let weight = weights_arr[i]
@@ -493,6 +499,9 @@ pub fn Database::try_zinterstore_with_options(
     Some("min") => 1
     Some("max") => 2
     _ => 0
+  }
+  if zsets.length() == 0 {
+    return Err(RedisError::InvalidArgument)
   }
   let mut min_idx = 0
   let mut min_len = zsets[0].length()
