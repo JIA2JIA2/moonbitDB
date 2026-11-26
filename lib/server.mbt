@@ -507,13 +507,10 @@ pub fn Database::try_bitcount_range(self : Database, key : String, start : Int, 
       let mut i = from
       while i < to {
         let unit = s[i].to_int()
-        let mut b = 0
-        while b < 16 {
-          if (unit & (1 << b)) != 0 {
-            count = count + 1
-          }
-          b = b + 1
-        }
+        let v = unit - ((unit >> 1) & 0x5555)
+        let v2 = (v & 0x3333) + ((v >> 2) & 0x3333)
+        let v3 = (v2 + (v2 >> 4)) & 0x0F0F
+        count = count + ((v3 + (v3 >> 8)) & 0x3F)
         i = i + 1
       }
       Ok(count)

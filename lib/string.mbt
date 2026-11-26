@@ -536,22 +536,14 @@ pub fn Database::try_setbit(self : Database, key : String, offset : Int, value :
       let bit = offset % 16
       let old_unit : Int = if cu < s.length() { s[cu].to_int() } else { 0 }
       let old_bit = (old_unit >> bit) & 1
-      let new_unit = if value == 1 { old_unit | (1 << bit) } else { old_unit & (0xFFFF ^ (1 << bit)) }
-      let new_char = Int::unsafe_to_char(new_unit)
-      let new_str = if cu < s.length() {
-        s[0:cu].to_owned() + "\{new_char}" + s[cu + 1:s.length()].to_owned()
-      } else {
-        let pad = String::make(cu - s.length(), Int::unsafe_to_char(0))
-        s + pad + "\{new_char}"
-      }
+      let new_str = setbit_in_string(s, offset, value)
       self.put(key, RedisValue::String(new_str))
       Ok(old_bit)
     }
     Some(_) => Err(RedisError::WrongType)
     None => {
       let cu = offset / 16
-      let bit = offset % 16
-      let new_unit = if value == 1 { 1 << bit } else { 0 }
+      let new_unit = if value == 1 { 1 << (offset % 16) } else { 0 }
       let pad = String::make(cu, Int::unsafe_to_char(0))
       let new_str = pad + "\{Int::unsafe_to_char(new_unit)}"
       self.put(key, RedisValue::String(new_str))
@@ -570,40 +562,71 @@ pub fn Database::setbit(self : Database, key : String, offset : Int, value : Int
 fn setbit_in_string(s : String, offset : Int, bit : Int) -> String {
   let cu = offset / 16
   let b = offset % 16
-  let old_unit : Int = if cu < s.length() { s[cu].to_int() } else { 0 }
-  let new_unit = if bit == 1 { old_unit | (1 << b) } else { old_unit & (0xFFFF ^ (1 << b)) }
-  let new_char = Int::unsafe_to_char(new_unit)
-  if cu < s.length() {
-    s[0:cu].to_owned() + "\{new_char}" + s[cu + 1:s.length()].to_owned()
-  } else {
-    let pad = String::make(cu - s.length(), Int::unsafe_to_char(0))
-    s + pad + "\{new_char}"
+  let len = s.length()
+  let target_len = if cu < len { len } else { cu + 1 }
+  let chars : Array[Char] = []
+  for i = 0; i < target_len; i = i + 1 {
+    let u : Int = if i < len { s[i].to_int() } else { 0 }
+    let new_unit = if i == cu {
+      if bit == 1 {
+        u | (1 << b)
+      } else {
+        u & (0xFFFF ^ (1 << b))
+      }
+    } else {
+      u
+    }
+    chars.push(Int::unsafe_to_char(new_unit))
   }
+  String::from_array(chars)
 }
 
-fn bitfield_read_units(s : String, offset : Int, width : Int, signed : Bool) -> Int {
-  let mut value = 0
+fn bitfield_read_units(s : String, offset : Int, width : Int, signed : Bool) -> Int64 {
+  let mut value : Int64 = 0
   for i = 0; i < width; i = i + 1 {
     let cu = (offset + i) / 16
     let b = (offset + i) % 16
-    let bit : Int = if cu < s.length() { (s[cu].to_int() >> b) & 1 } else { 0 }
+    let bit : Int64 = if cu < s.length() && ((s[cu].to_int() >> b) & 1) == 1 {
+      1L
+    } else {
+      0L
+    }
     value = value | (bit << i)
   }
-  if signed && width < 32 {
-    let sign_bit = 1 << (width - 1)
-    if (value & sign_bit) != 0 {
-      value = value - (1 << width)
+  if signed {
+    let sign_bit = 1L << (width - 1)
+    if (value & sign_bit) != 0L {
+      value = value - (1L << width)
     }
   }
   value
 }
 
-fn bitfield_write_units(s : String, offset : Int, width : Int, raw : Int) -> String {
-  let mut out = s
-  for i = 0; i < width; i = i + 1 {
-    out = setbit_in_string(out, offset + i, (raw >> i) & 1)
+fn bitfield_write_units(s : String, offset : Int, width : Int, raw : Int64) -> String {
+  let len = s.length()
+  let last_cu = (offset + width - 1) / 16
+  let total = if last_cu < len { len } else { last_cu + 1 }
+  let chars : Array[Char] = []
+  for cu = 0; cu < total; cu = cu + 1 {
+    let mut u : Int = if cu < len { s[cu].to_int() } else { 0 }
+    let start_bit = cu * 16
+    let rel_from = offset - start_bit
+    let rel_to = offset + width - start_bit
+    let lo = if rel_from < 0 { 0 } else { rel_from }
+    let hi = if rel_to > 16 { 16 } else { rel_to }
+    let mut b = lo
+    while b < hi {
+      let raw_idx = start_bit + b - offset
+      if ((raw >> raw_idx) & 1L) == 1L {
+        u = u | (1 << b)
+      } else {
+        u = u & (0xFFFF ^ (1 << b))
+      }
+      b = b + 1
+    }
+    chars.push(Int::unsafe_to_char(u))
   }
-  out
+  String::from_array(chars)
 }
 
 /// BITFIELD GET 精确错误版：位段读取（宽 1-32）
@@ -613,7 +636,7 @@ pub fn Database::try_bitfield_get(
   offset : Int,
   width : Int,
   signed : Bool,
-) -> Result[Int, RedisError] {
+) -> Result[Int64, RedisError] {
   if offset < 0 || width < 1 || width > 32 {
     return Err(RedisError::InvalidArgument)
   }
@@ -635,7 +658,7 @@ pub fn Database::try_bitfield_set(
   width : Int,
   signed : Bool,
   value : Int,
-) -> Result[Int, RedisError] {
+) -> Result[Int64, RedisError] {
   if offset < 0 || width < 1 || width > 32 {
     return Err(RedisError::InvalidArgument)
   }
@@ -643,17 +666,17 @@ pub fn Database::try_bitfield_set(
   match self.data.get(key) {
     Some(RedisValue::String(s)) => {
       let old = bitfield_read_units(s, offset, width, signed)
-      let mask = if width >= 32 { -1 } else { (1 << width) - 1 }
-      let new_s = bitfield_write_units(s, offset, width, value & mask)
+      let mask : Int64 = if width >= 32 { -1L } else { (1L << width) - 1L }
+      let new_s = bitfield_write_units(s, offset, width, value.to_int64() & mask)
       self.put(key, RedisValue::String(new_s))
       Ok(old)
     }
     Some(_) => Err(RedisError::WrongType)
     None => {
-      let mask = if width >= 32 { -1 } else { (1 << width) - 1 }
-      let new_s = bitfield_write_units("", offset, width, value & mask)
+      let mask : Int64 = if width >= 32 { -1L } else { (1L << width) - 1L }
+      let new_s = bitfield_write_units("", offset, width, value.to_int64() & mask)
       self.put(key, RedisValue::String(new_s))
-      Ok(0)
+      Ok(0L)
     }
   }
 }
@@ -666,7 +689,7 @@ pub fn Database::try_bitfield_incrby(
   width : Int,
   signed : Bool,
   increment : Int,
-) -> Result[Int, RedisError] {
+) -> Result[Int64, RedisError] {
   if offset < 0 || width < 1 || width > 32 {
     return Err(RedisError::InvalidArgument)
   }
@@ -674,10 +697,10 @@ pub fn Database::try_bitfield_incrby(
   let current = match self.data.get(key) {
     Some(RedisValue::String(s)) => bitfield_read_units(s, offset, width, false)
     Some(_) => return Err(RedisError::WrongType)
-    None => 0
+    None => 0L
   }
-  let mask = if width >= 32 { -1 } else { (1 << width) - 1 }
-  let new_raw = (current + increment) & mask
+  let mask : Int64 = if width >= 32 { -1L } else { (1L << width) - 1L }
+  let new_raw : Int64 = (current + increment.to_int64()) & mask
   let old_str = match self.data.get(key) {
     Some(RedisValue::String(s)) => s
     _ => ""
@@ -696,7 +719,7 @@ pub fn Database::try_bitfield_incrby_mode(
   signed : Bool,
   increment : Int,
   overflow : String?,
-) -> Result[Int?, RedisError] {
+) -> Result[Int64?, RedisError] {
   if offset < 0 || width < 1 || width > 32 {
     return Err(RedisError::InvalidArgument)
   }
@@ -711,22 +734,22 @@ pub fn Database::try_bitfield_incrby_mode(
   let current = match self.data.get(key) {
     Some(RedisValue::String(s)) => bitfield_read_units(s, offset, width, false)
     Some(_) => return Err(RedisError::WrongType)
-    None => 0
+    None => 0L
   }
-  let mask = if width >= 32 { -1 } else { (1 << width) - 1 }
-  let max_val = if signed {
-    (1 << (width - 1)) - 1
+  let mask : Int64 = if width >= 32 { -1L } else { (1L << width) - 1L }
+  let max_val : Int64 = if signed {
+    (1L << (width - 1)) - 1L
   } else if width >= 32 {
-    2147483647
+    4294967295L
   } else {
     mask
   }
-  let min_val = if signed {
-    -(1 << (width - 1))
+  let min_val : Int64 = if signed {
+    -(1L << (width - 1))
   } else {
-    0
+    0L
   }
-  let raw_sum = current + increment
+  let raw_sum = current + increment.to_int64()
   let overflowed = raw_sum > max_val || raw_sum < min_val
   let new_raw = if overflowed {
     if mode == "FAIL" {
@@ -772,6 +795,12 @@ pub fn Database::try_bitpos(self : Database, key : String, bit : Int, start : In
       }
       for cu = from; cu < to; cu = cu + 1 {
         let unit = s[cu].to_int()
+        if bit == 0 && unit == 0xFFFF {
+          continue
+        }
+        if bit == 1 && unit == 0 {
+          continue
+        }
         for b = 0; b < 16; b = b + 1 {
           if ((unit >> b) & 1) == bit {
             return Ok(cu * 16 + b)
@@ -837,7 +866,7 @@ pub fn Database::try_bitop(
     }
     max_v
   }
-  let out : Array[String] = []
+  let out : Array[Char] = []
   for i = 0; i < max_len; i = i + 1 {
     let first = if i < units[0].length() { units[0][i] } else { 0 }
     let unit = if cmd == "NOT" {
@@ -856,9 +885,9 @@ pub fn Database::try_bitop(
       }
       acc
     }
-    out.push("\{Int::unsafe_to_char(unit)}")
+    out.push(Int::unsafe_to_char(unit))
   }
-  let result = out.join("")
+  let result = String::from_array(out)
   match self.data.get(dest) {
     Some(RedisValue::String(_)) | None => ()
     Some(_) => return Err(RedisError::WrongType)

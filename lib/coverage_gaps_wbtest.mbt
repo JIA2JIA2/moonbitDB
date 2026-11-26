@@ -383,6 +383,43 @@ test "w1_clear_scan_caches_zscan" {
   @test.assert_eq(db.zscan_snapshots.length(), 0)
 }
 
+test "w3_bitfield_u32_boundary" {
+  let db = Database::new()
+  db.set("bf", "")
+  ignore(db.try_bitfield_set("bf", 0, 32, false, -1))
+  match db.try_bitfield_get("bf", 0, 32, false) {
+    Ok(v) => @test.assert_eq(v, 4294967295L)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_get("bf", 0, 31, false) {
+    Ok(v) => @test.assert_eq(v, 2147483647L)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  db.set("bf2", "")
+  ignore(db.try_bitfield_set("bf2", 0, 32, false, 250))
+  match db.try_bitfield_incrby_mode("bf2", 0, 32, false, 10, Some("SAT")) {
+    Ok(v) => @test.assert_eq(v, Some(260L))
+    Err(_) => @test.assert_eq(true, false)
+  }
+  ignore(db.try_bitfield_set("bf2", 0, 32, false, -100))
+  match db.try_bitfield_get("bf2", 0, 32, false) {
+    Ok(v) => @test.assert_eq(v, 4294967196L)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_incrby_mode("bf2", 0, 32, false, 100, Some("SAT")) {
+    Ok(v) => @test.assert_eq(v, Some(4294967295L))
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_incrby_mode("bf2", 0, 32, false, 10, Some("FAIL")) {
+    Ok(v) => @test.assert_eq(v, None)
+    Err(_) => @test.assert_eq(true, false)
+  }
+  match db.try_bitfield_incrby_mode("bf2", 0, 32, false, 10, Some("WRAP")) {
+    Ok(v) => @test.assert_eq(v, Some(9L))
+    Err(_) => @test.assert_eq(true, false)
+  }
+}
+
 test "coverage_merge_sort_big_zset" {
   let db = Database::new()
   for i = 0; i < 20; i = i + 1 {
