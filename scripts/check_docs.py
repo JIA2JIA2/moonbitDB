@@ -10,10 +10,27 @@ README = ROOT / "README.md"
 
 def command_list():
     source = SERVER.read_text(encoding="utf-8")
-    match = re.search(r"pub fn Database::command\(\) -> Array\[String\] \{(.*?)\n  \]", source, re.S)
-    if not match:
-        raise SystemExit("cannot find Database::command() in lib/server.mbt")
-    return re.findall(r'"([A-Z_]+)"', match.group(1))
+    fn_match = re.search(
+        r"pub fn Database::command\(\) -> Array\[String\] \{\s*\n\s*([A-Za-z_]+)\s*\n\}",
+        source,
+    )
+    if fn_match:
+        table_match = re.search(
+            rf"let {fn_match.group(1)} : Array\[String\] = \[(.*?)\n\]",
+            source,
+            re.S,
+        )
+        if not table_match:
+            raise SystemExit(
+                f"cannot find command table constant '{fn_match.group(1)}' in lib/server.mbt"
+            )
+        body = table_match.group(1)
+    else:
+        match = re.search(r"pub fn Database::command\(\) -> Array\[String\] \{(.*?)\n  \]", source, re.S)
+        if not match:
+            raise SystemExit("cannot find Database::command() in lib/server.mbt")
+        body = match.group(1)
+    return re.findall(r'"([A-Z_]+)"', body)
 
 
 def readme_commands():
