@@ -201,7 +201,7 @@ moonbitDB/
 | `BITPOS` | `(key, bit) -> Int` | 查找第一个指定值的位（返回 -1 表示未找到） |
 | `BITCOUNT` | `(key, start?, end?) -> Int` | 统计置位位数（可选 code unit 范围，负索引从尾） |
 | `BITOP` | `(op, dest, src_keys) -> Int` | AND/OR/XOR/NOT 按位运算写入 dest，返回 dest 长度 |
-| `BITFIELD` | `(key, GET/SET/INCRBY u/i width offset [value]) -> Array[Int?]` | 位段读写（宽 1-32 位，u 无符号/i 符号扩展，INCRBY 溢出支持 WRAP/SAT/FAIL；差异：本库位序为 code unit 内 LSB，与 Redis 字节序 MSB 不同；u32 最大值按 Int 上限 2147483647 截断） |
+| `BITFIELD` | `(key, GET/SET/INCRBY u/i width offset [value]) -> Int64` | 位段读写（宽 1-32 位，u 无符号/i 符号扩展；GET 返回 Int64，u32 读值可达 4294967295；INCRBY 溢出支持 WRAP/SAT/FAIL 且 signed 负当前值语义正确；SET 超范围 value 报错；差异：本库位序为 code unit 内 LSB，与 Redis 字节序 MSB 不同） |
 | `INCR` | `(key) -> Int64?` | 自增 1（非数字返回 None） |
 | `DECR` | `(key) -> Int64?` | 自减 1（非数字返回 None） |
 | `INCRBY` | `(key, increment) -> Int64?` | 增加指定整数（非数字返回 None） |
@@ -903,7 +903,7 @@ moon run examples/cli_repl --target native
 - Set — 集合（无序唯一元素）
 - Sorted Set — 有序集合（分数排序）
 
-**命令语义**（8 大命令组，141 个命令）：
+**命令语义**（8 大命令组，167 个命令）：
 
 | 命令组 | 命令数量 | 代表命令 |
 |--------|----------|----------|

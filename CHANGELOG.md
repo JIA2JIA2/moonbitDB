@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased — 2026-11-26（W1-W5 + S1-S3）
+
+### Fixed
+- 事务回放 INCR/DECR 的 Int64→Int32 截断（MULTI 内 INCR 突破 2^31 不再回绕）；ZINCRBY 补 NaN 拒绝
+- ZRANGEBYSCORE LIMIT 与 ZRANGEBYLEX 族 offset+count 整数回绕（负索引 panic / 返回空）
+- TTL 改四舍五入、EXPIRETIME 改截断（对齐 Redis）
+- ZUNION/ZINTER/ZDIFF/SINTER/SUNION/SDIFF STORE 对非同类型 destination 返回 WRONGTYPE（新增 RedisError::DestinationWrongType）
+- format_float 整数部分 Int64 化（分数 ≥ 2^31 不再截断）+ 15 位有效数字剥尾零（INCRBYFLOAT 累加 0.1、0.2 输出 0.3）；parse_float 指数放宽 ±308 并对齐 inf/下溢语义（新增 inf/+inf/-inf 字面量，浮点写读闭环）
+- BITFIELD 读写 Int64 化：u32 读值可达 4294967295（此前按 Int32 截断为负数）、INCRBY signed 负当前值 SAT/FAIL 修复、SET 超范围 value 拒绝
+- WATCH 标脏补齐全部原地修改路径（HDEL/SREM/SPOP/SMOVE/ZREM/ZPOPMIN/ZPOPMAX/ZREMRANGEBY*/PERSIST）
+- ZSCAN 快照扫完即清（对齐 HSCAN/SSCAN）、RENAME 补清 ZSCAN 快照、RESTORE ttl=0 清旧 TTL、ZADD 新建 key 失效 SCAN 快照
+- SETNX 对已存在任意类型返回 0（对齐 Redis）；BITPOS 空串/不存在 key bit=0 返回 0、末尾越界零返回 len*16
+- SETBIT/BITFIELD offset 上限防护（≤512MB，此前可触发 ~125MB 单次分配）；ZRANGESTORE 负 capacity 防护；ZUNION/ZINTERSTORE 空源保护（此前 zsets[0] 越界 panic）
+
+### Performance
+- Deque 双栈均摊 O(1)（修复交替 LPOP/RPOP 的 O(n²)）；SORT 两条路径 O(n²) 插入排序改 sort_by 且 numeric rebuilt 双层循环消除
+- ZSet LRU 改逻辑时钟 Map（touch/invalidate 均摊 O(1)）；List LRANGE/LPOS/LREM/LTRIM get_at 零分配遍历
+- SETBIT/BITFIELD 写路径单次成型（消除 O(width×n) 全串重建）；BITCOUNT SWAR、BITPOS 全零/全幺码元短路、BITOP Char 数组输出
+- parse_float 指数 O(log|exp|) 快速幂；command() 顶层常量数组；ensure_rank_cache 消除双重构建；flushdb 清 ZSet LRU
+
+### Engineering
+- zset_apply_score 统一四处缓存写穿；run_transaction 回放复用 try_ 系列；try_sort 委托 try_sort_advanced；scan 快照构建去重
+- lolwut 版本对齐 0.1.5；SINTERCARD 哨兵常量化；scan limit 复用 DEFAULT_SCAN_COUNT
+- 测试 238 → 246（新增 u32 边界、事务 I64 边界、WATCH 原地写、Deque 交替 pop、语义对齐等回归）
+- cli_repl SET 路由支持 EX/PX/EXAT/PXAT/NX/XX/GET/KEEPTTL（此前静默丢弃选项）
+
 ## 0.1.5 — 2026-11-04
 
 ### Added

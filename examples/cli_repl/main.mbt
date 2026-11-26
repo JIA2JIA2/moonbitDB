@@ -21,6 +21,29 @@ fn parse_int(s : String) -> Int? {
   if neg { Some(-result) } else { Some(result) }
 }
 
+fn parse_int64(s : String) -> Int64? {
+  let mut result : Int64 = 0
+  let mut i = 0
+  let mut neg = false
+  if s.length() > 0 && s[0] == '-' {
+    neg = true
+    i = 1
+  }
+  if i >= s.length() {
+    return None
+  }
+  while i < s.length() {
+    let c = s[i]
+    if c >= '0' && c <= '9' {
+      result = result * 10L + (c.to_int() - '0'.to_int()).to_int64()
+    } else {
+      return None
+    }
+    i = i + 1
+  }
+  if neg { Some(-result) } else { Some(result) }
+}
+
 fn parse_float(s : String) -> Double? {
   let mut result : Double = 0.0
   let mut i = 0
@@ -110,8 +133,103 @@ fn execute_command(db : @lib.Database, cmd : String) -> Array[String] {
   let command = parts[0].to_upper()
   match command {
     "SET" => {
-      if parts.length() < 3 { ["ERR wrong number of arguments"] }
-      else { db.set(parts[1], parts[2]); ["OK"] }
+      if parts.length() < 3 {
+        ["ERR wrong number of arguments"]
+      } else {
+        let key = parts[1]
+        let value = parts[2]
+        let mut nx = false
+        let mut xx = false
+        let mut get = false
+        let mut keep_ttl = false
+        let mut ex_seconds : Int? = None
+        let mut px_ms : Int64? = None
+        let mut exat : Int64? = None
+        let mut pxat : Int64? = None
+        let mut bad = false
+        let mut i = 3
+        while i < parts.length() && !bad {
+          let opt = parts[i].to_upper()
+          if opt == "EX" {
+            if i + 1 < parts.length() {
+              match parse_int(parts[i + 1]) {
+                Some(sec) => ex_seconds = Some(sec)
+                None => bad = true
+              }
+              i = i + 2
+            } else {
+              bad = true
+            }
+          } else if opt == "PX" {
+            if i + 1 < parts.length() {
+              match parse_int(parts[i + 1]) {
+                Some(ms) => px_ms = Some(ms.to_int64())
+                None => bad = true
+              }
+              i = i + 2
+            } else {
+              bad = true
+            }
+          } else if opt == "EXAT" {
+            if i + 1 < parts.length() {
+              match parse_int64(parts[i + 1]) {
+                Some(sec) => exat = Some(sec * 1000L)
+                None => bad = true
+              }
+              i = i + 2
+            } else {
+              bad = true
+            }
+          } else if opt == "PXAT" {
+            if i + 1 < parts.length() {
+              match parse_int64(parts[i + 1]) {
+                Some(ms) => pxat = Some(ms)
+                None => bad = true
+              }
+              i = i + 2
+            } else {
+              bad = true
+            }
+          } else if opt == "NX" {
+            nx = true
+            i = i + 1
+          } else if opt == "XX" {
+            xx = true
+            i = i + 1
+          } else if opt == "GET" {
+            get = true
+            i = i + 1
+          } else if opt == "KEEPTTL" {
+            keep_ttl = true
+            i = i + 1
+          } else {
+            bad = true
+          }
+        }
+        if bad {
+          ["ERR syntax error"]
+        } else {
+          match db.set_with_options(
+            key,
+            value,
+            nx,
+            xx,
+            get,
+            ex_seconds,
+            px_ms,
+            exat,
+            pxat,
+            keep_ttl,
+          ) {
+            Ok(old) =>
+              match old {
+                Some(v) => ["\"\{v}\""]
+                None => ["OK"]
+              }
+            Err(e) => ["\{e.message()}"]
+          }
+        }
+      }
     }
     "GET" => {
       if parts.length() < 2 { ["ERR wrong number of arguments"] }
