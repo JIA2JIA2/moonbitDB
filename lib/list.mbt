@@ -185,14 +185,16 @@ pub fn Database::lrange(self : Database, key : String, start : Int, end : Int) -
   } else {
     match self.data.get(key) {
       Some(RedisValue::List(deque)) => {
-        let arr = deque.to_array()
-        let len = arr.length()
+        let len = deque.length()
         let start_idx = if start < 0 { len + start } else { start }
         let end_idx = if end < 0 { len + end } else { end }
         let s = if start_idx < 0 { 0 } else { start_idx }
         let result = []
         for i = s; i <= end_idx && i < len; i = i + 1 {
-          result.push(arr[i])
+          match deque.get_at(i) {
+            Some(v) => result.push(v)
+            None => ()
+          }
         }
         result
       }
@@ -267,16 +269,19 @@ pub fn Database::lrem(self : Database, key : String, count : Int, value : String
   } else {
     match self.data.get(key) {
       Some(RedisValue::List(deque)) => {
-        let arr = deque.to_array()
-        let len = arr.length()
+        let len = deque.length()
         let result = []
         let mut removed_count = 0
         if count > 0 {
           for i = 0; i < len; i = i + 1 {
-            if removed_count < count && arr[i] == value {
+            let item = match deque.get_at(i) {
+              Some(v) => v
+              None => ""
+            }
+            if removed_count < count && item == value {
               removed_count = removed_count + 1
             } else {
-              result.push(arr[i])
+              result.push(item)
             }
           }
         } else if count < 0 {
@@ -284,7 +289,11 @@ pub fn Database::lrem(self : Database, key : String, count : Int, value : String
           let mut seen = 0
           let mut cut = -1
           for i = len - 1; i >= 0; i = i - 1 {
-            if arr[i] == value {
+            let item = match deque.get_at(i) {
+              Some(v) => v
+              None => ""
+            }
+            if item == value {
               seen = seen + 1
               if seen == limit {
                 cut = i
@@ -296,18 +305,26 @@ pub fn Database::lrem(self : Database, key : String, count : Int, value : String
             cut = 0
           }
           for i = 0; i < len; i = i + 1 {
-            if cut != -1 && i >= cut && arr[i] == value {
+            let item = match deque.get_at(i) {
+              Some(v) => v
+              None => ""
+            }
+            if cut != -1 && i >= cut && item == value {
               removed_count = removed_count + 1
             } else {
-              result.push(arr[i])
+              result.push(item)
             }
           }
         } else {
           for i = 0; i < len; i = i + 1 {
-            if arr[i] == value {
+            let item = match deque.get_at(i) {
+              Some(v) => v
+              None => ""
+            }
+            if item == value {
               removed_count = removed_count + 1
             } else {
-              result.push(arr[i])
+              result.push(item)
             }
           }
         }
@@ -552,8 +569,7 @@ pub fn Database::ltrim(self : Database, key : String, start : Int, end : Int) ->
   }
   match self.data.get(key) {
     Some(RedisValue::List(deque)) => {
-      let arr = deque.to_array()
-      let len = arr.length()
+      let len = deque.length()
       let start_idx = if start < 0 { len + start } else { start }
       let end_idx = if end < 0 { len + end } else { end }
       let s = if start_idx < 0 { 0 } else { start_idx }
@@ -561,7 +577,10 @@ pub fn Database::ltrim(self : Database, key : String, start : Int, end : Int) ->
       let new_deque = Deque::new()
       if s <= e && s < len {
         for i = s; i <= e; i = i + 1 {
-          new_deque.push_back(arr[i])
+          match deque.get_at(i) {
+            Some(v) => new_deque.push_back(v)
+            None => ()
+          }
         }
       }
       if new_deque.length() == 0 {
@@ -581,15 +600,12 @@ pub fn Database::try_lpos(self : Database, key : String, value : String) -> Resu
   } else {
     match self.data.get(key) {
       Some(RedisValue::List(deque)) => {
-        let arr = deque.to_array()
-        let mut result = Err(RedisError::NotFound)
-        for i = 0; i < arr.length(); i = i + 1 {
-          if arr[i] == value {
-            result = Ok(i)
-            break
-          }
+        let idx = deque.find_index_cb((s) => s == value)
+        if idx == -1 {
+          Err(RedisError::NotFound)
+        } else {
+          Ok(idx)
         }
-        result
       }
       Some(_) => Err(RedisError::WrongType)
       None => Err(RedisError::NotFound)
@@ -624,14 +640,17 @@ pub fn Database::try_lpos_options(
   }
   match self.data.get(key) {
     Some(RedisValue::List(deque)) => {
-      let arr = deque.to_array()
-      let len = arr.length()
+      let len = deque.length()
       let scan_limit = if maxlen > 0 && maxlen < len { maxlen } else { len }
       let result : Array[Int] = []
       if rank > 0 {
         let mut matches = 0
         for i = 0; i < scan_limit; i = i + 1 {
-          if arr[i] == value {
+          let item = match deque.get_at(i) {
+            Some(v) => v
+            None => ""
+          }
+          if item == value {
             matches = matches + 1
             if matches >= rank {
               result.push(i)
@@ -647,7 +666,11 @@ pub fn Database::try_lpos_options(
         let mut i = len - 1
         let stop = if scan_limit < len { len - scan_limit } else { -1 }
         while i > stop {
-          if arr[i] == value {
+          let item = match deque.get_at(i) {
+            Some(v) => v
+            None => ""
+          }
+          if item == value {
             matches = matches + 1
             if matches >= target {
               result.push(i)

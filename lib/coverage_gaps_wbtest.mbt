@@ -420,6 +420,26 @@ test "w3_bitfield_u32_boundary" {
   }
 }
 
+test "w4_deque_alternating_pops" {
+  let db = Database::new()
+  for i = 0; i < 100; i = i + 1 {
+    db.rpush("q", "item\{i}") |> ignore
+  }
+  for i = 0; i < 50; i = i + 1 {
+    let l = db.lpop("q")
+    match l {
+      Some(v) => @test.assert_eq(v, "item\{i}")
+      None => @test.assert_eq(true, false)
+    }
+    let r = db.rpop("q")
+    match r {
+      Some(v) => @test.assert_eq(v, "item\{99 - i}")
+      None => @test.assert_eq(true, false)
+    }
+  }
+  @test.assert_eq(db.llen("q"), 0)
+}
+
 test "coverage_merge_sort_big_zset" {
   let db = Database::new()
   for i = 0; i < 20; i = i + 1 {

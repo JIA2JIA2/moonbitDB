@@ -599,18 +599,7 @@ pub fn Database::try_sort(
     None => []
   }
   let sorted : Array[String] = if alpha {
-    for i = 1; i < items.length(); i = i + 1 {
-      let item = items[i]
-      let mut j = i - 1
-      while j >= 0 {
-        if items[j].lexical_compare(item) <= 0 {
-          break
-        }
-        items[j + 1] = items[j]
-        j = j - 1
-      }
-      items[j + 1] = item
-    }
+    items.sort_by((a, b) => a.lexical_compare(b))
     items
   } else {
     let pairs : Array[(String, Double)] = []
@@ -818,44 +807,59 @@ pub fn Database::try_sort_advanced(
   }
   if !nosort {
     if alpha {
-      for i = 1; i < pairs.length(); i = i + 1 {
-        let item = pairs[i]
-        let mut j = i - 1
-        while j >= 0 {
-          if pairs[j].1.lexical_compare(item.1) <= 0 {
-            break
-          }
-          pairs[j + 1] = pairs[j]
-          j = j - 1
+      let sortable : Array[(String, Int)] = []
+      for j = 0; j < pairs.length(); j = j + 1 {
+        sortable.push((pairs[j].1, j))
+      }
+      sortable.sort_by((a, b) => {
+        let c = a.0.lexical_compare(b.0)
+        if c != 0 {
+          c
+        } else if a.1 < b.1 {
+          -1
+        } else if a.1 > b.1 {
+          1
+        } else {
+          0
         }
-        pairs[j + 1] = item
+      })
+      let rebuilt : Array[(String, String)] = []
+      for sp in sortable {
+        rebuilt.push(pairs[sp.1])
+      }
+      pairs.clear()
+      for p in rebuilt {
+        pairs.push(p)
       }
     } else {
-      let numeric : Array[(String, Double)] = []
-      for p in pairs {
+      let numeric : Array[(Double, Int)] = []
+      for j = 0; j < pairs.length(); j = j + 1 {
+        let p = pairs[j]
         if p.1 == "" {
-          numeric.push((p.0, 0.0))
+          numeric.push((0.0, j))
         } else {
           match parse_float(p.1) {
-            Some(v) => numeric.push((p.0, v))
+            Some(v) => numeric.push((v, j))
             None => return Err(RedisError::NotInteger)
           }
         }
       }
-      let sorted_pairs = sort_by_score(numeric)
-      let used : Array[Bool] = []
-      for j = 0; j < pairs.length(); j = j + 1 {
-        used.push(false)
-      }
-      let rebuilt : Array[(String, String)] = []
-      for sp in sorted_pairs {
-        for j = 0; j < pairs.length(); j = j + 1 {
-          if !used[j] && pairs[j].0 == sp.0 {
-            rebuilt.push(pairs[j])
-            used[j] = true
-            break
-          }
+      numeric.sort_by((a, b) => {
+        if a.0 < b.0 {
+          -1
+        } else if a.0 > b.0 {
+          1
+        } else if a.1 < b.1 {
+          -1
+        } else if a.1 > b.1 {
+          1
+        } else {
+          0
         }
+      })
+      let rebuilt : Array[(String, String)] = []
+      for np in numeric {
+        rebuilt.push(pairs[np.1])
       }
       pairs.clear()
       for p in rebuilt {

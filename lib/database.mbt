@@ -47,7 +47,8 @@ pub struct Database {
   mut zset_sorted_cache : Map[String, Array[(String, Double)]]
   mut zset_rank_cache : Map[String, Map[String, Int]]
   mut zset_lex_cache : Map[String, Array[String]]
-  mut zset_cache_lru : Array[String]
+  zset_cache_lru : Map[String, Int]
+  mut lru_clock : Int
   mut scan_snapshot : Array[String]?
   mut hscan_snapshots : Map[String, Array[String]]
   mut sscan_snapshots : Map[String, Array[String]]
@@ -63,7 +64,7 @@ pub struct Database {
 }
 
 pub fn Database::new() -> Database {
-  Database::{ data: Map([], capacity=1000), expires: Map([], capacity=1000), current_time: 0, rand_state: 123456789, zset_sorted_cache: Map([], capacity=100), zset_rank_cache: Map([], capacity=100), zset_lex_cache: Map([], capacity=100), zset_cache_lru: [], scan_snapshot: None, hscan_snapshots: Map([], capacity=10), sscan_snapshots: Map([], capacity=10), zscan_snapshots: Map([], capacity=10), expire_heap: [], in_transaction: false, transaction_queue: [], watched_keys: Map([], capacity=10), watched_dirty: Map([], capacity=10), start_time: 0, client_name: "", config_overrides: Map([], capacity=10) }
+  Database::{ data: Map([], capacity=1000), expires: Map([], capacity=1000), current_time: 0, rand_state: 123456789, zset_sorted_cache: Map([], capacity=100), zset_rank_cache: Map([], capacity=100), zset_lex_cache: Map([], capacity=100), zset_cache_lru: Map([], capacity=100), lru_clock: 0, scan_snapshot: None, hscan_snapshots: Map([], capacity=10), sscan_snapshots: Map([], capacity=10), zscan_snapshots: Map([], capacity=10), expire_heap: [], in_transaction: false, transaction_queue: [], watched_keys: Map([], capacity=10), watched_dirty: Map([], capacity=10), start_time: 0, client_name: "", config_overrides: Map([], capacity=10) }
 }
 
 /// 设置当前时钟（重置 uptime 基准）
@@ -83,35 +84,26 @@ fn Database::invalidate_zset_cache(self : Database, key : String) -> Unit {
   self.zset_sorted_cache.remove(key)
   self.zset_rank_cache.remove(key)
   self.zset_lex_cache.remove(key)
-  let new_lru : Array[String] = []
-  for k in self.zset_cache_lru {
-    if k != key {
-      new_lru.push(k)
-    }
-  }
-  self.zset_cache_lru = new_lru
+  self.zset_cache_lru.remove(key)
 }
 
 fn Database::touch_zset_cache(self : Database, key : String) -> Unit {
-  let mut new_lru : Array[String] = []
-  for k in self.zset_cache_lru {
-    if k != key {
-      new_lru.push(k)
+  self.lru_clock = self.lru_clock + 1
+  self.zset_cache_lru.set(key, self.lru_clock)
+  if self.zset_cache_lru.length() > MAX_CACHE_SIZE {
+    let mut oldest_key = ""
+    let mut oldest_ts = self.lru_clock + 1
+    for k, ts in self.zset_cache_lru {
+      if ts < oldest_ts {
+        oldest_ts = ts
+        oldest_key = k
+      }
     }
+    self.zset_sorted_cache.remove(oldest_key)
+    self.zset_rank_cache.remove(oldest_key)
+    self.zset_lex_cache.remove(oldest_key)
+    self.zset_cache_lru.remove(oldest_key)
   }
-  new_lru.push(key)
-  if new_lru.length() > MAX_CACHE_SIZE {
-    let oldest = new_lru[0]
-    self.zset_sorted_cache.remove(oldest)
-    self.zset_rank_cache.remove(oldest)
-    self.zset_lex_cache.remove(oldest)
-    let remaining : Array[String] = []
-    for i = 1; i < new_lru.length(); i = i + 1 {
-      remaining.push(new_lru[i])
-    }
-    new_lru = remaining
-  }
-  self.zset_cache_lru = new_lru
 }
 
 fn Database::maybe_compact_expire_heap(self : Database) -> Unit {

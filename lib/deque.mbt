@@ -17,26 +17,38 @@ pub fn Deque::push_back(self : Deque, value : String) -> Unit {
 
 pub fn Deque::pop_front(self : Deque) -> String? {
   if self.front.length() == 0 {
-    while self.back.length() > 0 {
-      let item = self.back.pop()
-      match item {
-        Some(v) => self.front.push(v)
-        None => break
-      }
+    let blen = self.back.length()
+    if blen == 0 {
+      return None
     }
+    let half = (blen + 1) / 2
+    for i = half - 1; i >= 0; i = i - 1 {
+      self.front.push(self.back[i])
+    }
+    let new_back : Array[String] = []
+    for i = half; i < blen; i = i + 1 {
+      new_back.push(self.back[i])
+    }
+    self.back = new_back
   }
   self.front.pop()
 }
 
 pub fn Deque::pop_back(self : Deque) -> String? {
   if self.back.length() == 0 {
-    while self.front.length() > 0 {
-      let item = self.front.pop()
-      match item {
-        Some(v) => self.back.push(v)
-        None => break
-      }
+    let flen = self.front.length()
+    if flen == 0 {
+      return None
     }
+    let half = (flen + 1) / 2
+    for i = half - 1; i >= 0; i = i - 1 {
+      self.back.push(self.front[i])
+    }
+    let new_front : Array[String] = []
+    for i = half; i < flen; i = i + 1 {
+      new_front.push(self.front[i])
+    }
+    self.front = new_front
   }
   self.back.pop()
 }
@@ -116,14 +128,25 @@ pub fn Deque::remove_at(self : Deque, index : Int) -> Bool {
   }
 }
 
-pub fn Deque::find_index(self : Deque, value : String) -> Int {
-  let arr = self.to_array()
-  for i = 0; i < arr.length(); i = i + 1 {
-    if arr[i] == value {
-      return i
+pub fn Deque::find_index_cb(self : Deque, f : (String) -> Bool) -> Int {
+  let mut idx = 0
+  for i = self.front.length() - 1; i >= 0; i = i - 1 {
+    if f(self.front[i]) {
+      return idx
     }
+    idx = idx + 1
+  }
+  for i = 0; i < self.back.length(); i = i + 1 {
+    if f(self.back[i]) {
+      return idx
+    }
+    idx = idx + 1
   }
   -1
+}
+
+pub fn Deque::find_index(self : Deque, value : String) -> Int {
+  self.find_index_cb((s) => s == value)
 }
 
 pub fn Deque::insert_at(self : Deque, index : Int, value : String) -> Bool {
